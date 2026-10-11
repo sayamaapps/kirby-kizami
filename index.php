@@ -170,6 +170,24 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
     }
 }
 
+/**
+ * Campaign tag of the request. utm_campaign wins; only if it is empty after
+ * cleaning, the parameter named in kizami.campaignParam (for example `cam`)
+ * is used. Not set, or not a non-empty string: no fallback.
+ */
+function kizami_campaign(): string
+{
+    $campaign = Capture::cleanId(get('utm_campaign'));
+    if ($campaign !== '') {
+        return $campaign;
+    }
+    $param = kizami_option('campaignParam');
+    if (!is_string($param) || $param === '') {
+        return '';
+    }
+    return Capture::cleanId(get($param));
+}
+
 /** Origin check for the beacons /k/image and /k/duration, and the page they report. */
 function kizami_beacon_path(): ?string
 {
@@ -341,7 +359,7 @@ App::plugin('sayamaapps/kizami', [
                     ]),
                     'utm_source'   => Capture::cleanId(get('utm_source')),
                     'utm_medium'   => Capture::cleanId(get('utm_medium')),
-                    'utm_campaign' => Capture::cleanId(get('utm_campaign')),
+                    'utm_campaign' => kizami_campaign(),
                 ]);
             } catch (\Throwable $e) {
                 error_log('Kizami: ' . $e->getMessage());

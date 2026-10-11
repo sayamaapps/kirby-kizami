@@ -452,6 +452,28 @@ final class Store
         );
     }
 
+    /**
+     * Campaign tags of the page views: utm_campaign, or the parameter named
+     * in kizami.campaignParam (stored in the same column). Every page view
+     * with a tag counts, not only entry pages. A visit with two campaigns
+     * counts once for each of them, so the rows don't add up to visits().
+     *
+     * @return list<array{campaign:string,visits:int,pageViews:int}>
+     */
+    public function campaigns(int $days, int $offset = 0): array
+    {
+        return $this->fetch(
+            "SELECT utm_campaign AS campaign, COUNT(DISTINCT session) AS visits, COUNT(*) AS pageViews
+             FROM kizami_events
+             WHERE type='page' AND action='view' AND utm_campaign <> ''
+                AND created_at >= :since AND created_at < :until
+             GROUP BY utm_campaign ORDER BY visits DESC, pageViews DESC, utm_campaign",
+            $days,
+            fn ($r) => ['campaign' => (string) $r['campaign'], 'visits' => (int) $r['visits'], 'pageViews' => (int) $r['pageViews']],
+            $offset
+        );
+    }
+
     /** @return list<array{day:string,count:int}> */
     public function viewsPerDay(int $days, int $offset = 0): array
     {

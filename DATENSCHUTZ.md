@@ -22,7 +22,8 @@ keinen externen Analysedienst. Der Hostinganbieter betreibt den Server; Angaben
 zu dessen eigenen Protokollen und Datenverarbeitung sind gesondert zu beachten.
 
 Gespeichert werden Seitenpfad, Zeitpunkt, die Domain der verweisenden Website,
-Kampagnenkennzeichen aus dem Link (utm_source, utm_medium, utm_campaign), Name
+Kampagnenkennzeichen aus dem Link (utm_source, utm_medium, utm_campaign sowie,
+falls konfiguriert, ein weiterer Kampagnenparameter), Name
 und Herkunftsseite sowie die Position ausgewählter Weiterleitungs-Klicks und ein
 Tageskennzeichen. Bei aktivierter Bildzählung werden zusätzlich eine festgelegte
 Bildkennung und die Seite der ersten Großansicht gespeichert. Dasselbe Foto zählt

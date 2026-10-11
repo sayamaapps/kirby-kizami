@@ -267,6 +267,28 @@ try {
     checkHttp(requestHttp('/k/dashboard', $previewAuth)[0] === 401, 'previewAccess null: preview login no longer accepted');
     writeConfig($config);
 
+    // Campaign tag: utm_campaign wins; kizami.campaignParam names one more
+    // parameter, used only while utm_campaign is empty after cleaning.
+    $lastCampaign = function (): string {
+        global $tmp;
+        $d = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+        $value = (string) $d->querySingle("SELECT utm_campaign FROM kizami_events WHERE type='page' ORDER BY id DESC LIMIT 1");
+        $d->close();
+        return $value;
+    };
+    writeConfig($config + ['kizami.campaignParam' => 'cam']);
+    checkHttp(requestHttp('/?cam=social-tg-test')[0] === 200 && $lastCampaign() === 'social-tg-test', 'campaignParam: cam stored as utm_campaign');
+    checkHttp(requestHttp('/?cam=social-tg-test&utm_campaign=autumn')[0] === 200 && $lastCampaign() === 'autumn', 'campaignParam: utm_campaign wins');
+    checkHttp(requestHttp('/?cam[]=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: array value stored empty, page 200');
+    checkHttp(requestHttp('/?cam=' . str_repeat('a', 60))[0] === 200 && strlen($lastCampaign()) === 50, 'campaignParam: capped at 50 characters');
+    checkHttp(requestHttp('/?cam=' . rawurlencode('<b>x y</b>'))[0] === 200 && $lastCampaign() === 'bxyb', 'campaignParam: cleaned like utm values');
+    writeConfig($config + ['kizami.campaignParam' => ['cam']]);
+    checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: non-string option is not set');
+    writeConfig($config + ['kizami.campaignParam' => '']);
+    checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: empty option is not set');
+    writeConfig($config);
+    checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'Without campaignParam, cam is ignored');
+
     // Server handles sequential requests, no open request/DB writer here.
     foreach (glob($tmp . '/storage/kizami/kizami.sqlite*') as $file) { unlink($file); }
     file_put_contents($tmp . '/storage/kizami/kizami.sqlite', 'not a database');
