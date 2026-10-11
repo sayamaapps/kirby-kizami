@@ -45,7 +45,7 @@ final class SnapshotService
                 throw new ReportError('No data yet.', 404);
             }
             $temp = kizami_directory() . '/.snapshot-' . bin2hex(random_bytes(8)) . '.sqlite';
-            (new Store($db))->snapshot($temp);
+            (new Store($db, Store::journal(Options::get($kirby, 'journal'))))->snapshot($temp);
             $content = (string) file_get_contents($temp);
             $day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
             return new Response($content, 'application/vnd.sqlite3', 200, [

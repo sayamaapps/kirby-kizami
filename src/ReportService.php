@@ -61,7 +61,7 @@ final class ReportService
                 throw new ReportError($e->getMessage());
             }
 
-            $store = new Store(kizami_directory() . '/' . Store::FILE);
+            $store = kizami_store();
             $names = new Names(
                 (array) Options::get($kirby, 'targetNames', []),
                 (array) Options::get($kirby, 'sourceNames', []),

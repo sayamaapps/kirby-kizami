@@ -62,6 +62,12 @@ function kizami_option(string $key, mixed $default = null): mixed
     return Options::get(App::instance(), $key, $default);
 }
 
+/** Opens the site's database with the configured journal mode (`kizami.journal`). */
+function kizami_store(): Store
+{
+    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')));
+}
+
 /**
  * Directory of the SQLite file and the secret, outside the web root. Moves
  * the pre-1.0 directory storage/kennzahlen/ on first use (src/Migration.php).
@@ -133,7 +139,7 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
             return; // no secret, no capture
         }
 
-        $store = new Store($directory . '/' . Store::FILE);
+        $store = new Store($directory . '/' . Store::FILE, Store::journal(kizami_option('journal')));
         $session = Capture::sessionHash(
             $server['REMOTE_ADDR'] ?? '0.0.0.0',
             $ua,
@@ -419,7 +425,7 @@ App::plugin('sayamaapps/kizami', [
                     $kirby = App::instance();
                     I18n::setLanguage(Options::language($kirby));
                     try {
-                        $store = new Store(kizami_directory() . '/' . Store::FILE);
+                        $store = kizami_store();
                         $store->compact();
                         $names = new Names(
                             (array) kizami_option('targetNames', []),

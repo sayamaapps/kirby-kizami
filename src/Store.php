@@ -52,16 +52,63 @@ final class Store
     // Deliberately only date and count — no identifier, no target, no page.
     private const DISCARDED_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_discarded (day TEXT PRIMARY KEY NOT NULL, hits INTEGER NOT NULL)';
 
+    /** Closes the connection, so SQLite can checkpoint and remove -wal/-shm. */
+    public function __destruct()
+    {
+        if (isset($this->db)) {
+            @$this->db->close();
+        }
+    }
+
+    /** Normalises a configured journal mode; unknown values mean WAL. */
+    public static function journal(mixed $value): string
+    {
+        return is_string($value) && strtolower(trim($value)) === self::JOURNAL_DELETE
+            ? self::JOURNAL_DELETE
+            : self::JOURNAL_WAL;
+    }
+
+    /**
+     * Journal mode recorded in an existing database file: header bytes 18/19
+     * are 2 in WAL mode and 1 with a rollback journal. Missing or unreadable
+     * file → WAL (the default for new databases).
+     */
+    public static function journalOfFile(string $dbPath): string
+    {
+        $header = is_file($dbPath) ? @file_get_contents($dbPath, false, null, 0, 20) : false;
+        if (is_string($header) && strlen($header) === 20 && str_starts_with($header, "SQLite format 3\0")) {
+            return ord($header[18]) === 1 ? self::JOURNAL_DELETE : self::JOURNAL_WAL;
+        }
+        return self::JOURNAL_WAL;
+    }
+
     /** @return list<string> columns of kizami_events in write order. */
     public static function columns(): array
     {
         return ['created_at','type','action','path','target','referrer','utm_source','utm_medium','utm_campaign','session','device','position','seconds'];
     }
 
+    /** Journal modes `kizami.journal` accepts; anything else falls back to WAL. */
+    public const JOURNAL_WAL = 'wal';
+    public const JOURNAL_DELETE = 'delete';
+
     private SQLite3 $db;
 
-    public function __construct(string $dbPath)
+    /**
+     * @param string $journal `wal` (default) or `delete`. WAL lets readers and
+     *        the per-request writer work side by side, but needs working shared
+     *        memory and file locks for the `-shm`/`-wal` files. On some shared
+     *        hosters (Shared-Host, SQLite 3.7.17) that is not given: on 11.10.2026 WAL
+     *        left mustergasthaus's database malformed after earlier "disk I/O
+     *        error"s. `delete` uses the classic rollback journal — one file,
+     *        no shared memory. Every opener must pass the same mode, otherwise
+     *        the next connection switches the file back. Null (CLI tools
+     *        without Kirby options) keeps the mode the file already has; a new
+     *        file starts in WAL.
+     */
+    public function __construct(string $dbPath, ?string $journal = null)
     {
+        $journal ??= self::journalOfFile($dbPath);
         $directory = dirname($dbPath);
         if (!is_dir($directory)) {
             mkdir($directory, 0755, true);
@@ -79,8 +126,14 @@ final class Store
         // a read-only database may pass for now: schema creation or the write
         // probe report the relevant storage error.
         try {
-            $this->db->exec('PRAGMA journal_mode = WAL');
-            $this->db->exec('PRAGMA synchronous = NORMAL');
+            if (self::journal($journal) === self::JOURNAL_DELETE) {
+                // Rollback journal: FULL is SQLite's safe default for it.
+                $this->db->exec('PRAGMA journal_mode = DELETE');
+                $this->db->exec('PRAGMA synchronous = FULL');
+            } else {
+                $this->db->exec('PRAGMA journal_mode = WAL');
+                $this->db->exec('PRAGMA synchronous = NORMAL');
+            }
         } catch (\Throwable) {
             // The write probe/schema report the relevant error.
         }

@@ -13,6 +13,20 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.2.0] — 2026-10-11
+
+### Added
+- Option `journal`: `wal` (default) or `delete`. `delete` runs the database
+  with SQLite's classic rollback journal — one file, no `-wal`/`-shm`, no shared
+  memory. For shared hosters where WAL is unreliable: on 2026-10-11 a site on
+  Shared-Host (SQLite 3.7.17, earlier "disk I/O error"s) had its database malformed
+  in WAL mode. Switching an existing database is automatic on the next request.
+- Openers without Kirby options (`maintenance.php`, `bin/kizami-snapshot`) keep
+  the mode the file already has, instead of switching it back to WAL.
+
+### Changed
+- `Store` closes its connection when it is destroyed.
+
 ## [1.1.0] — 2026-10-08
 
 ### Added

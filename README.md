@@ -91,6 +91,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `previewAccess` | `null` | For sites behind their own password while being built: a closure returning `['user' => …, 'hash' => …]` while that protection is on, `null` once live. During preview the dashboard checks exactly these credentials. |
 | `report` | `false` | Enable `/k/report` (also requires `active`). Registers the Panel role `kizami-report`. |
 | `reportRoles` | `['kizami-report']` | Roles allowed to read the report. Admins are deliberately not allowed by default. |
+| `journal` | `'wal'` | SQLite journal mode: `'wal'` or `'delete'`. Use `'delete'` on shared hosters where WAL is unreliable (old SQLite, network file systems, "disk I/O error" in `storage/kizami/errors.log`): one file, no `-wal`/`-shm`. Takes effect on the next request. |
 | `siteId` | site hostname | Site identifier (`site`) in the report. Set it explicitly so it survives a domain change. |
 | `reportWithoutHttps` | `false` | Allow the report and snapshot over plain HTTP. Local testing only. |
 | `snapshot` | `false` | Enable `/k/snapshot` (also requires `active`). Registers the Panel role `kizami-snapshot` (no Panel access). |
@@ -131,7 +132,7 @@ Two optional routes accept `POST` requests from the site's own scripts. Both che
 
 ## Backups
 
-`<storage>/kizami/kizami.sqlite` runs in WAL mode. A plain file copy can miss committed transactions, so use one of these:
+`<storage>/kizami/kizami.sqlite` runs in WAL mode (unless `journal` is `'delete'`). A plain file copy can miss committed transactions, so use one of these:
 
 - **CLI:** `php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite` (also `vendor/bin/kizami-snapshot`).
 - **HTTP**, for hosts without a shell or cron: `GET /k/snapshot` with Basic Auth (enable with `kizami.snapshot`). It returns the snapshot as `application/vnd.sqlite3` and puts the SHA-256 in `X-Kizami-Sha256`.
