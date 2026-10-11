@@ -13,6 +13,30 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.3.0] — 2026-10-12
+
+### Added
+
+- **`kizami.campaignParam`**: a second campaign parameter, for example `cam`.
+  Its value is stored as `utm_campaign` when the link has no `utm_campaign`
+  (`utm_campaign` wins). Same cleaning as `utm_*` values: `A–Z`, `a–z`, `0–9`,
+  `_`, `-`, at most 50 characters. Not set by default; a value that is not a
+  non-empty string is ignored. No schema change, no migration.
+- **Report fields `campaigns` and `campaignsOmitted`**: `[{"name", "visits",
+  "pageViews"}]` per campaign tag of the period, sorted by visits, at most 20
+  (`campaignsOmitted` counts the rest — any request can create a tag, so the
+  list is capped). `name` is the raw key, not a display name. `format` stays
+  2: new fields.
+- **Report text**: a `Campaigns: …` / `Kampagnen: …` line after the sources
+  with the top 5 and `+n more` / `+n weitere`, only if there are campaigns.
+- `Store::campaigns()`, the store method behind the report field.
+
+### [privacy text]
+
+- `DATENSCHUTZ.md` / `PRIVACY.md` mention the optional further campaign
+  parameter. Nothing new is stored unless `kizami.campaignParam` is set; sites
+  that set it must review their privacy policy.
+
 ## [1.2.0] — 2026-10-11
 
 ### Added

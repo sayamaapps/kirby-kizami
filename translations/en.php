@@ -54,6 +54,8 @@ return [
     'report.direct' => 'Of these without a previous page visit: {n}',
     'report.perDay' => 'Per day: {list}',
     'report.sources' => 'Sources: {list}',
+    'report.campaigns' => 'Campaigns: {list}',
+    'report.campaignsMore' => '+{n} more',
     'report.pages' => 'Most viewed: {list}',
     'report.mobileShare' => 'Phone: {n} % of visits',
     'report.dwellTime' => 'Time on site (median): {time}',

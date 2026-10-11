@@ -21,6 +21,15 @@ final class Report
     public const KINDS = ['day', 'week'];
 
     /**
+     * Caps for the campaign list. Anyone can create a new tag with one
+     * request (`?cam=<anything>`), so an uncapped list is a lever on the size
+     * of the report and of every chat message built from it. Real campaigns
+     * have more visits than a flood of one-off tags and stay on top.
+     */
+    public const CAMPAIGNS_MAX = 20;
+    public const CAMPAIGNS_TEXT_MAX = 5;
+
+    /**
      * Reference time for Store::setNow(): the last microsecond of the report
      * period. window() rounds a time with a fraction up to the next full
      * second — the exclusive end then lies exactly on midnight, the last day
@@ -129,6 +138,13 @@ final class Report
         }
         $pages = self::descending($pages);
 
+        // Campaign keys are machine IDs, not display names, so Names is not
+        // involved. Capped (see CAMPAIGNS_MAX); the number left out is reported.
+        $campaigns = [];
+        foreach ($store->campaigns($days) as $c) {
+            $campaigns[] = ['name' => $c['campaign'], 'visits' => $c['visits'], 'pageViews' => $c['pageViews']];
+        }
+
         $data = [
             'kind' => $kind,
             'from' => $from->format('Y-m-d'),
@@ -146,6 +162,8 @@ final class Report
             'actions' => $actions,
             'sources' => array_slice($sources, 0, 4, true),
             'pages' => array_slice($pages, 0, 3, true),
+            'campaigns' => array_slice($campaigns, 0, self::CAMPAIGNS_MAX),
+            'campaignsOmitted' => max(0, count($campaigns) - self::CAMPAIGNS_MAX),
             'dwellTime' => !empty($settings['dwellTime']) ? self::median($store->dwellTimePerVisit($days)) : null,
         ];
         if ($kind === 'week') {
@@ -194,6 +212,17 @@ final class Report
         }
         if ($d['sources'] !== []) {
             $lines[] = I18n::t('report.sources', ['list' => self::list($d['sources'])]);
+        }
+        if ($d['campaigns'] !== []) {
+            // The text shows visits for the top campaigns; the JSON field keeps
+            // both numbers. The rest is a count, so the line stays one line.
+            $shown = array_slice($d['campaigns'], 0, self::CAMPAIGNS_TEXT_MAX);
+            $more = count($d['campaigns']) - count($shown) + (int) ($d['campaignsOmitted'] ?? 0);
+            $list = self::list(array_map(fn ($c) => ['name' => $c['name'], 'value' => $c['visits']], $shown));
+            if ($more > 0) {
+                $list .= ' · ' . I18n::t('report.campaignsMore', ['n' => $more]);
+            }
+            $lines[] = I18n::t('report.campaigns', ['list' => $list]);
         }
         if ($d['pages'] !== []) {
             $lines[] = I18n::t('report.pages', ['list' => self::list($d['pages'])]);

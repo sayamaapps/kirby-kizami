@@ -204,6 +204,79 @@ try {
     same("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).\nDirekte Linkaufrufe ohne Seitenbesuch: 1", $scanEmpty['text'], 'Pure link checks create no visits even in the empty day report');
     I18n::setLanguage('en');
     same(true, str_contains(Report::data($store, $names, 'day', $thu, $settings)['text'], 'Of these without a previous page visit: 3'), 'Direct hits in the English text');
+
+    // Campaigns (utm_campaign, or kizami.campaignParam): own store, so the
+    // fixtures above and their texts stay as they are.
+    same([], $day['campaigns'], 'Without tags: no campaigns');
+    same(false, str_contains($day['text'], 'Campaigns:'), 'Without tags: no campaigns line');
+    $campaignStore = new Store("$tmp/campaigns.sqlite");
+    $tagged = function (string $time, string $session, string $campaign, string $path = '/', string $type = 'page') use ($campaignStore, $utc) {
+        $campaignStore->write(['type' => $type, 'action' => $type === 'page' ? 'view' : 'click', 'session' => $session,
+            'path' => $path, 'utm_campaign' => $campaign, 'created_at' => $utc($time), 'device' => 'mobile']);
+    };
+    $tagged('2026-09-30 10:00:00', 's1', 'social-tg-angst');
+    $tagged('2026-09-30 10:05:00', 's1', 'social-tg-angst', '/menu');   // second page view of one visit
+    $tagged('2026-09-30 11:00:00', 's2', 'social-tg-angst');
+    $tagged('2026-09-30 12:00:00', 's3', 'autumn');
+    $tagged('2026-09-30 12:01:00', 's4', 'autumn');
+    $tagged('2026-09-30 13:00:00', 's6', 'autumn');                     // one visit with two campaigns
+    $tagged('2026-09-30 13:01:00', 's6', 'social-tg-angst', '/menu');
+    $tagged('2026-09-30 14:00:00', 's7', 'zeta');                       // ties: name decides
+    $tagged('2026-09-30 14:01:00', 's8', 'alpha');
+    $tagged('2026-09-30 15:00:00', 's9', '');                           // no tag
+    $tagged('2026-09-30 15:01:00', 's9', 'social-tg-angst', '/', 'redirect'); // a click, not a page view
+    $tagged('2026-09-29 23:59:59', 's10', 'social-tg-angst');           // before the day window
+    $tagged('2026-10-01 00:00:00', 's11', 'social-tg-angst');           // after it
+    $tagged('2026-09-29 12:00:00', 's12', 'autumn');                    // the day before
+    $tagged('2026-09-23 12:00:00', 's13', 'autumn');                    // in the week 21.–27.09.
+    // Names translate display labels only; the campaign key stays as it is.
+    $campNames = new Names(['social-tg-angst' => 'Telegram'], ['autumn' => 'Herbst'], []);
+    $campDay = Report::data($campaignStore, $campNames, 'day', $thu, $settings);
+    same([
+        ['name' => 'social-tg-angst', 'visits' => 3, 'pageViews' => 4],
+        ['name' => 'autumn', 'visits' => 3, 'pageViews' => 3],
+        ['name' => 'alpha', 'visits' => 1, 'pageViews' => 1],
+        ['name' => 'zeta', 'visits' => 1, 'pageViews' => 1],
+    ], $campDay['campaigns'], 'Day: visits and page views per campaign, by visits, page views, name');
+    $campLines = explode("\n", $campDay['text']);
+    $at = array_search('Campaigns: social-tg-angst 3 · autumn 3 · alpha 1 · zeta 1', $campLines, true);
+    same(true, $at !== false && str_starts_with($campLines[$at - 1], 'Sources: ') && str_starts_with($campLines[$at + 1] ?? '', 'Most viewed: '),
+        'Day: campaigns line between sources and most viewed');
+    I18n::setLanguage('de');
+    same(true, in_array('Kampagnen: social-tg-angst 3 · autumn 3 · alpha 1 · zeta 1', explode("\n", Report::data($campaignStore, $campNames, 'day', $thu, $settings)['text']), true),
+        'Day: campaigns line in German');
+    I18n::setLanguage('en');
+    // The same numbers as the store returns them (for an offset window the
+    // store is the only way to read them: the report has no previous period
+    // for campaigns). The day before has social 1 and autumn 1.
+    $campaignStore->setNow(Report::period('day', $thu)['now']);
+    same([
+        ['campaign' => 'autumn', 'visits' => 1, 'pageViews' => 1],
+        ['campaign' => 'social-tg-angst', 'visits' => 1, 'pageViews' => 1],
+    ], $campaignStore->campaigns(1, 1), 'Store: offset window, same mechanics');
+    $campaignStore->setNow(null);
+    $campWeek = Report::data($campaignStore, $campNames, 'week', $mon, $settings);
+    same([['name' => 'autumn', 'visits' => 1, 'pageViews' => 1]], $campWeek['campaigns'], 'Week: only its own days');
+    same(0, $campDay['campaignsOmitted'], 'Day: nothing omitted below the cap');
+    // Flood: 30 one-off tags on one day. The list is capped, the rest counted,
+    // the text shows the top five and a count.
+    $floodStore = new Store("$tmp/flood.sqlite");
+    for ($i = 1; $i <= 30; $i++) {
+        $floodStore->write(['type' => 'page', 'action' => 'view', 'session' => 'f' . $i, 'path' => '/',
+            'utm_campaign' => sprintf('junk-%02d', $i), 'created_at' => $utc('2026-09-30 10:00:00'), 'device' => 'mobile']);
+    }
+    foreach (['r1', 'r2'] as $s) {
+        $floodStore->write(['type' => 'page', 'action' => 'view', 'session' => $s, 'path' => '/',
+            'utm_campaign' => 'real', 'created_at' => $utc('2026-09-30 11:00:00'), 'device' => 'mobile']);
+    }
+    $flood = Report::data($floodStore, $campNames, 'day', $thu, $settings);
+    same(Report::CAMPAIGNS_MAX, count($flood['campaigns']), 'Flood: list capped');
+    same('real', $flood['campaigns'][0]['name'], 'Flood: the real campaign stays on top');
+    same(31 - Report::CAMPAIGNS_MAX, $flood['campaignsOmitted'], 'Flood: the rest is counted');
+    same(true, in_array('Campaigns: real 2 · junk-01 1 · junk-02 1 · junk-03 1 · junk-04 1 · +26 more', explode("\n", $flood['text']), true), 'Flood: text shows the top five and a count');
+    I18n::setLanguage('de');
+    same(true, str_contains(Report::data($floodStore, $campNames, 'day', $thu, $settings)['text'], ' · +26 weitere'), 'Flood: German count');
+    I18n::setLanguage('en');
 } catch (Throwable $e) {
     fwrite(STDERR, 'Report: ' . $e->getMessage() . "\n");
     $failed = true;
@@ -300,9 +373,11 @@ try {
     // of its own (alias), and a German site must still get German text.
     same(true, str_starts_with((string) $request($url, options: ['locale' => 'de_DE.utf8'])[1]['text'], 'Sample Inn · Mi 30.09.'), 'German locale: German report text via respond()');
     same(true, str_starts_with((string) $request($url, options: ['locale' => 'de_DE.utf8', 'kizami.language' => 'en'])[1]['text'], 'Sample Inn · Wed 30 Sep'), 'kizami.language wins over the locale');
-    foreach (['generatedAt', 'brand', 'visits', 'visitsPrevious', 'pageViews', 'pageViewsPrevious', 'clicks', 'clicksPrevious', 'directLinkHits', 'actions', 'sources', 'pages', 'dwellTime', 'discardedLinkHits', 'discardedLinkHitsPrevious', 'text'] as $field) {
+    foreach (['generatedAt', 'brand', 'visits', 'visitsPrevious', 'pageViews', 'pageViewsPrevious', 'clicks', 'clicksPrevious', 'directLinkHits', 'actions', 'sources', 'pages', 'dwellTime', 'discardedLinkHits', 'discardedLinkHitsPrevious', 'campaigns', 'campaignsOmitted', 'text'] as $field) {
         same(true, array_key_exists($field, $json), 'Field ' . $field);
     }
+    same([], $json['campaigns'], 'Campaigns: empty list without tags');
+    same(true, str_contains($request($url)[3], '"campaigns": []'), 'Campaigns: JSON list [] rather than {}');
     same([1, 1, 1, 0], [$json['visits'], $json['visitsPrevious'], $json['pageViews'], $json['clicks'] - 1], 'Numbers of the previous day and the previous week');
     same([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0]], $json['actions'], 'Tiles from the configuration');
     same(['google.com' => 1], $json['sources'], 'Sources without sourceNames: host without www');

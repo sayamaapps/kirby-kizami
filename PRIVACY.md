@@ -18,8 +18,9 @@ their own site.
 ## What is stored
 
 Page path, timestamp, referring domain, campaign tags from the link
-(`utm_source`, `utm_medium`, `utm_campaign`), name, origin page and position of
-selected redirect clicks, a rough device class (phone, tablet, desktop),
+(`utm_source`, `utm_medium`, `utm_campaign` and, if configured, one further
+campaign parameter), name, origin page and position of selected redirect
+clicks, a rough device class (phone, tablet, desktop),
 requests for missing pages, and a **day identifier**. If enabled, it also
 stores image IDs and seconds on page.
 

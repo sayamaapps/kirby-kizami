@@ -83,6 +83,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `images` | `[]` | Allowed image IDs for gallery-open counting (needs the site's gallery script, see [Beacons](#beacons)). |
 | `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
 | `ownHosts` | `[]` | Additional own domains whose referrers count as internal. |
+| `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
 | `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
 | `brand` | site title | Name in the dashboard title and the report (string or closure). |
 | `color` | `#2f4f2a` | Dashboard accent colour (`#rrggbb`). |
@@ -115,6 +116,8 @@ Two optional routes accept `POST` requests from the site's own scripts. Both che
 - `kind=day`: the given day, or yesterday if `date` is omitted. Compared with the same weekday one week earlier.
 - `kind=week`: the Monday–Sunday week containing `date`, or the last full week. Compared with the week before.
 
+`campaigns` lists the campaign tags of the period sorted by visits, at most 20 (`campaignsOmitted` says how many more there were — anyone can create a tag with one request, so the list is capped): `{"name": "…", "visits": n, "pageViews": n}`. `name` is the raw value of `utm_campaign` (or of `kizami.campaignParam`), not a display name. `visits` counts the visits with at least one page view carrying the tag. `pageViews` counts all page views with it, not only entry pages, so a visit with two campaigns counts in both. The tag is recorded only when the request reaches Kirby: a page that a cache serves without its query string is not counted. The `text` lists the top 5 after the sources, as `Campaigns: name visits · … · +n more` (`Kampagnen:` / `+n weitere` in German), and only if there are any.
+
 ```json
 {
   "ok": true, "format": 2, "site": "example", "generatedAt": "2026-10-07T08:00:00+02:00",
@@ -122,7 +125,7 @@ Two optional routes accept `POST` requests from the site's own scripts. Both che
   "visits": 3, "visitsPrevious": 2, "pageViews": 9, "pageViewsPrevious": 7,
   "clicks": 1, "clicksPrevious": 0, "directLinkHits": 0,
   "discardedLinkHits": 0, "discardedLinkHitsPrevious": 0,
-  "actions": [{"name": "Calls", "value": 1}], "sources": {}, "pages": {},
+  "actions": [{"name": "Calls", "value": 1}], "sources": {}, "pages": {}, "campaigns": [], "campaignsOmitted": 0,
   "dwellTime": null,
   "text": "…"
 }
