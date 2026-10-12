@@ -77,6 +77,7 @@ final class ReportService
                 'tileNames' => (array) Options::get($kirby, 'tileNames', []),
                 'contactTargets' => array_values(array_intersect((array) Options::get($kirby, 'contactTargets', []), $redirects)),
                 'dwellTime' => Options::get($kirby, 'dwellTime', false) === true,
+                'events' => Events::config(Options::get($kirby, 'events', [])),
             ]);
             // Name lists always as a JSON object: PHP would turn an empty
             // list into "[]", and a reader would have to know two shapes.

@@ -93,7 +93,7 @@ final class Report
 
     /**
      * @param 'day'|'week' $kind
-     * @param array{tiles?:list<string>,tileNames?:array<string,string>,contactTargets?:list<string>,brand?:string,dwellTime?:bool} $settings
+     * @param array{tiles?:list<string>,tileNames?:array<string,string>,contactTargets?:list<string>,brand?:string,dwellTime?:bool,events?:array} $settings
      */
     public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
     {
@@ -165,6 +165,10 @@ final class Report
             'campaigns' => array_slice($campaigns, 0, self::CAMPAIGNS_MAX),
             'campaignsOmitted' => max(0, count($campaigns) - self::CAMPAIGNS_MAX),
             'dwellTime' => !empty($settings['dwellTime']) ? self::median($store->dwellTimePerVisit($days)) : null,
+            // Reported actions (kizami.events, since 1.4.0): every configured
+            // action with total, visits and its top details. An empty list
+            // without configuration. New field, format stays 2.
+            'events' => Events::summary($store, (array) ($settings['events'] ?? []), $days, I18n::language()),
         ];
         if ($kind === 'week') {
             $data['perDay'] = array_map(fn ($d) => ['day' => $d['day'], 'visits' => $d['count']], $store->visitsPerDay($days));
@@ -203,6 +207,12 @@ final class Report
         }
         if ($d['directLinkHits'] > 0) {
             $lines[] = I18n::t('report.direct', ['n' => $d['directLinkHits']]);
+        }
+        // Only actions that were reported, so a site without kizami.events
+        // (or a quiet day) gets the same text as before 1.4.0.
+        $events = array_filter($d['events'] ?? [], fn ($e) => $e['count'] > 0);
+        if ($events !== []) {
+            $lines[] = I18n::t('report.events', ['list' => self::list(array_map(fn ($e) => ['name' => $e['name'], 'value' => $e['count']], $events))]);
         }
         if ($week && !empty($d['perDay'])) {
             $lines[] = I18n::t('report.perDay', ['list' => implode(' · ', array_map(

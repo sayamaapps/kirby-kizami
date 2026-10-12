@@ -31,6 +31,7 @@ try {
     $store = new Kizami\Store($db);
     $old = (new DateTimeImmutable('-6 years', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
     $store->write(['type' => 'page', 'action' => 'view', 'path' => '/old', 'session' => 'a', 'created_at' => $old]);
+    $store->write(['type' => 'event', 'event' => 'download', 'detail' => 'menu.pdf', 'path' => '/', 'session' => 'a', 'created_at' => gmdate('Y-m-d H:i:s')]);
     for ($i = 0; $i < 50; $i++) {
         $store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 's' . $i, 'created_at' => gmdate('Y-m-d H:i:s')]);
     }
@@ -46,6 +47,7 @@ try {
     $copy = new SQLite3($tmp . '/copy.sqlite');
     check($copy->querySingle('SELECT COUNT(*) FROM kizami_events') === 51, 'all rows including the WAL in the copy');
     check($copy->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path = '/old'") === 1, 'nothing compacted or removed');
+    check($copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events") === 'download|menu.pdf', 'reported actions in the copy');
     check($copy->querySingle('PRAGMA integrity_check') === 'ok', 'copy is intact');
     $copy->close();
     check(substr(sprintf('%o', fileperms($tmp . '/copy.sqlite')), -4) === '0600', 'copy with 0600');

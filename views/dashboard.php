@@ -222,6 +222,29 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
 </section>
 <?php endif; ?>
 
+<?php if (($data['events'] ?? null) !== null): ?>
+<section class="block" aria-labelledby="events-title">
+  <h2 id="events-title"><?= $t('events.title') ?></h2>
+  <p class="hint"><?= $t('events.hint') ?></p>
+  <?php if (array_sum(array_column($data['events'], 'count')) === 0): ?><?= Chart::empty(I18n::t('events.none')) ?><?php else: ?>
+  <?= Chart::bars(array_map(fn ($ev) => ['name' => $ev['name'], 'value' => $ev['count']], $data['events'])) ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.column') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+    <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count']) ?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
+  </tbody></table>
+  <?php foreach ($data['events'] as $ev): ?>
+    <?php if (!$ev['detail'] || $ev['count'] === 0) { continue; } ?>
+  <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
+    <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+      <?php foreach ($ev['details'] as $d): ?><tr><td><?= $e($d['name']) ?></td><td class="num"><?= Chart::number($d['count']) ?></td><td class="num"><?= Chart::number($d['visits']) ?></td></tr><?php endforeach; ?>
+  </tbody></table>
+      <?php if ($ev['detailsOmitted'] > 0): ?><p class="hint"><?= $t('events.more', ['n' => Chart::number($ev['detailsOmitted'])]) ?></p><?php endif; ?>
+    <?php endif; ?>
+  <?php endforeach; ?>
+  <?php endif; ?>
+</section>
+<?php endif; ?>
+
 <details class="block">
   <summary><?= $t('positions.title') ?></summary>
   <p class="hint"><?= $t('positions.hint') ?></p>

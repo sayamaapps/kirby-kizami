@@ -193,7 +193,7 @@ try {
     $tables = [];
     $result = $db->query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
     while ($row = $result->fetchArray(SQLITE3_NUM)) { $tables[] = $row[0]; }
-    expect(['kizami_days', 'kizami_discarded', 'kizami_events', 'kizami_maintenance'], $tables, 'only English tables left');
+    expect(['kizami_custom_events', 'kizami_days', 'kizami_discarded', 'kizami_events', 'kizami_maintenance'], $tables, 'only English tables left');
     expect(7, $db->querySingle('SELECT COUNT(*) FROM kizami_events'), 'every event kept, including the one from the WAL');
     expect(1, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE id = 16 AND path = '/wal'"), 'WAL row present after the move');
     $mapped = [];

@@ -124,6 +124,11 @@ final class Analysis
         // the template lean — it does not show the section at all then.
         $dwellTime = !empty($settings['dwellTime']) ? self::dwellTime($store, $names, $days, $berlin) : null;
 
+        // Reported actions (kizami.events): null without configuration, so
+        // the template leaves the section out, like dwell time.
+        $events = (array) ($settings['events'] ?? []);
+        $events = $events === [] ? null : Events::summary($store, $events, $days, I18n::language());
+
         $lt = $store->longTerm();
         $months = array_reverse(array_slice($lt['months'], 0, 24));
         $months = array_map(fn ($m) => ['name' => I18n::monthYear($m['month']), 'value' => $m['devices']], $months);
@@ -153,6 +158,7 @@ final class Analysis
             'technical' => ['notFound' => $store->notFound($days), 'schema' => $store->missingTables(), 'writeError' => $store->writeProbe()],
             'shades' => Chart::shades((string) ($settings['color'] ?? '#2f4f2a')),
             'dwellTime' => $dwellTime,
+            'events' => $events,
         ];
     }
 

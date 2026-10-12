@@ -18,6 +18,7 @@ require $base . '/vendor/autoload.php';
 require_once $base . '/src/I18n.php';
 require_once $base . '/src/Store.php';
 require_once $base . '/src/Names.php';
+require_once $base . '/src/Events.php';
 require_once $base . '/src/Report.php';
 
 // Kirby logs failed logins via error_log (auth.debug). The intended failed
@@ -326,6 +327,7 @@ try {
     $store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'x', 'created_at' => $utc('2026-09-30 12:00:00'), 'device' => 'mobile', 'referrer' => 'www.google.com']);
     $store->write(['type' => 'redirect', 'action' => 'click', 'path' => '/', 'target' => 'call', 'session' => 'x', 'created_at' => $utc('2026-09-30 12:01:00'), 'device' => 'mobile']);
     $store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'y', 'created_at' => $utc('2026-09-23 12:00:00'), 'device' => 'mobile']);
+    $store->write(['type' => 'event', 'event' => 'download', 'detail' => 'menu.pdf', 'path' => '/', 'session' => 'x', 'created_at' => $utc('2026-09-30 12:02:00')]);
 
     $request = function (string $url, ?string $who = 'report@example.invalid', string $pw = 'report-password-very-long-123', array $options = []) use ($app, $thu) {
         $request = ['method' => 'GET', 'url' => $url];
@@ -377,6 +379,25 @@ try {
         same(true, array_key_exists($field, $json), 'Field ' . $field);
     }
     same([], $json['campaigns'], 'Campaigns: empty list without tags');
+    // Actions (1.4.0): a new field, everything else as before — format stays 2.
+    same([], $json['events'], 'Actions: empty list without kizami.events, even with stored actions');
+    same(false, str_contains($json['text'], 'Actions:'), 'Actions: no text line without kizami.events');
+    $events = ['kizami.events' => ['download' => ['label' => ['en' => 'Downloads', 'de' => 'Downloads'], 'detail' => true], 'video_play' => ['label' => 'Video']]];
+    [$code, $withEvents, , $eventsBody] = $request($url, options: $events);
+    same([200, 2], [$code, $withEvents['format']], 'Actions: format stays 2');
+    same([
+        ['key' => 'download', 'name' => 'Downloads', 'count' => 1, 'visits' => 1, 'detail' => true, 'details' => [['name' => 'menu.pdf', 'count' => 1, 'visits' => 1]], 'detailsOmitted' => 0],
+        ['key' => 'video_play', 'name' => 'Video', 'count' => 0, 'visits' => 0, 'detail' => false, 'details' => [], 'detailsOmitted' => 0],
+    ], $withEvents['events'], 'Actions: field events with total, visits and details');
+    same(true, str_contains($eventsBody, '"details": []'), 'Actions: an empty detail list stays a JSON list');
+    $unchanged = $withEvents;
+    unset($unchanged['events'], $unchanged['text'], $unchanged['generatedAt']);
+    $plain = $json;
+    unset($plain['events'], $plain['text'], $plain['generatedAt']);
+    same($plain, $unchanged, 'Actions: every other field unchanged');
+    $lines = explode("\n", $withEvents['text']);
+    same(true, in_array('Actions: Downloads 1', $lines, true), 'Actions: text line with the reported action');
+    same($json['text'], implode("\n", array_filter($lines, fn ($line) => $line !== 'Actions: Downloads 1')), 'Actions: the text gains only that line');
     same(true, str_contains($request($url)[3], '"campaigns": []'), 'Campaigns: JSON list [] rather than {}');
     same([1, 1, 1, 0], [$json['visits'], $json['visitsPrevious'], $json['pageViews'], $json['clicks'] - 1], 'Numbers of the previous day and the previous week');
     same([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0]], $json['actions'], 'Tiles from the configuration');
@@ -426,6 +447,7 @@ try {
     file_put_contents($tmp . '/copy.sqlite', $body);
     $copy = new SQLite3($tmp . '/copy.sqlite');
     same(['ok', 3, 4], [$copy->querySingle('PRAGMA integrity_check'), $copy->querySingle('SELECT COUNT(*) FROM kizami_events'), $copy->querySingle('SELECT SUM(hits) FROM kizami_discarded')], 'Snapshot complete and intact');
+    same('download|menu.pdf', $copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events"), 'Snapshot includes the reported actions');
     $copy->close();
     same([], glob($tmp . '/storage/kizami/.snapshot-*'), 'Intermediate file deleted');
     same(true, in_array('k/snapshot', array_column($app()->extensions('routes'), 'pattern'), true), 'Snapshot route registered');
