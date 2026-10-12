@@ -157,6 +157,17 @@ return [
     'dwell.measurements' => 'Messungen',
     'dwell.hint' => 'Gezählt wird nur aktive Zeit: Seite sichtbar, Fenster im Vordergrund, höchstens eine Minute ohne Scrollen oder Tippen. Erst ab {date} erfasst.',
 
+    'events.title' => 'Aktionen',
+    'events.hint' => 'Klicks und Wiedergaben, die das Skript der Website meldet, etwa Downloads oder ein gestartetes Video. Jede Aktion (mit ihrer Zusatzangabe) zählt je Seitenaufruf höchstens einmal. Getrennt von den Linkaufrufen oben und nicht Teil der Aktionsquote. Besuche werden je Tag gezählt.',
+    'events.none' => 'Noch keine gemeldeten Aktionen im Zeitraum',
+    'events.column' => 'Aktion',
+    'events.count' => 'Gesamt',
+    'events.visits' => 'Besuche mit dieser Aktion',
+    'events.details' => '{name}: häufigste Zusatzangaben',
+    'events.detail' => 'Zusatzangabe',
+    'events.noDetails' => 'Keine Zusatzangaben gemeldet.',
+    'events.more' => '{n} weitere Zusatzangaben nicht angezeigt.',
+
     'positions.title' => 'Welche Linkposition genutzt wird',
     'positions.hint' => 'Klickzahlen nach Platzierung. Wie häufig ein Link gesehen wurde, wird nicht gemessen. Ältere Klicks haben keine Position.',
     'positions.column' => 'Position',
@@ -178,7 +189,7 @@ return [
     'technical.noneInPeriod' => 'Keine im Zeitraum.',
     'technical.address' => 'Adresse',
     'technical.howTitle' => 'So wird gezählt',
-    'technical.how' => 'Ohne Analyse-Cookies und ohne Browser-Speicher. Seitenaufrufe und Linkklicks werden serverseitig erfasst. Bei aktivierter Bildzählung meldet die Bildergalerie bewusste Großansichten an denselben Server. Ein Gerät ist nur innerhalb eines Tages wiedererkennbar. Browser mit „Do Not Track“ oder „Global Privacy Control“ und bekannte Bots werden nicht gezählt. Fehlseiten zählen nicht als Besuche.',
+    'technical.how' => 'Ohne Analyse-Cookies und ohne Browser-Speicher. Seitenaufrufe und Linkklicks werden serverseitig erfasst. Bei aktivierter Bildzählung meldet die Bildergalerie bewusste Großansichten an denselben Server. Sind Aktionen eingerichtet, meldet das Skript der Website dorthin auch ausgewählte Klicks und Wiedergaben. Ein Gerät ist nur innerhalb eines Tages wiedererkennbar. Browser mit „Do Not Track“ oder „Global Privacy Control“ und bekannte Bots werden nicht gezählt. Fehlseiten zählen nicht als Besuche.',
     'technical.storageOk' => 'Speicher: in Ordnung.',
     'technical.storageProblem' => 'Speicher: Problem, bitte Betreiber informieren.',
 ];

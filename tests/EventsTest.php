@@ -166,6 +166,53 @@ try {
     same(['details' => [], 'omitted' => 0], $store->customEventDetails('video_play', 7, 10), 'Details: empty details are no details');
     same($before, [$store->visits(7), $store->pageViews(7), $store->clicks(7), $store->devices(7), $store->longTerm()], 'Actions change neither visits, page views, clicks, devices nor the long term');
 
+    // Summary for dashboard and report: configured actions only, most reported first.
+    I18n::setLanguage('de');
+    $summary = Events::summary($store, $config, 7, I18n::language());
+    same(['download', 'video_play', 'social-click', 'resume', str_repeat('b', 32), 'labels'], array_column($summary, 'key'), 'Summary: configured actions, most reported first, ties in configuration order, unconfigured key left out');
+    same(['key' => 'download', 'name' => 'Download', 'count' => 6, 'visits' => 3, 'detail' => true, 'details' => [
+        ['name' => 'a.pdf', 'count' => 4, 'visits' => 3], ['name' => 'b.pdf', 'count' => 1, 'visits' => 1], ['name' => 'c.pdf', 'count' => 1, 'visits' => 0],
+    ], 'detailsOmitted' => 0], $summary[0], 'Summary: an action with details');
+    same(['key' => 'video_play', 'name' => 'Video gestartet', 'count' => 1, 'visits' => 1, 'detail' => false, 'details' => [], 'detailsOmitted' => 0], $summary[1], 'Summary: an action without details, German label');
+    same(0, $summary[2]['count'], 'Summary: a configured action without reports is listed with 0');
+    $db->exec("INSERT INTO kizami_custom_events (created_at, event, detail, session) VALUES ('" . $at(0) . "', 'video_play', 'stored earlier', 'x')");
+    same([], Events::summary($store, $config, 7, 'de')[1]['details'], 'Summary: details only for actions with detail => true');
+    $db->exec("DELETE FROM kizami_custom_events WHERE detail = 'stored earlier'");
+    for ($i = 1; $i <= 12; $i++) { $event('download', 'flood', 0, sprintf('junk-%02d', $i)); }
+    $flood = Events::summary($store, $config, 7, 'de')[0];
+    same([Events::DETAILS_MAX, 'a.pdf', 5], [count($flood['details']), $flood['details'][0]['name'], $flood['detailsOmitted']], 'Summary: details capped at 10, the most frequent first, the rest counted');
+    $db->exec("DELETE FROM kizami_custom_events WHERE session = 'flood'");
+
+    // Dashboard section.
+    $names = new Names([], [], []);
+    I18n::setLanguage('en');
+    $html = render(Analysis::data($store, $names, 7, ['events' => $config]));
+    preg_match('/<section class="block" aria-labelledby="events-title">.*?<\/section>/s', $html, $section);
+    $section = $section[0] ?? '';
+    same(true, str_contains($section, '<h2 id="events-title">Actions</h2>'), 'Dashboard: section "Actions"');
+    same(true, str_contains($section, '<th scope="col" class="num">Total</th><th scope="col" class="num">Visits with this action</th>'), 'Dashboard: total and visits columns');
+    same(true, str_contains($section, '<tr><td>Download</td><td class="num">6</td><td class="num">3</td></tr>'), 'Dashboard: row per action with total and visits');
+    same(true, str_contains($section, '<tr><td>Video played</td><td class="num">1</td><td class="num">1</td></tr>'), 'Dashboard: English label');
+    same(true, str_contains($section, '<h3>Download: most frequent details</h3>') && str_contains($section, '<tr><td>a.pdf</td><td class="num">4</td><td class="num">3</td></tr>'), 'Dashboard: top details below');
+    same(false, str_contains($section, 'Video played: most frequent details'), 'Dashboard: no detail table for actions without details');
+    same(false, str_contains($html, '<script') || (bool) preg_match('/ style="/', $html), 'Dashboard: still no script, no inline style');
+    $event('download', 'x', 0, '<b>"&</b>');
+    $db->exec("INSERT INTO kizami_custom_events (created_at, event, detail, session) VALUES ('" . $at(0) . "', 'download', '<script>alert(1)</script>', 'x')");
+    $html = render(Analysis::data($store, $names, 7, ['events' => $config + Events::config(['xss' => ['label' => '<i>Label</i>']])]));
+    same(true, str_contains($html, '&lt;b&gt;&quot;&amp;&lt;/b&gt;') && str_contains($html, '&lt;script&gt;alert(1)&lt;/script&gt;') && str_contains($html, '&lt;i&gt;Label&lt;/i&gt;') && !str_contains($html, '<script>'),
+        'Dashboard: details and labels HTML-escaped, even if written past the cleaning');
+    $db->exec("DELETE FROM kizami_custom_events WHERE session = 'x'");
+    same(false, str_contains(render(Analysis::data($store, $names, 7, [])), 'events-title'), 'Dashboard: no section without kizami.events');
+    $quiet = render(Analysis::data(new Store("$tmp/quiet.sqlite"), $names, 7, ['events' => $config]));
+    same(true, str_contains($quiet, 'events-title') && str_contains($quiet, 'No reported actions in this period yet'), 'Dashboard: section with a note while nothing was reported');
+    for ($i = 1; $i <= 12; $i++) { $event('download', 'flood', 0, sprintf('junk-%02d', $i)); }
+    same(true, str_contains(render(Analysis::data($store, $names, 7, ['events' => $config])), '5 more details not shown.'), 'Dashboard: hidden details counted');
+    $db->exec("DELETE FROM kizami_custom_events WHERE session = 'flood'");
+    I18n::setLanguage('de');
+    $htmlDe = render(Analysis::data($store, $names, 7, ['events' => $config]));
+    same(true, str_contains($htmlDe, '<h2 id="events-title">Aktionen</h2>') && str_contains($htmlDe, 'Besuche mit dieser Aktion') && str_contains($htmlDe, 'Download: häufigste Zusatzangaben'), 'Dashboard: German');
+    I18n::setLanguage('en');
+
     // Retention: five years, like the single events; not rolled up.
     $old = (new DateTimeImmutable('today', $berlin))->modify('-5 years -1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     $recent = (new DateTimeImmutable('today', $berlin))->modify('-5 years +1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');

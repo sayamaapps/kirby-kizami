@@ -312,6 +312,7 @@ try {
     checkHttp(str_contains($html, 'Link clicks') && str_contains($html, 'Link clicks without a previous page visit') && str_contains($html, 'Trend') && str_contains($html, 'Long term') && str_contains($html, 'Time on site'), 'Dashboard sections');
     checkHttp(str_contains($html, '/contact%3Cscript%3Ealert(1)%3C/script%3E') && !str_contains($html, '<script'), 'Missing-page path cleaned and without script');
     checkHttp(!preg_match('/ style="/', $html) && !str_contains($html, '<script'), 'No inline styles, no script');
+    checkHttp(str_contains($html, '<h2 id="events-title">Actions</h2>') && str_contains($html, '<tr><td>Download</td>') && str_contains($html, '<td>cdn.example/menu.pdf</td>'), 'Dashboard shows the actions and their details');
     // K9: months appear readable ("Jan 10"), no longer as raw ISO "2010-01".
     checkHttp(str_contains($html, 'Jan 10'), 'Dashboard shows archived months');
     // Language: English by default — no kizami.language, no locale.

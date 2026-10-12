@@ -522,6 +522,7 @@ App::plugin('sayamaapps/kizami', [
                             'tileNames'      => (array) kizami_option('tileNames', []),
                             'color'          => (string) kizami_option('color', '#2f4f2a'),
                             'dwellTime'      => kizami_option('dwellTime', false) === true,
+                            'events'         => Events::config(kizami_option('events', [])),
                         ]);
                     } catch (\Throwable $e) {
                         error_log('Kizami: dashboard not available: ' . $e->getMessage());

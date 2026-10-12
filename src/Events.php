@@ -52,6 +52,35 @@ final class Events
         return is_string($key) && preg_match(self::KEY, $key) === 1;
     }
 
+    /**
+     * Every configured action with its numbers in the window, for the
+     * dashboard and the report alike: most reported first, ties in
+     * configuration order. Configured actions without reports are listed
+     * with 0 — the list is the operator's own and short. Rows of keys no
+     * longer configured are not shown (they stay stored until retention).
+     *
+     * @param array<string, array{label: array<string,string>, detail: bool}> $config from config()
+     * @return list<array{key:string,name:string,count:int,visits:int,detail:bool,details:list<array{name:string,count:int,visits:int}>,detailsOmitted:int}>
+     */
+    public static function summary(Store $store, array $config, int $days, string $language, int $offset = 0): array
+    {
+        $numbers = array_column($store->customEvents($days, $offset), null, 'event');
+        $summary = [];
+        foreach ($config as $key => $entry) {
+            $row = ['key' => $key, 'name' => self::label($config, $key, $language),
+                'count' => $numbers[$key]['count'] ?? 0, 'visits' => $numbers[$key]['visits'] ?? 0,
+                'detail' => $entry['detail'], 'details' => [], 'detailsOmitted' => 0];
+            if ($entry['detail'] && $row['count'] > 0) {
+                $details = $store->customEventDetails($key, $days, self::DETAILS_MAX, $offset);
+                $row['details'] = array_map(fn ($d) => ['name' => $d['detail'], 'count' => $d['count'], 'visits' => $d['visits']], $details['details']);
+                $row['detailsOmitted'] = $details['omitted'];
+            }
+            $summary[] = $row;
+        }
+        usort($summary, fn ($a, $b) => $b['count'] <=> $a['count']);
+        return $summary;
+    }
+
     /** Label in $language, else English, else the first label, else the key. */
     public static function label(array $config, string $key, string $language): string
     {
