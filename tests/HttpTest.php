@@ -13,11 +13,17 @@ function checkHttp(bool $ok, string $message): void {
 }
 function requestHttp(string $path, array $headers = [], ?array $post = null): array {
     global $port;
+    // Only the last User-Agent is sent (the default one or the last passed
+    // one): with two headers, which one the server keeps differs between PHP
+    // builds (the built-in server of Ubuntu's PHP 8.3.6 keeps the first).
+    $headers = ['User-Agent: Mozilla/5.0 Firefox/130.0', ...$headers];
+    $agents = preg_grep('/^User-Agent:/i', $headers);
+    $headers = array_values(array_diff_key($headers, array_slice($agents, 0, -1, true)));
     $context = stream_context_create(['http' => [
         'method' => $post === null ? 'GET' : 'POST',
         'content' => $post === null ? '' : http_build_query($post),
         'ignore_errors' => true, 'follow_location' => 0, 'timeout' => 5,
-        'header' => implode("\r\n", ['User-Agent: Mozilla/5.0 Firefox/130.0', ...($post === null ? [] : ['Content-Type: application/x-www-form-urlencoded']), ...$headers]),
+        'header' => implode("\r\n", [...($post === null ? [] : ['Content-Type: application/x-www-form-urlencoded']), ...$headers]),
     ]]);
     $body = @file_get_contents("http://127.0.0.1:$port$path", false, $context);
     $responseHeaders = $http_response_header ?? [];
