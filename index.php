@@ -200,12 +200,74 @@ function kizami_beacon_path(): ?string
         return null;
     }
     $path = get('path');
+    return kizami_find_page($path) !== null ? $path : null;
+}
+
+/**
+ * The page a reported path names — only an existing page, never the error
+ * page. '/' is the home page, everything else goes through site()->find(),
+ * which takes the page ID in every language.
+ */
+function kizami_find_page(mixed $path): ?\Kirby\Cms\Page
+{
     if (!is_string($path) || strlen($path) > 255 || $path !== Capture::cleanPath($path)
         || !str_starts_with($path, '/') || str_starts_with($path, '//')) {
         return null;
     }
     $page = $path === '/' ? App::instance()->site()->homePage() : App::instance()->site()->find(trim($path, '/'));
-    return $page && !$page->isErrorPage() ? $path : null;
+    return $page instanceof \Kirby\Cms\Page && !$page->isErrorPage() ? $page : null;
+}
+
+/**
+ * The path under which kizami_find_page() finds $page again (since 1.4.0):
+ * '/' for the home page, otherwise '/' and the page ID. The ID, not the
+ * address in the browser: a page served by a route of its own (a short code
+ * like /EEAQ77), under a language prefix or with a translated slug has
+ * another address, but one ID, and the beacons only accept existing pages.
+ * Null for no page, the error page and an ID the beacons would reject.
+ */
+function kizami_page_path(mixed $page): ?string
+{
+    if (!($page instanceof \Kirby\Cms\Page) || $page->isErrorPage()) {
+        return null;
+    }
+    $path = $page->isHomePage() ? '/' : '/' . $page->id();
+    return strlen($path) <= 255 && $path === Capture::cleanPath($path) ? $path : null;
+}
+
+/**
+ * Counts the configured action $key on $page for the current request, from
+ * PHP instead of the browser (since 1.4.0) — for a route or a template, for
+ * example a short-code route that counts `shortcode_access` without any
+ * JavaScript. Use $page->kizamiEvent($key, $detail) (page method below).
+ *
+ * The rules of /k/event, except the two that only make sense for a beacon
+ * (Origin, Sec-Fetch-Site): only keys listed in kizami.events, a detail only
+ * for `'detail' => true` and cleaned like there, nothing for bots, an empty
+ * user agent, DNT or GPC (kizami_write()), the same day identifier as page
+ * views. HEAD requests count nothing: link checkers and previews send them.
+ * A key that is not (or no longer) configured counts nothing, silently —
+ * like a removed redirect, removing the entry is a way to switch it off.
+ *
+ * Never throws: errors end up in the error log, the page goes on.
+ */
+function kizami_event(mixed $key, mixed $page, mixed $detail = null): void
+{
+    try {
+        // kizami.active, DNT/GPC and bots: kizami_write().
+        if (App::instance()->request()->method() === 'HEAD') {
+            return;
+        }
+        $events = Events::config(kizami_option('events', []));
+        $path = kizami_page_path($page);
+        if (!Events::isKey($key) || !array_key_exists($key, $events) || $path === null) {
+            return;
+        }
+        $detail = $events[$key]['detail'] ? Capture::cleanDetail($detail) : '';
+        kizami_write(fn () => ['type' => 'event', 'event' => $key, 'detail' => $detail, 'path' => $path]);
+    } catch (\Throwable $e) {
+        error_log('Kizami: ' . $e->getMessage());
+    }
 }
 
 $kizamiTranslations = [];
@@ -320,6 +382,20 @@ App::plugin('sayamaapps/kizami', [
             unset($attributes['href'], $attributes['rel']);
             $attr = \Kirby\Toolkit\Html::attr(['href' => $this->redirectLink($name, $fallback, $position), 'rel' => implode(' ', array_unique($rel))] + $attributes);
             return '<a ' . $attr . '>' . htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a>';
+        },
+        /**
+         * Counts a configured action (kizami.events) on this page from PHP
+         * (since 1.4.0), see kizami_event(). Returns the page, so a route
+         * can count and answer in one line:
+         *
+         *     'action' => fn () => page('books/kizami')?->kizamiEvent('shortcode_access')
+         *
+         * Never throws and decides nothing: the page is returned whether
+         * the action was counted or not.
+         */
+        'kizamiEvent' => function (mixed $key, mixed $detail = null) {
+            kizami_event($key, $this, $detail);
+            return $this;
         },
     ],
 
