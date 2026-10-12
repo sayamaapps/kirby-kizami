@@ -132,7 +132,11 @@ Embed the script once per page, for example in the `<head>`:
 <?php snippet('kizami/events') ?>
 ```
 
-It prints `<script src="/k/event.js?v=…" defer></script>`, and nothing while Kizami is off or no action is configured. The script comes from the site's own server and there is no inline script, so it works with a strict `script-src 'self'`. Then mark elements:
+It prints `<script src="/k/event.js?v=…" data-kizami-path="/books/kizami" defer></script>`, and nothing while Kizami is off or no action is configured. The script comes from the site's own server and there is no inline script, so it works with a strict `script-src 'self'`.
+
+`data-kizami-path` names the page being rendered: `/` for the home page, otherwise `/` and the page ID. The script reports that path instead of the address in the browser, because `/k/event` only accepts existing pages and the address is not always one: a page served by a route of your own (a short code such as `/EEAQ77`), under a language prefix (`/en/…`) or with a translated slug. Without `$page` (the snippet outside a page) and on the error page the attribute is missing and the script sends `location.pathname`.
+
+Then mark elements:
 
 ```html
 <a href="/media/prices.pdf" data-kizami-event="download" data-kizami-detail="prices.pdf">Prices (PDF)</a>
@@ -156,6 +160,26 @@ The server applies the rules of the other beacons: `Origin` and `Sec-Fetch-Site`
 - `mailto:`, `tel:` and `sms:` keep only the scheme.
 
 Don't put names, e-mail addresses or other personal data into details.
+
+**Counting from PHP.** A route or a template can count a configured action itself, without JavaScript, with the page method `$page->kizamiEvent($key, $detail = null)`. It returns the page, so a short-code route counts and answers in one line:
+
+```php
+// site/config/config.php
+'kizami.events' => [
+    'shortcode_access' => ['label' => ['de' => 'Kurzlink', 'en' => 'Short link'], 'detail' => true],
+],
+'routes' => [
+    [
+        'pattern' => '(:alphanum)',
+        'action'  => function (string $code) {
+            $book = page('books')?->children()->findBy('shortcode', $code);
+            return $book?->kizamiEvent('shortcode_access', $code) ?? $this->next();
+        },
+    ],
+],
+```
+
+The rules of `/k/event` apply, except `Origin` and `Sec-Fetch-Site`, which only make sense for a beacon: only keys listed in `kizami.events` count (a key that is not, or no longer, configured counts nothing, without an error), a detail is kept and cleaned only for `'detail' => true`, bots, an empty user agent, `DNT: 1` and `Sec-GPC: 1` are not counted, the day identifier is the one of the visit, and the path is the page's (`/` and its ID, as above; nothing for the error page). `HEAD` requests count nothing. The method never throws: errors go to PHP's error log and the page is returned either way. It writes once to the database like a page view does. Every call counts, so call it once per request. In a template or controller, mind Kirby's page cache: a cached page is served without running either, so count in a route or keep that page out of the cache.
 
 The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same five-year retention as single events. They are not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
 
@@ -202,8 +226,9 @@ Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/
 - **Redirect clicks** count only when the browser confirms a user action (`Sec-Fetch-User: ?1`) or when the same day identifier has already viewed a page today. Discarded hits are still redirected and appear as a daily total (`discardedLinkHits`), with no other data.
   - Known undercount: Safari/WebKit never sends `Sec-Fetch-User`. A visitor whose IP or user agent changes between the page view and the click (for example, switching from Wi-Fi to mobile data) is not counted. There is no workaround.
   - Hits from before 1.0.0 are not filtered retroactively.
-- **Actions** (since 1.4.0) count every accepted report of a configured key. The script sends each action and detail at most once per page view, but the server does not deduplicate. "Visits with this action" are distinct day identifiers per day; unlike redirect clicks they are not filtered by a page view.
+- **Actions** (since 1.4.0) count every accepted report of a configured key. The script sends each action and detail at most once per page view, but the server does not deduplicate; `$page->kizamiEvent()` counts every call. "Visits with this action" are distinct day identifiers per day; unlike redirect clicks they are not filtered by a page view.
 - Bots (user-agent list, empty user agent) and requests with DNT/GPC are not counted. Logged-in Panel users are currently counted like everyone else.
+- The user-agent list contains `headless`, so a headless browser (`HeadlessChrome` in the user agent, as Playwright's Chromium sends by default) counts as a bot. Browser tests that should be counted must set a normal user agent.
 
 ## Upgrading from the `kennzahlen` copy
 
@@ -220,7 +245,7 @@ composer install --ignore-platform-req=ext-gd   # Kirby is a dev dependency used
 composer test                                   # or: sh tests/run.sh
 ```
 
-The tests are plain PHP scripts (exit code 0 = pass). The read-only database check must run as a non-root user.
+The tests are plain PHP scripts (exit code 0 = pass). The read-only database check must run as a non-root user. `tests/EventJsTest.php` runs `views/event.js` in Node and is skipped where `node` is missing. For a test in a real headless browser, set a normal user agent (for example `browser.newPage({ userAgent: 'Mozilla/5.0 … Chrome/130.0.0.0 Safari/537.36' })` in Playwright): the default contains `HeadlessChrome` and is filtered as a bot, so nothing would be counted.
 
 ## License
 

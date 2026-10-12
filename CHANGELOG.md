@@ -39,6 +39,23 @@ All notable changes to this project are documented here. Versions follow
     site's own code. Each action and detail at most once per page view;
     `sendBeacon`, falling back to `fetch` with `keepalive`. No cookies, no
     browser storage.
+  - **`data-kizami-path`** on the script tag of the snippet: the path of the
+    page being rendered (`/` for the home page, otherwise `/` and the page
+    ID), which `event.js` reports instead of `location.pathname` (still the
+    fallback without the attribute). `/k/event` only accepts existing pages,
+    and the address in the browser is not always one: a page served by a
+    route of the site's own (a short code like `/EEAQ77`), under a language
+    prefix or with a translated slug. Found on a site with short-code
+    routes, where every action was answered with `204` but not stored. The
+    server check is unchanged: still only existing pages.
+  - **`$page->kizamiEvent($key, $detail = null)`**: counts a configured
+    action from PHP, for a route or a template — for example a short-code
+    route counting `shortcode_access` without JavaScript. Returns the page.
+    The rules of `/k/event` without `Origin`/`Sec-Fetch-Site`: only listed
+    keys (others count nothing, silently), the detail cleaned and only for
+    `'detail' => true`, no bots, no empty user agent, no DNT/GPC, the day
+    identifier of the visit, the page path as above, nothing on the error
+    page and for `HEAD` requests. Never throws; errors go to the error log.
   - **Dashboard section "Actions"** ("Aktionen"): total and visits with the
     action per configured action, and the ten most frequent details for
     actions with `detail`.
@@ -50,6 +67,8 @@ All notable changes to this project are documented here. Versions follow
     or changed in meaning.
 - `Store::customEvents()`, `Store::customEventDetails()` and
   `Kizami\Events` behind the dashboard and the report.
+- README: a headless browser (`HeadlessChrome`) counts as a bot; browser
+  tests that should be counted must set a normal user agent.
 
 ### Changed — schema (automatic)
 
@@ -68,6 +87,8 @@ All notable changes to this project are documented here. Versions follow
   allowed), for how long (five years, not rolled up), and that the script
   uses no cookies and no browser storage. Nothing new is stored unless
   `kizami.events` is set; sites that set it must review their privacy policy.
+  They also say that the web server itself can count selected actions when
+  a page is called, for example through a short link (`kizamiEvent()`).
 
 ## [1.3.0] — 2026-10-12
 
