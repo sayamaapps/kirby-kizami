@@ -213,6 +213,33 @@ try {
     same(true, str_contains($htmlDe, '<h2 id="events-title">Aktionen</h2>') && str_contains($htmlDe, 'Besuche mit dieser Aktion') && str_contains($htmlDe, 'Download: häufigste Zusatzangaben'), 'Dashboard: German');
     I18n::setLanguage('en');
 
+    // Report: field events, a text line only when something was reported.
+    $report = new Store("$tmp/report.sqlite");
+    $thu = new DateTimeImmutable('2026-10-01 09:00', $berlin);
+    $utc = fn (string $time) => (new DateTimeImmutable($time, $berlin))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $report->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:00')]);
+    $plain = Report::data($report, $names, 'day', $thu, ['brand' => 'Test']);
+    same([], $plain['events'], 'Report: empty list without kizami.events');
+    $configured = Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config]);
+    same($plain['text'], $configured['text'], 'Report: text unchanged while nothing was reported');
+    same(0, array_sum(array_column($configured['events'], 'count')), 'Report: configured actions listed with 0');
+    $report->write(['type' => 'event', 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:05')]);
+    $report->write(['type' => 'event', 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:06')]);
+    $report->write(['type' => 'event', 'event' => 'video_play', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:07')]);
+    $report->write(['type' => 'event', 'event' => 'video_play', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-10-01 08:00')]);  // today: not in the report
+    $day = Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config]);
+    same(['key' => 'download', 'name' => 'Download', 'count' => 2, 'visits' => 1, 'detail' => true,
+        'details' => [['name' => 'a.pdf', 'count' => 2, 'visits' => 1]], 'detailsOmitted' => 0], $day['events'][0], 'Report: total, visits and details of the day');
+    same(['video_play', 1], [$day['events'][1]['key'], $day['events'][1]['count']], 'Report: only completed days');
+    same(true, in_array('Actions: Download 2 · Video played 1', explode("\n", $day['text']), true), 'Report: text line with the reported actions only');
+    $lines = explode("\n", $day['text']);
+    same(array_search('Actions: Download 2 · Video played 1', $lines, true) - 1, array_search('Page views: 1 (0)', $lines, true), 'Report: actions line after the page views (no link clicks that day)');
+    I18n::setLanguage('de');
+    same(true, in_array('Aktionen: Download 2 · Video gestartet 1', explode("\n", Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config])['text']), true), 'Report: German line with German labels');
+    I18n::setLanguage('en');
+    $week = Report::data($report, $names, 'week', new DateTimeImmutable('2026-10-05 09:00', $berlin), ['events' => $config])['events'];
+    same([['download', 2, 1], ['video_play', 2, 2]], array_map(fn ($e) => [$e['key'], $e['count'], $e['visits']], array_slice($week, 0, 2)), 'Report: the week counts all its days, a visit per day');
+
     // Retention: five years, like the single events; not rolled up.
     $old = (new DateTimeImmutable('today', $berlin))->modify('-5 years -1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     $recent = (new DateTimeImmutable('today', $berlin))->modify('-5 years +1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');

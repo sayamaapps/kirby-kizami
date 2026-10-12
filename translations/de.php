@@ -55,6 +55,7 @@ return [
     'report.sources' => 'Herkunft: {list}',
     'report.campaigns' => 'Kampagnen: {list}',
     'report.campaignsMore' => '+{n} weitere',
+    'report.events' => 'Aktionen: {list}',
     'report.pages' => 'Meistgesehen: {list}',
     'report.mobileShare' => 'Handy: {n} % der Besuche',
     'report.dwellTime' => 'Verweildauer (Median): {time}',

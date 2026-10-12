@@ -56,6 +56,7 @@ return [
     'report.sources' => 'Sources: {list}',
     'report.campaigns' => 'Campaigns: {list}',
     'report.campaignsMore' => '+{n} more',
+    'report.events' => 'Actions: {list}',
     'report.pages' => 'Most viewed: {list}',
     'report.mobileShare' => 'Phone: {n} % of visits',
     'report.dwellTime' => 'Time on site (median): {time}',
