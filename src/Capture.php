@@ -20,6 +20,9 @@ final class Capture
         'headless', 'python-requests', 'curl', 'wget', 'ahrefs', 'semrush',
     ];
 
+    /** Characters kept of an action detail (cleanDetail()). */
+    public const DETAIL_MAX = 100;
+
     /**
      * Pseudonymous day identifier: SHA256(IP + date + UA + secret). Rotates
      * daily. No promise of full anonymity. Without a secret there is NO hash —
@@ -119,6 +122,70 @@ final class Capture
             return '';
         }
         return substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $value), 0, 50);
+    }
+
+    /**
+     * Detail of a reported action (file name, platform, album title), at
+     * most 100 characters. Free text from the browser, so:
+     *  - not a string or not valid UTF-8 → empty (discarded, not repaired);
+     *  - control characters and line breaks become spaces, invisible format
+     *    characters (bidi overrides, zero-width) are removed, `<` and `>`
+     *    too — the detail reaches the dashboard and the report text;
+     *  - a URL keeps only host and path: query and fragment can carry
+     *    tokens, e-mail addresses or session IDs. That applies to
+     *    `scheme://…`, `//…` and `www.…` anywhere in the text, and to a word
+     *    starting with `/` (a site path). `mailto:`, `tel:` and `sms:` keep
+     *    only the scheme — the address or number is personal data.
+     */
+    public static function cleanDetail(mixed $value): string
+    {
+        if (!is_string($value) || preg_match('//u', $value) !== 1) {
+            return '';
+        }
+        $value = preg_replace(['/\p{Cf}+/u', '/[\p{Cc}\p{Zl}\p{Zp}]+/u', '/[<>]/'], ['', ' ', ''], $value);
+        $value = preg_replace_callback(
+            // Each URL runs to the next space, minus trailing punctuation
+            // such as the `)` of "(https://…)".
+            '~\b(mailto|tel|sms):\S*|(?:(?:\b[a-z][a-z0-9+.\-]*:)?//|\bwww\.|(?<!\S)/)\S*?(?=[)\]},.;:!]*(?:\s|$))~iu',
+            fn (array $m) => self::withoutQuery($m[0], $m[1] ?? ''),
+            $value
+        );
+        $value = trim(preg_replace('/\s+/u', ' ', $value));
+        preg_match('/^.{0,' . self::DETAIL_MAX . '}/us', $value, $cut);
+        return rtrim($cut[0] ?? '');
+    }
+
+
+    /** One URL from cleanDetail(): host and path only, or just the scheme. */
+    private static function withoutQuery(string $url, string $scheme): string
+    {
+        if ($scheme !== '') {
+            return strtolower($scheme) . ':';
+        }
+        if ($url[0] === '/' && ($url[1] ?? '') !== '/') {
+            return preg_replace('/[?#].*$/s', '', $url);
+        }
+        $parts = parse_url(stripos($url, 'www.') === 0 ? '//' . $url : $url);
+        if (!is_array($parts) || !isset($parts['host'])) {
+            return '';
+        }
+        // parse_url() has split off query and fragment; user, password and
+        // port are dropped as well.
+        return strtolower($parts['host']) . ($parts['path'] ?? '');
+    }
+
+    /**
+     * Too much data for a beacon? (since 1.4.0) Only /k/event takes free
+     * text, so it caps the request: a declared body over $limit bytes, a
+     * Content-Length that is no number, or a query string over $limit.
+     */
+    public static function requestTooLarge(array $server, int $limit): bool
+    {
+        $length = $server['CONTENT_LENGTH'] ?? '';
+        if ($length !== '' && (!is_string($length) || !ctype_digit($length) || (int) $length > $limit)) {
+            return true;
+        }
+        return strlen((string) ($server['QUERY_STRING'] ?? '')) > $limit;
     }
 
     /**
