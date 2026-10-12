@@ -52,6 +52,27 @@ final class Store
     // Deliberately only date and count — no identifier, no target, no page.
     private const DISCARDED_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_discarded (day TEXT PRIMARY KEY NOT NULL, hits INTEGER NOT NULL)';
 
+    /**
+     * Actions reported by the site's script (`kizami.events`, /k/event,
+     * since 1.4.0). A table of its own instead of a new type in
+     * kizami_events: its CHECK constraint only changes by copying the whole
+     * table, on every site at once, on the first request after the update —
+     * on SQLite 3.7.17 shared hosting that is the riskiest thing a minor
+     * version could do. This table is simply created, and kizami_events
+     * stays untouched.
+     *
+     * No device class and no referrer: an action only needs its key, the
+     * cleaned detail, the page and the day identifier.
+     */
+    private const CUSTOM_EVENTS_TABLE = "CREATE TABLE IF NOT EXISTS kizami_custom_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at DATETIME NOT NULL,
+        event      TEXT NOT NULL,
+        detail     TEXT NOT NULL DEFAULT '',
+        path       TEXT NOT NULL DEFAULT '',
+        session    TEXT NOT NULL DEFAULT ''
+    )";
+
     /** Closes the connection, so SQLite can checkpoint and remove -wal/-shm. */
     public function __destruct()
     {
@@ -146,6 +167,9 @@ final class Store
         $this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_events_session ON kizami_events(session, created_at)');
         $this->exec(self::MAINTENANCE_TABLE);
         $this->exec(self::DISCARDED_TABLE);
+        $this->exec(self::CUSTOM_EVENTS_TABLE);
+        $this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_event ON kizami_custom_events(event, created_at)');
+        $this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_created_at ON kizami_custom_events(created_at)');
     }
 
     /**
@@ -386,6 +410,10 @@ final class Store
     /** @param array<string,string|int> $row */
     private function insert(array $row): void
     {
+        if (($row['type'] ?? '') === 'event') {
+            $this->insertCustomEvent($row);
+            return;
+        }
         $columns = self::columns();
         $sql = 'INSERT INTO kizami_events (' . implode(', ', $columns) . ') SELECT :'
             . implode(', :', $columns);
@@ -414,6 +442,31 @@ final class Store
         }
         // execute() returns false for a rejected write WITHOUT throwing —
         // so throw here ourselves.
+        if (@$stmt->execute() === false) {
+            throw new RuntimeException('Kizami: INSERT rejected: ' . $this->db->lastErrorMsg());
+        }
+    }
+
+    /**
+     * One reported action (type 'event', see CUSTOM_EVENTS_TABLE). Comes
+     * through write() like every other row, so the daily compaction and the
+     * error contract are the same. Not deduplicated: the script sends each
+     * action and detail at most once per page view, and "visits with this
+     * action" counts day identifiers, not rows.
+     *
+     * @param array<string,string|int> $row
+     */
+    private function insertCustomEvent(array $row): void
+    {
+        $stmt = @$this->db->prepare('INSERT INTO kizami_custom_events (created_at, event, detail, path, session)
+            VALUES (:created_at, :event, :detail, :path, :session)');
+        if ($stmt === false) {
+            throw new RuntimeException('Kizami: INSERT cannot be prepared');
+        }
+        $stmt->bindValue(':created_at', $row['created_at'] ?? gmdate('Y-m-d H:i:s'), SQLITE3_TEXT);
+        foreach (['event', 'detail', 'path', 'session'] as $field) {
+            $stmt->bindValue(':' . $field, (string) ($row[$field] ?? ''), SQLITE3_TEXT);
+        }
         if (@$stmt->execute() === false) {
             throw new RuntimeException('Kizami: INSERT rejected: ' . $this->db->lastErrorMsg());
         }
@@ -551,7 +604,14 @@ final class Store
         $stmt = $this->db->prepare('DELETE FROM kizami_events WHERE created_at < :limit');
         $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
         $stmt->execute()->finalize();
-        return $this->db->changes();
+        $deleted = $this->db->changes();
+
+        // Reported actions follow the same five years, but are not rolled
+        // up: like image openings they have no place in the daily totals.
+        $stmt = $this->db->prepare('DELETE FROM kizami_custom_events WHERE created_at < :limit');
+        $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
+        $stmt->execute()->finalize();
+        return $deleted;
     }
 
     /** SQL fragment for internal, fixed queries only. */
@@ -942,6 +1002,53 @@ final class Store
             GROUP BY target, path ORDER BY n DESC, target, path", $days,
             fn ($r) => ['image' => (string) $r['target'], 'path' => (string) $r['path'], 'count' => (int) $r['n']]);
     }
+
+    /**
+     * Reported actions per key: every report (`count`) and the visits with
+     * it (`visits`, distinct day identifiers per Berlin day — the same unit
+     * as visits()).
+     *
+     * @return list<array{event:string,count:int,visits:int}>
+     */
+    public function customEvents(int $days, int $offset = 0): array
+    {
+        return $this->fetch(
+            "SELECT event, COUNT(*) AS n, COUNT(DISTINCT " . self::CUSTOM_VISIT . ") AS visits
+             FROM kizami_custom_events WHERE created_at >= :since AND created_at < :until
+             GROUP BY event ORDER BY n DESC, event",
+            $days,
+            fn ($r) => ['event' => (string) $r['event'], 'count' => (int) $r['n'], 'visits' => (int) $r['visits']],
+            $offset
+        );
+    }
+
+    /**
+     * The most frequent details of one action, at most $limit, and how many
+     * other details there were. Capped in SQL: any request can create a new
+     * detail, so the full list could be as long as there were requests.
+     *
+     * @return array{details:list<array{detail:string,count:int,visits:int}>,omitted:int}
+     */
+    public function customEventDetails(string $event, int $days, int $limit, int $offset = 0): array
+    {
+        $details = $this->fetch(
+            "SELECT detail, COUNT(*) AS n, COUNT(DISTINCT " . self::CUSTOM_VISIT . ") AS visits
+             FROM kizami_custom_events WHERE event = :event AND detail <> ''
+                AND created_at >= :since AND created_at < :until
+             GROUP BY detail ORDER BY n DESC, detail LIMIT " . max(0, $limit),
+            $days,
+            fn ($r) => ['detail' => (string) $r['detail'], 'count' => (int) $r['n'], 'visits' => (int) $r['visits']],
+            $offset,
+            ['event' => $event]
+        );
+        $all = $this->count("SELECT COUNT(DISTINCT detail) AS n FROM kizami_custom_events
+            WHERE event = :event AND detail <> '' AND created_at >= :since AND created_at < :until",
+            $days, $offset, ['event' => $event]);
+        return ['details' => $details, 'omitted' => max(0, $all - count($details))];
+    }
+
+    /** One visit of kizami_custom_events: Berlin day and day identifier; NULL without one. */
+    private const CUSTOM_VISIT = "CASE WHEN session <> '' THEN berlin_day(created_at) || ' ' || session END";
 
     /** @return list<array{day:string,count:int}> gapless, like visitsPerDay */
     public function viewsPerDayFilled(int $days, int $offset = 0): array

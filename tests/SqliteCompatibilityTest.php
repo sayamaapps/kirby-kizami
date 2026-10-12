@@ -118,6 +118,8 @@ foreach ([
     'Store queries' => 'FROM kizami_events',
     'legacy schema migration (events)' => 'INSERT INTO kizami_events (id, created_at, type, action, path, target, referrer',
     'legacy schema migration (daily totals)' => 'INSERT INTO kizami_days (day, views, clicks, devices) SELECT',
+    'actions table (1.4.0)' => 'CREATE TABLE IF NOT EXISTS kizami_custom_events',
+    'actions queries (1.4.0)' => 'FROM kizami_custom_events',
 ] as $what => $needle) {
     if (str_contains($scanned['src/Store.php'] ?? '', $needle)) {
         $passed++;
