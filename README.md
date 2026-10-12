@@ -9,6 +9,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 - **Honours Do Not Track and Global Privacy Control.** With `DNT: 1` or `Sec-GPC: 1`, nothing is recorded.
 - **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is overwritten every day (Europe/Berlin). Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
 - **Counts what small businesses care about.** Phone calls, route requests and e-mail clicks go through counted redirects such as `/call` → `tel:…`. No JavaScript is involved, and the dashboard shows contact rates per source and landing page.
+- **Optional actions.** Downloads, video plays or newsletter openings can be counted with a small script from the site's own server (see [Actions](#actions)). Off unless configured.
 - **Bot and crawler filtering.** User-agent filtering plus a redirect-click filter based on Fetch Metadata and the visitor's same-day page views (see [Counting rules](#counting-rules)).
 - **Dashboard** at `/k/dashboard`, linked from the Panel menu, and a **JSON report** at `/k/report` for scripts (daily or weekly summaries).
 - **English and German.** The dashboard and the report text follow the site's language (see `language` below).
@@ -82,6 +83,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `positionNames` | `[]` | Allowed link positions (`header`, `footer`, …) with labels. Unknown positions are dropped. |
 | `images` | `[]` | Allowed image IDs for gallery-open counting (needs the site's gallery script, see [Beacons](#beacons)). |
 | `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
+| `events` | `[]` | Allowed actions for `/k/event`: `key => ['label' => ['de' => …, 'en' => …], 'detail' => true\|false]`. See [Actions](#actions). |
 | `ownHosts` | `[]` | Additional own domains whose referrers count as internal. |
 | `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
 | `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
@@ -108,6 +110,54 @@ Two optional routes accept `POST` requests from the site's own scripts. Both che
 
 - `/k/image` with `image` (a key of `images`) and `path` — a deliberate full-size view in a gallery.
 - `/k/duration` with `path` and `seconds` — active seconds on a page, capped at 30 minutes.
+- `/k/event` with `event`, `path` and optionally `detail` — a configured action, see [Actions](#actions).
+
+### Actions
+
+Actions are clicks or plays that never reach the server on their own: a PDF download, a started video, a click on a social profile, a newsletter window that opened. Kizami counts them when the page reports them. There is no counting without a configured list, and only keys on that list count:
+
+```php
+'kizami.events' => [
+    'download'     => ['label' => ['de' => 'Download', 'en' => 'Download'], 'detail' => true],
+    'video_play'   => ['label' => ['de' => 'Video gestartet', 'en' => 'Video played']],
+    'social_click' => ['label' => ['de' => 'Social Media', 'en' => 'Social media'], 'detail' => true],
+],
+```
+
+Keys are 1–32 characters from `a–z`, `0–9`, `_` and `-`; other keys are ignored. `label` is shown in the dashboard and the report, in the dashboard language (English if missing, then the key). `detail => true` allows a short detail such as a file name, a platform or an album title. Without it a detail is dropped.
+
+Embed the script once per page, for example in the `<head>`:
+
+```php
+<?php snippet('kizami/events') ?>
+```
+
+It prints `<script src="/k/event.js?v=…" defer></script>`, and nothing while Kizami is off or no action is configured. The script comes from the site's own server and there is no inline script, so it works with a strict `script-src 'self'`. Then mark elements:
+
+```html
+<a href="/media/prices.pdf" data-kizami-event="download" data-kizami-detail="prices.pdf">Prices (PDF)</a>
+<a href="https://instagram.com/…" data-kizami-event="social_click" data-kizami-detail="Instagram">Instagram</a>
+<video src="/media/trailer.mp4" controls data-kizami-event="video_play"></video>
+```
+
+A click on such an element (or inside it), including a middle click, counts. On `<audio>` and `<video>` the start of playback counts instead. From your own scripts:
+
+```js
+window.kizami.event('newsletter_open', 'scroll'); // key, optional detail
+```
+
+Each action and detail is sent at most once per page view, with `navigator.sendBeacon` (falling back to `fetch` with `keepalive`). The script reads and writes no cookies and no browser storage.
+
+The server applies the rules of the other beacons: `Origin` and `Sec-Fetch-Site` must be the site itself, the path must be an existing page, and bots, an empty user agent, `DNT: 1` and `Sec-GPC: 1` are not counted. A request with more than 2 KB of data is discarded. The answer is always `204`. A detail is cleaned before it is stored:
+
+- at most 100 characters;
+- control characters and line breaks become spaces, and `<` and `>` are removed;
+- URLs keep host and path only (`https://cdn.example/a.pdf?token=…` → `cdn.example/a.pdf`), and a site path loses its query;
+- `mailto:`, `tel:` and `sms:` keep only the scheme.
+
+Don't put names, e-mail addresses or other personal data into details.
+
+The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same five-year retention as single events. They are not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
 
 ## Report route
 
@@ -126,10 +176,12 @@ Two optional routes accept `POST` requests from the site's own scripts. Both che
   "clicks": 1, "clicksPrevious": 0, "directLinkHits": 0,
   "discardedLinkHits": 0, "discardedLinkHitsPrevious": 0,
   "actions": [{"name": "Calls", "value": 1}], "sources": {}, "pages": {}, "campaigns": [], "campaignsOmitted": 0,
-  "dwellTime": null,
+  "dwellTime": null, "events": [],
   "text": "…"
 }
 ```
+
+`events` (since 1.4.0) lists every configured action, most reported first: `{"key": "download", "name": "Download", "count": n, "visits": n, "detail": true, "details": [{"name": "prices.pdf", "count": n, "visits": n}], "detailsOmitted": 0}`. `details` holds the ten most frequent details for actions with `detail`, and `detailsOmitted` counts the rest. Without `kizami.events` the list is empty. When anything was reported, the `text` gets a line `Actions: Download 3 · Video played 1` (`Aktionen:` in German) after the page views and link clicks.
 
 `kind=week` adds `perDay` (`[{"day": "…", "visits": 3}, …]`) and `mobileShare` (percent or `null`). `from` is the first day that was actually delivered, so a reader can check it against the day it asked for. Errors are `{"ok": false, "error": "…"}` with a 4xx/5xx status. `format` changes only when a field is removed, renamed or changes meaning. New fields don't change it.
 
@@ -150,6 +202,7 @@ Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/
 - **Redirect clicks** count only when the browser confirms a user action (`Sec-Fetch-User: ?1`) or when the same day identifier has already viewed a page today. Discarded hits are still redirected and appear as a daily total (`discardedLinkHits`), with no other data.
   - Known undercount: Safari/WebKit never sends `Sec-Fetch-User`. A visitor whose IP or user agent changes between the page view and the click (for example, switching from Wi-Fi to mobile data) is not counted. There is no workaround.
   - Hits from before 1.0.0 are not filtered retroactively.
+- **Actions** (since 1.4.0) count every accepted report of a configured key. The script sends each action and detail at most once per page view, but the server does not deduplicate. "Visits with this action" are distinct day identifiers per day; unlike redirect clicks they are not filtered by a page view.
 - Bots (user-agent list, empty user agent) and requests with DNT/GPC are not counted. Logged-in Panel users are currently counted like everyone else.
 
 ## Upgrading from the `kennzahlen` copy

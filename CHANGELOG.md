@@ -13,6 +13,62 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.4.0] — 2026-10-12
+
+### Added
+
+- **Actions**: counted clicks and plays the page reports, for example
+  downloads, video and audio plays, clicks on social profiles or a
+  newsletter window that opened. Off by default.
+  - **`kizami.events`**: the allow list, `key => ['label' => ['de' => …,
+    'en' => …], 'detail' => true|false]`. Keys `[a-z0-9_-]{1,32}`; other keys
+    and entries that are not arrays are ignored. Only listed keys count.
+  - **`POST /k/event`** (`event`, `path`, optional `detail`): the rules of
+    `/k/image` — own `Origin` and `Sec-Fetch-Site`, existing pages only, no
+    bots, no empty user agent, no DNT/GPC, always `204`, Kirby's real 404
+    while off. Requests with more than 2 KB of data are discarded. The
+    detail is kept only for actions with `'detail' => true`: at most 100
+    characters, control characters and line breaks become spaces, `<` and
+    `>` are removed, URLs keep host and path (no query, no fragment, no
+    credentials, no port), `mailto:`/`tel:`/`sms:` keep only the scheme.
+  - **`GET /k/event.js`** and the snippet **`kizami/events`**: the browser
+    half as a file from the site's own server, no inline script (works with
+    `script-src 'self'`). `data-kizami-event` / `data-kizami-detail` on links
+    and buttons count clicks (including middle clicks), on `<audio>`/`<video>`
+    the start of playback. `window.kizami.event(key, detail)` reports from the
+    site's own code. Each action and detail at most once per page view;
+    `sendBeacon`, falling back to `fetch` with `keepalive`. No cookies, no
+    browser storage.
+  - **Dashboard section "Actions"** ("Aktionen"): total and visits with the
+    action per configured action, and the ten most frequent details for
+    actions with `detail`.
+  - **Report field `events`**: `[{"key", "name", "count", "visits", "detail",
+    "details": [{"name", "count", "visits"}], "detailsOmitted"}]` per
+    configured action, empty without `kizami.events`. The `text` gets an
+    `Actions: …` / `Aktionen: …` line after page views and link clicks when
+    anything was reported. `format` stays 2: no field was removed, renamed
+    or changed in meaning.
+- `Store::customEvents()`, `Store::customEventDetails()` and
+  `Kizami\Events` behind the dashboard and the report.
+
+### Changed — schema (automatic)
+
+- New table `kizami_custom_events` (`created_at`, `event`, `detail`, `path`,
+  `session`), created on the next request. `kizami_events` is not touched:
+  adding a type to its `CHECK` constraint would have meant copying the whole
+  table on every site on the first request after the update. Actions follow
+  the five-year retention of single events, are not rolled up into daily
+  totals, and are part of every snapshot (CLI and `/k/snapshot`). They change
+  neither visits, page views, clicks nor the action rate.
+
+### [privacy text]
+
+- `DATENSCHUTZ.md` / `PRIVACY.md` describe the optional actions: what is
+  stored (kind, page, time, day identifier, a cleaned short detail only where
+  allowed), for how long (five years, not rolled up), and that the script
+  uses no cookies and no browser storage. Nothing new is stored unless
+  `kizami.events` is set; sites that set it must review their privacy policy.
+
 ## [1.3.0] — 2026-10-12
 
 ### Added

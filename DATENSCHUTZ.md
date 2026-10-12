@@ -17,6 +17,15 @@ Bloßes Laden oder Vorladen eines Bildes löst keine solche Meldung aus.
 Außerdem meldet ein kleines Skript beim Verlassen oder Wechseln der Seite, wie
 viele Sekunden sie aktiv sichtbar war; gespeichert werden nur Seite und
 Sekundenzahl zusammen mit dem Tageskennzeichen.
+Optional meldet ein kleines Skript von unserem eigenen Server ausgewählte Aktionen
+auf der Seite an denselben Server, etwa das Herunterladen einer Datei, das Starten
+eines Videos oder Klicks auf Links zu unseren Profilen in sozialen Netzwerken.
+Gespeichert werden die Art der Aktion, die Seite, der Zeitpunkt, das
+Tageskennzeichen und, nur bei dafür freigegebenen Aktionen, eine kurze
+Zusatzangabe wie Dateiname, Plattform oder Titel (höchstens 100 Zeichen). Bei
+Webadressen bleiben davon nur Domain und Pfad, ohne Parameter und Sprungmarke;
+E-Mail-Adressen und Telefonnummern aus `mailto:`- oder `tel:`-Links werden nicht
+gespeichert. Jede Aktion wird je Seitenaufruf höchstens einmal gemeldet.
 Das Modul setzt keine Analyse-Cookies, verwendet keinen Browser-Speicher und lädt
 keinen externen Analysedienst. Der Hostinganbieter betreibt den Server; Angaben
 zu dessen eigenen Protokollen und Datenverarbeitung sind gesondert zu beachten.
@@ -66,8 +75,9 @@ Datenbank entfernt. Vorher werden vollständige Tage in Tageszahlen zusammengefa
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe
 der für den jeweiligen Tag geschätzten Geräte. Diese Zählwerte bleiben für
 Gesamtzahlen und langfristige Monatsvergleiche erhalten. Gerätekennzeichen,
-Geräteklassen, Fehlseiten, Bildöffnungen, Linkpositionen, genaue Uhrzeiten, Seitenpfade, Weiterleitungsziele, Herkunft und Kampagnenangaben
-werden nicht in diese Zusammenfassung übernommen.
+Geräteklassen, Fehlseiten, Bildöffnungen, Aktionen und ihre Zusatzangaben, Linkpositionen, genaue Uhrzeiten, Seitenpfade, Weiterleitungsziele, Herkunft und Kampagnenangaben
+werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nach
+fünf Jahren ohne Zusammenfassung gelöscht.
 
 Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages, beim Öffnen
 des Dashboards und optional über einen separat eingerichteten Wartungsjob.
@@ -125,6 +135,15 @@ nicht archivieren.
   gelten ebenso wie für Seitenaufrufe. Browser-Speicher wird nicht verwendet.
 - Ein atomarer `INSERT … SELECT … WHERE NOT EXISTS` dedupliziert Bildöffnungen
   auch bei parallelen Requests. Bildöffnungen sind Ereignisse vom Typ `image`. SQL bleibt mit SQLite 3.7.17 kompatibel.
+- `kizami.events`: erlaubte Aktionen mit Namen und dem Schalter `detail` für
+  Zusatzangaben. Ohne diese Konfiguration gibt es weder `/k/event` noch
+  `/k/event.js`, und das Snippet `kizami/events` gibt nichts aus. Fremde Origins,
+  unbekannte Aktionen, nicht vorhandene Seiten und Anfragen über 2 KB werden
+  abgewiesen; DNT/GPC und Botfilter gelten wie für Seitenaufrufe. Zusatzangaben
+  nur für Aktionen mit `detail => true` freigeben und keine personenbezogenen
+  Angaben (Namen, E-Mail-Adressen) hineinschreiben. Aktionen liegen in der
+  Tabelle `kizami_custom_events`, sind in Sicherungen enthalten und zählen weder
+  in die Besuche noch in die Aktionsquote oder Langzeitsummen.
 - Herkunft und Einstiegsseiten funktionieren mit vorhandenen Seiten-/Klickdaten.
   Linkpositionen und Bildöffnungen beginnen erst mit ihrer Einführung. Bilddaten
   zählen weder in die Besuche noch in Kontakt-/Aktionsquoten oder Langzeitsummen.
