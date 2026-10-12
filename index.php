@@ -6,6 +6,7 @@ use Kirby\Http\Response;
 require_once __DIR__ . '/src/I18n.php';
 require_once __DIR__ . '/src/Options.php';
 require_once __DIR__ . '/src/Capture.php';
+require_once __DIR__ . '/src/Events.php';
 require_once __DIR__ . '/src/Secret.php';
 require_once __DIR__ . '/src/Store.php';
 require_once __DIR__ . '/src/Migration.php';
@@ -25,6 +26,7 @@ use Kizami\Access;
 use Kizami\Analysis;
 use Kizami\Capture;
 use Kizami\Chart;
+use Kizami\Events;
 use Kizami\Fonts;
 use Kizami\I18n;
 use Kizami\Migration;
@@ -188,7 +190,7 @@ function kizami_campaign(): string
     return Capture::cleanId(get($param));
 }
 
-/** Origin check for the beacons /k/image and /k/duration, and the page they report. */
+/** Origin check for the beacons /k/image, /k/duration and /k/event, and the page they report. */
 function kizami_beacon_path(): ?string
 {
     $url = parse_url(App::instance()->url('index'));
@@ -234,6 +236,10 @@ App::plugin('sayamaapps/kizami', [
 
     // The dashboard and report strings, also usable as t('kizami.<key>').
     'translations' => $kizamiTranslations,
+
+    // snippet('kizami/events') prints the script tag for the actions
+    // (kizami.events), and nothing while they are off.
+    'snippets' => ['kizami/events' => __DIR__ . '/snippets/events.php'],
 
     /**
      * Panel menu entry "Statistics" / "Kennzahlen" — the Panel is where
@@ -421,6 +427,59 @@ App::plugin('sayamaapps/kizami', [
                     $seconds = min($seconds, 1800);
                     kizami_write(fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
                     return $done();
+                },
+            ],
+            [
+                'pattern' => 'k/event',
+                'method' => 'POST',
+                'action' => function () {
+                    // Reported actions (kizami.events, since 1.4.0): the same
+                    // origin, path and opt-out rules as k/image, only listed
+                    // keys, always 204. The detail is the only free text any
+                    // Kizami route accepts, hence the size cap: a request with
+                    // more than 2 KB of data is discarded before any field is
+                    // looked at. No rate limit of its own, like the other beacons.
+                    $done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
+                    $events = Events::config(kizami_option('events', []));
+                    if (kizami_option('active', false) !== true || $events === []) {
+                        return kizami_not_found();
+                    }
+                    if (Capture::requestTooLarge($_SERVER, 2048)) {
+                        return $done();
+                    }
+                    $path = kizami_beacon_path();
+                    $event = get('event');
+                    if ($path === null || !Events::isKey($event) || !array_key_exists($event, $events)) {
+                        return $done();
+                    }
+                    // Without 'detail' => true a detail sent along is dropped, not stored.
+                    $detail = $events[$event]['detail'] ? Capture::cleanDetail(get('detail')) : '';
+                    kizami_write(fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
+                    return $done();
+                },
+            ],
+            [
+                /**
+                 * The browser half of the actions as a file of its own: a
+                 * strict CSP ("script-src 'self'") drops inline scripts, so
+                 * there are none. Embed it with the snippet `kizami/events`.
+                 *
+                 * A route and not the plugin's assets/ folder: Kirby would
+                 * publish that under /media for every site, even with the
+                 * module off. This way the file only exists while actions are
+                 * configured — otherwise Kirby's real 404, like the other
+                 * routes. Public, unlike dashboard.css: visitors load it.
+                 */
+                'pattern' => 'k/event.js',
+                'method'  => 'GET',
+                'action'  => function () {
+                    if (kizami_option('active', false) !== true || Events::config(kizami_option('events', [])) === []) {
+                        return kizami_not_found();
+                    }
+                    return new Response((string) file_get_contents(__DIR__ . '/views/event.js'), 'text/javascript', 200, [
+                        'Cache-Control' => 'public, max-age=86400',
+                        'X-Content-Type-Options' => 'nosniff',
+                    ]);
                 },
             ],
             [
