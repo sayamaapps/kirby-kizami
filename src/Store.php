@@ -119,8 +119,8 @@ final class Store
      * @param string $journal `wal` (default) or `delete`. WAL lets readers and
      *        the per-request writer work side by side, but needs working shared
      *        memory and file locks for the `-shm`/`-wal` files. On some shared
-     *        hosters (Shared-Host, SQLite 3.7.17) that is not given: on 11.10.2026 WAL
-     *        left mustergasthaus's database malformed after earlier "disk I/O
+     *        hosters (a shared host, SQLite 3.7.17) that is not given: on 11.10.2026 WAL
+     *        left a client site's database malformed after earlier "disk I/O
      *        error"s. `delete` uses the classic rollback journal — one file,
      *        no shared memory. Every opener must pass the same mode, otherwise
      *        the next connection switches the file back. Null (CLI tools
