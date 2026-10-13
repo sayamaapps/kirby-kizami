@@ -13,7 +13,7 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
-## [1.4.0] — 2026-10-12
+## [1.4.0] — 2026-10-13
 
 ### Added
 
