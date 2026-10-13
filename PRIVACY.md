@@ -14,7 +14,8 @@ their own site.
 - Optionally, a small script from the site's own server reports **configured
   actions** such as a file download, a started video or a click on a social
   media profile (since 1.4.0). Each action is reported at most once per page
-  view.
+  view. The web server itself can also count selected actions when a page is
+  called, for example through a short link; the same data is stored.
 - **No analytics cookies, no browser storage, no external service.**
 - With **Do Not Track** or **Global Privacy Control** set to 1, nothing is
   recorded. Known bots are filtered out.

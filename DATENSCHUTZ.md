@@ -26,6 +26,8 @@ Zusatzangabe wie Dateiname, Plattform oder Titel (höchstens 100 Zeichen). Bei
 Webadressen bleiben davon nur Domain und Pfad, ohne Parameter und Sprungmarke;
 E-Mail-Adressen und Telefonnummern aus `mailto:`- oder `tel:`-Links werden nicht
 gespeichert. Jede Aktion wird je Seitenaufruf höchstens einmal gemeldet.
+Ausgewählte Aktionen kann auch der Webserver selbst beim Aufruf einer Seite
+zählen, etwa den Aufruf über einen Kurzlink; gespeichert werden dieselben Angaben.
 Das Modul setzt keine Analyse-Cookies, verwendet keinen Browser-Speicher und lädt
 keinen externen Analysedienst. Der Hostinganbieter betreibt den Server; Angaben
 zu dessen eigenen Protokollen und Datenverarbeitung sind gesondert zu beachten.
@@ -144,6 +146,9 @@ nicht archivieren.
   Angaben (Namen, E-Mail-Adressen) hineinschreiben. Aktionen liegen in der
   Tabelle `kizami_custom_events`, sind in Sicherungen enthalten und zählen weder
   in die Besuche noch in die Aktionsquote oder Langzeitsummen.
+  `$page->kizamiEvent('schluessel')` zählt eine konfigurierte Aktion ohne
+  Skript aus einer Route oder einem Template, mit denselben Regeln außer der
+  Origin-Prüfung.
 - Herkunft und Einstiegsseiten funktionieren mit vorhandenen Seiten-/Klickdaten.
   Linkpositionen und Bildöffnungen beginnen erst mit ihrer Einführung. Bilddaten
   zählen weder in die Besuche noch in Kontakt-/Aktionsquoten oder Langzeitsummen.

@@ -19,6 +19,10 @@
   if (!script || !script.src) { return; }
   // /k/event.js?v=… → /k/event, so a site in a subfolder works as well.
   var endpoint = script.src.replace(/\.js(?:[?#].*)?$/, '');
+  // The page as the server knows it (snippet kizami/events): a page served
+  // by a route of the site's own (a short code like /EEAQ77) has another
+  // address than its path, and /k/event only takes existing pages.
+  var path = script.getAttribute('data-kizami-path') || location.pathname;
   var sent = {};
 
   // The server cleans the detail again; this only keeps query strings and
@@ -39,7 +43,7 @@
     sent[once] = true;
     var body = new URLSearchParams();
     body.set('event', key);
-    body.set('path', location.pathname);
+    body.set('path', path);
     if (detail !== '') { body.set('detail', detail); }
     try {
       if (navigator.sendBeacon && navigator.sendBeacon(endpoint, body)) { return true; }

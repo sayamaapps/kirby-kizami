@@ -58,6 +58,10 @@ try {
     file_put_contents($tmp . '/content/error/error.txt', "Title: Error\n");
     file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } echo isset($_GET["links"]) ? $page->redirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
     file_put_contents($tmp . '/site/templates/error.php', '<?php echo "Fixture 404";');
+    // A page that a route of the site's own also serves under a short code (/EEAQ77).
+    mkdir($tmp . '/content/book');
+    file_put_contents($tmp . '/content/book/book.txt', "Title: Book\n");
+    file_put_contents($tmp . '/site/templates/book.php', '<?php snippet("kizami/events"); echo "Book";');
     file_put_contents($tmp . '/site/config/kizami.php', '<?php return ' . var_export([
         'user' => 'fixture', 'hash' => password_hash('fixture-password', PASSWORD_DEFAULT),
     ], true) . ';');
@@ -72,6 +76,7 @@ try {
         'kizami.events' => [
             'download' => ['label' => ['de' => 'Download', 'en' => 'Download'], 'detail' => true],
             'video_play' => ['label' => ['de' => 'Video gestartet', 'en' => 'Video played']],
+            'shortcode_access' => ['label' => 'Short code', 'detail' => true],
         ],
         // K8: extraCss may only include .css files. If it points (by mistake
         // or with intent) at the access file itself, its content (the bcrypt
@@ -274,10 +279,73 @@ try {
         checkHttp(!str_contains($js, $needle), 'event.js without ' . $needle);
     }
     [$status, $tag] = requestHttp('/?snippet=1', ['DNT: 1']);
-    checkHttp($status === 200 && preg_match('#^\s*<script src="http://127\.0\.0\.1:' . $port . '/k/event\.js\?v=' . substr(md5_file($repo . '/views/event.js'), 0, 8) . '" defer></script>\s*$#', $tag) === 1,
-        'Snippet: one external script tag with a content hash, no inline script: ' . $tag);
+    checkHttp($status === 200 && preg_match('#^\s*<script src="http://127\.0\.0\.1:' . $port . '/k/event\.js\?v=' . substr(md5_file($repo . '/views/event.js'), 0, 8) . '" data-kizami-path="/" defer></script>\s*$#', $tag) === 1,
+        'Snippet: one external script tag with a content hash and the page path, no inline script: ' . $tag);
+
+    // Routed pages: a route of the site's own serves the page "book" under
+    // the short code /EEAQ77 as well. The snippet names the rendered page,
+    // not the address; /k/event still only takes existing pages.
+    // count/<key> counts an action from PHP ($page->kizamiEvent()).
+    $routes = <<<'PHP'
+        'routes' => [
+            ['pattern' => 'EEAQ77', 'action' => function () { return page('book'); }],
+            ['pattern' => 'count/(:any)', 'method' => 'GET|HEAD|POST', 'action' => function ($key) {
+                return page('book')->kizamiEvent($key, get('detail'));
+            }],
+        ]
+        PHP;
+    writeConfig($config, $routes);
+    $bookTag = '#^\s*<script src="http://127\.0\.0\.1:' . $port . '/k/event\.js\?v=[0-9a-f]{8}" data-kizami-path="/book" defer></script>\s*Book$#';
+    foreach (['/EEAQ77', '/book'] as $address) {
+        [$status, $html] = requestHttp($address, ['DNT: 1']);
+        checkHttp($status === 200 && preg_match($bookTag, $html) === 1, 'Snippet names the rendered page /book at ' . $address . ': ' . $html);
+    }
+    $beforeRouted = $customRows();
+    checkHttp(requestHttp('/k/event', [$origin], ['event' => 'download', 'path' => '/EEAQ77'])[0] === 204 && $customRows() === $beforeRouted, 'The short code itself is still no page for /k/event');
+    checkHttp(requestHttp('/k/event', [$origin], ['event' => 'download', 'path' => '/book', 'detail' => 'book.pdf'])[0] === 204, 'Action with the path from the snippet accepted');
+    checkHttp($customRows() === $beforeRouted + 1 && $lastCustom() === 'download|book.pdf|/book|1', 'Action with the path from the snippet stored');
+
+    // Server side: same rules as /k/event minus Origin/Sec-Fetch-Site.
+    $lastSessions = function (): array {
+        global $tmp;
+        $d = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+        $sessions = [$d->querySingle("SELECT session FROM kizami_events WHERE type='page' ORDER BY id DESC LIMIT 1"),
+            $d->querySingle('SELECT session FROM kizami_custom_events ORDER BY id DESC LIMIT 1')];
+        $d->close();
+        return $sessions;
+    };
+    $beforeServer = $customRows();
+    [$status, $html] = requestHttp('/count/shortcode_access?detail=' . rawurlencode('https://example.org/x?token=SECRET'));
+    checkHttp($status === 200 && preg_match($bookTag, $html) === 1, 'kizamiEvent() returns the page, the route renders it: ' . $html);
+    checkHttp($customRows() === $beforeServer + 1 && $lastCustom() === 'shortcode_access|example.org/x|/book|1', 'Server-side action stored, detail cleaned, path of the page');
+    [$viewSession, $eventSession] = $lastSessions();
+    checkHttp(is_string($eventSession) && strlen($eventSession) === 64 && $viewSession === $eventSession, 'Server-side action has the day identifier of the page view of the same request');
+    requestHttp('/count/video_play?detail=not-allowed');
+    checkHttp($customRows() === $beforeServer + 2 && $lastCustom() === 'video_play||/book|1', 'Server side: detail dropped without detail => true');
+    checkHttp(requestHttp('/count/shortcode_access', [], ['detail' => 'form'])[0] === 200 && $lastCustom() === 'shortcode_access|form|/book|1', 'Server side: a POST request counts too, without Origin');
+    $countedServer = $customRows();
+    foreach ([
+        'DNT' => ['/count/shortcode_access', ['DNT: 1']], 'GPC' => ['/count/shortcode_access', ['Sec-GPC: 1']],
+        'bot' => ['/count/shortcode_access', ['User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)']],
+        'empty user agent' => ['/count/shortcode_access', ['User-Agent: ']],
+        'HeadlessChrome' => ['/count/shortcode_access', ['User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/130.0.0.0 Safari/537.36']],
+        'unknown key' => ['/count/unknown', []], 'invalid key' => ['/count/Shortcode_Access', []],
+    ] as $what => [$address, $h]) {
+        [$status, $html] = requestHttp($address, $h);
+        checkHttp($status === 200 && str_ends_with($html, 'Book'), 'Server side, not counted, page still served: ' . $what);
+    }
+    $head = stream_context_create(['http' => ['method' => 'HEAD', 'ignore_errors' => true, 'header' => 'User-Agent: Mozilla/5.0 Firefox/130.0']]);
+    @file_get_contents("http://127.0.0.1:$port/count/shortcode_access", false, $head);
+    checkHttp(preg_match('/\s200\s/', $http_response_header[0] ?? '') === 1, 'Server side: HEAD reaches the route');
+    checkHttp($customRows() === $countedServer, 'Server side: DNT, GPC, bots, empty user agent, HEAD and unknown keys write nothing');
+    writeConfig(array_merge($config, ['kizami.active' => false]), $routes);
+    checkHttp(str_ends_with(requestHttp('/count/shortcode_access')[1], 'Book') && $customRows() === $countedServer, 'Server side: Kizami off counts nothing, page still served');
+    writeConfig(array_merge($config, ['kizami.events' => []]), $routes);
+    checkHttp(str_ends_with(requestHttp('/count/shortcode_access')[1], 'Book') && $customRows() === $countedServer, 'Server side: no actions configured counts nothing');
+    writeConfig($config);
 
     // Off: the routes hide, the snippet prints nothing.
+    $beforeOff = $customRows();
     foreach ([['kizami.events' => []], ['kizami.events' => ['Bad Key' => ['label' => 'x']]], ['kizami.active' => false]] as $off) {
         writeConfig(array_merge($config, $off));
         checkHttp(requestHttp('/k/event', [$origin], $download)[0] === 404, 'Actions off: /k/event is a real 404 ' . json_encode($off));
@@ -285,12 +353,13 @@ try {
         checkHttp(trim(requestHttp('/?snippet=1', ['DNT: 1'])[1]) === '', 'Actions off: the snippet prints nothing ' . json_encode($off));
     }
     writeConfig($config);
-    checkHttp($customRows() === $counted + 1, 'Switched off: nothing counted');
+    checkHttp($customRows() === $beforeOff, 'Switched off: nothing counted');
 
     $config['kizami.active'] = false;
     writeConfig($config);
+    $beforeInactive = rowCount();
     checkHttp(requestHttp('/k/image', [$origin, 'User-Agent: Mozilla/5.0 Safari/600'], $post)[0] === 404, 'Deactivated endpoint stays hidden');
-    checkHttp(rowCount() === $beforeDuration + 2, 'Deactivated module counts no images');
+    checkHttp(rowCount() === $beforeInactive, 'Deactivated module counts no images');
     checkHttp(requestHttp('/k/duration', [$origin], ['seconds' => '5', 'path' => '/'])[0] === 404, 'kizami.active off also hides /k/duration despite its own option on');
     checkHttp(requestHttp('/call')[0] === 302, 'Switching off keeps the link working');
     $config['kizami.active'] = true;
@@ -383,6 +452,10 @@ try {
     checkHttp(requestHttp('/call?from[]=test')[0] === 302, 'Broken DB keeps the redirect working');
     checkHttp(requestHttp('/k/image', [$origin], $post)[0] === 204, 'Broken DB does not break the image gallery');
     checkHttp(requestHttp('/k/event', [$origin], $download)[0] === 204, 'Broken DB: /k/event still answers 204');
+    writeConfig($config, $routes);
+    [$status, $html] = requestHttp('/count/shortcode_access');
+    checkHttp($status === 200 && str_ends_with($html, 'Book'), 'Broken DB: the server-side action keeps the page working');
+    writeConfig($config);
     [$status, $html] = requestHttp('/k/dashboard', $auth);
     checkHttp($status === 503 && str_contains($html, 'currently unavailable'), 'Broken DB shows a controlled warning');
     checkHttp(!str_contains($html, 'not a database') && !str_contains($html, 'class="tiles"'), 'No DB internals or false zero numbers');
