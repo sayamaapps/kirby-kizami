@@ -247,6 +247,10 @@ composer test                                   # or: sh tests/run.sh
 
 The tests are plain PHP scripts (exit code 0 = pass). The read-only database check must run as a non-root user. `tests/EventJsTest.php` runs `views/event.js` in Node and is skipped where `node` is missing. For a test in a real headless browser, set a normal user agent (for example `browser.newPage({ userAgent: 'Mozilla/5.0 … Chrome/130.0.0.0 Safari/537.36' })` in Playwright): the default contains `HeadlessChrome` and is filtered as a bot, so nothing would be counted.
 
+## Maintenance
+
+This module is open source under the MIT license and is maintained for the author's own projects. Issues and pull requests are welcome, but there is no support promise and no release schedule. Report security problems privately through GitHub's private vulnerability reporting (the "Report a vulnerability" button on the Security tab).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
