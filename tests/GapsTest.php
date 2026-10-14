@@ -190,6 +190,7 @@ try {
     same(true, str_contains($html, '<strong>' . htmlspecialchars(Gaps::period($gapYesterday, $now), ENT_QUOTES, 'UTF-8') . '</strong>: Server &lt;b&gt;outage&lt;/b&gt;'),
         'Dashboard: note with period, reason escaped');
     same(false, str_contains($html, '<b>outage') || str_contains($html, 'Old outage'), 'Dashboard: no raw reason, no gap outside the shown range');
+    same(false, str_contains($html, '<script') || (bool) preg_match('/ style="/', $html), 'Dashboard: still no script and no inline style with gaps');
     $plain = render(Analysis::data($store, $names, 7, []));
     same(false, str_contains($plain, 'gap-band') || str_contains($plain, 'gap-notes') || str_contains($plain, 'Measurement gaps'), 'Dashboard: nothing without kizami.gaps');
     // A gap on a day without any visit still shows: the charts are drawn for it.
