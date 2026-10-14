@@ -128,10 +128,15 @@ final class Chart
         return $values . '</div>' . $svg . '</svg>' . $axis . '</div>';
     }
 
-    public static function area(array $points, string $name = 'Trend'): string
+    /**
+     * $marks: point index => tooltip text. A marked point gets a band over its
+     * whole day slot (a measurement gap). Marks also draw a chart without any
+     * visits, so an empty day that was a gap stays visible.
+     */
+    public static function area(array $points, string $name = 'Trend', array $marks = []): string
     {
         $points = array_values($points);
-        if ($points === [] || array_sum(array_column($points, 'value')) <= 0) {
+        if ($points === [] || (array_sum(array_column($points, 'value')) <= 0 && $marks === [])) {
             return self::empty();
         }
         $n = count($points);
@@ -149,10 +154,18 @@ final class Chart
             . '<path class="gridlines" d="M0,6 H600 M0,81 H600 M0,156 H600"/>'
             . '<path class="area-fill" d="' . $path . '"/>'
             . '<polyline class="area-line" points="' . $line . '"/>';
+        $step = $n > 1 ? 600 / ($n - 1) : 600;
+        foreach ($marks as $i => $title) {
+            if (!isset($points[$i])) {
+                continue;
+            }
+            $x = $n > 1 ? max(0, $i * $step - $step / 2) : 0;
+            $right = $n > 1 ? min(600, $i * $step + $step / 2) : 600;
+            $svg .= '<rect class="gap-band" x="' . round($x, 1) . '" y="0" width="' . round($right - $x, 1) . '" height="160"><title>' . self::e((string) $title) . '</title></rect>';
+        }
         // Split the hit areas between the points (midpoint to the neighbour
         // as the boundary) instead of giving each area the full step width —
         // otherwise neighbouring tooltip rectangles overlap.
-        $step = $n > 1 ? 600 / ($n - 1) : 600;
         foreach ($points as $i => $p) {
             if ($n > 1) {
                 $from = $i * $step;

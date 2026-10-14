@@ -1,6 +1,6 @@
 <?php
 /** Direct link hits must create neither website visits nor a contact rate. */
-foreach (['I18n', 'Store', 'Analysis', 'Names', 'Comparison', 'Chart'] as $class) {
+foreach (['I18n', 'Store', 'Gaps', 'Analysis', 'Names', 'Comparison', 'Chart'] as $class) {
     require_once __DIR__ . '/../src/' . $class . '.php';
 }
 

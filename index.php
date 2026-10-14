@@ -7,6 +7,7 @@ require_once __DIR__ . '/src/I18n.php';
 require_once __DIR__ . '/src/Options.php';
 require_once __DIR__ . '/src/Capture.php';
 require_once __DIR__ . '/src/Events.php';
+require_once __DIR__ . '/src/Gaps.php';
 require_once __DIR__ . '/src/Secret.php';
 require_once __DIR__ . '/src/Store.php';
 require_once __DIR__ . '/src/Migration.php';
@@ -28,6 +29,7 @@ use Kizami\Capture;
 use Kizami\Chart;
 use Kizami\Events;
 use Kizami\Fonts;
+use Kizami\Gaps;
 use Kizami\I18n;
 use Kizami\Migration;
 use Kizami\Names;
@@ -599,6 +601,7 @@ App::plugin('sayamaapps/kizami', [
                             'color'          => (string) kizami_option('color', '#2f4f2a'),
                             'dwellTime'      => kizami_option('dwellTime', false) === true,
                             'events'         => Events::config(kizami_option('events', [])),
+                            'gaps'           => Gaps::config(kizami_option('gaps', [])),
                         ]);
                     } catch (\Throwable $e) {
                         error_log('Kizami: dashboard not available: ' . $e->getMessage());

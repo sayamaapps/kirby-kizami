@@ -141,10 +141,21 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <h2 id="trend-title"><?= $t('trend.title') ?></h2>
   <?php $sum = fn (array $series) => array_sum(array_column($series, 'value')); ?>
   <h3><?= $t('trend.visits') ?></h3>
-  <?= $sum($data['trend']['visits']) === 0 ? Chart::empty() : Chart::area($data['trend']['visits'], I18n::t('trend.visits')) ?>
+  <?= $sum($data['trend']['visits']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty() : Chart::area($data['trend']['visits'], I18n::t('trend.visits'), $data['trend']['gapMarks']) ?>
   <h3 class="small"><?= $t('trend.actions') ?></h3>
-  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 ? Chart::empty(I18n::t('trend.noActions')) : Chart::area($data['trend']['actions'], I18n::t('trend.actions')) ?></div>
+  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty(I18n::t('trend.noActions')) : Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
   <div class="axis"><?php foreach (array_unique([0, (int) round(($days - 1) / 3), (int) round(2 * ($days - 1) / 3), $days - 1]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
+  <?php if ($data['gaps'] !== []): ?>
+  <div class="gaps">
+    <h3><?= $t('gap.title') ?></h3>
+    <p class="hint"><?= $t('gap.hint') ?></p>
+    <ul class="gap-notes">
+      <?php foreach ($data['gaps'] as $gap): ?>
+      <li><span class="gap-swatch" aria-hidden="true"></span> <strong><?= $e($gap['period']) ?></strong><?= $gap['reason'] !== '' ? ': ' . $e($gap['reason']) : '' ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+  <?php endif; ?>
   <?= $table(array_reverse($data['trend']['visits']), I18n::t('trend.day'), I18n::t('tile.visits'), I18n::t('trend.visitsTable')) ?>
   <?= $table(array_reverse($data['trend']['actions']), I18n::t('trend.day'), I18n::t('trend.actionsColumn'), I18n::t('trend.actionsTable')) ?>
 </section>

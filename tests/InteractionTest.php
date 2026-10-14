@@ -2,6 +2,7 @@
 /** Sources, entries, image deduplication and migration without Kirby. */
 require_once __DIR__ . '/../src/I18n.php';
 require_once __DIR__ . '/../src/Store.php';
+require_once __DIR__ . '/../src/Gaps.php';
 require_once __DIR__ . '/../src/Analysis.php';
 require_once __DIR__ . '/../src/Names.php';
 require_once __DIR__ . '/../src/Comparison.php';

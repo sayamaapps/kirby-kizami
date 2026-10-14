@@ -93,7 +93,7 @@ final class Report
 
     /**
      * @param 'day'|'week' $kind
-     * @param array{tiles?:list<string>,tileNames?:array<string,string>,contactTargets?:list<string>,brand?:string,dwellTime?:bool,events?:array} $settings
+     * @param array{tiles?:list<string>,tileNames?:array<string,string>,contactTargets?:list<string>,brand?:string,dwellTime?:bool,events?:array,gaps?:array,now?:\DateTimeImmutable} $settings
      */
     public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
     {
@@ -170,18 +170,38 @@ final class Report
             // without configuration. New field, format stays 2.
             'events' => Events::summary($store, (array) ($settings['events'] ?? []), $days, I18n::language()),
         ];
+        // Measurement gaps (kizami.gaps, since 1.5.0). The period is compared
+        // with the period one week earlier (same weekday, or the week before),
+        // so both are checked; `gaps` lists every gap that touches either.
+        $gaps = (array) ($settings['gaps'] ?? []);
+        $now = $settings['now'] ?? new \DateTimeImmutable('now');
+        $periodStart = $from;
+        $periodEnd = $from->modify('+' . $days . ' days');
+        $previousStart = $periodStart->modify('-7 days');
+        $previousEnd = $periodEnd->modify('-7 days');
+        $data['gaps'] = [];
+        foreach ($gaps as $gap) {
+            $current = Gaps::overlapping([$gap], $periodStart, $periodEnd, $now) !== [];
+            $previous = Gaps::overlapping([$gap], $previousStart, $previousEnd, $now) !== [];
+            if ($current || $previous) {
+                $data['gaps'][] = $gap + ['current' => $current, 'previous' => $previous];
+            }
+        }
+        $data['gap'] = in_array(true, array_column($data['gaps'], 'current'), true);
+        $data['gapPrevious'] = in_array(true, array_column($data['gaps'], 'previous'), true);
         if ($kind === 'week') {
-            $data['perDay'] = array_map(fn ($d) => ['day' => $d['day'], 'visits' => $d['count']], $store->visitsPerDay($days));
+            $data['perDay'] = array_map(fn ($d) => ['day' => $d['day'], 'visits' => $d['count'],
+                'gap' => Gaps::onDay($gaps, $d['day'], $now) !== []], $store->visitsPerDay($days));
             $d = $store->devices($days);
             $known = $d['mobile'] + $d['tablet'] + $d['desktop'];
             $data['mobileShare'] = $known > 0 ? (int) round(100 * $d['mobile'] / $known) : null;
         }
         $store->setNow(null);
-        $data['text'] = self::text($data);
+        $data['text'] = self::text($data, $now);
         return $data;
     }
 
-    public static function text(array $d): string
+    public static function text(array $d, ?\DateTimeImmutable $now = null): string
     {
         $from = new \DateTimeImmutable($d['from']);
         $to = new \DateTimeImmutable($d['to']);
@@ -192,6 +212,16 @@ final class Report
         $previous = $week ? I18n::t('report.previousWeek') : I18n::t('report.previousWeekday', ['weekday' => I18n::weekday((int) $from->format('N'))]);
 
         $lines = [trim(($d['brand'] !== '' ? $d['brand'] . ' · ' : '') . $heading)];
+        // Gaps first: a dip in the numbers below is then explained before it is read.
+        $now ??= new \DateTimeImmutable('now');
+        foreach ($d['gaps'] ?? [] as $gap) {
+            if (!empty($gap['current'])) {
+                $lines[] = Gaps::line($gap, $now);
+            }
+        }
+        if (!empty($d['gapPrevious'])) {
+            $lines[] = I18n::t('report.gapPrevious');
+        }
         if ($d['visits'] === 0 && $d['pageViews'] === 0) {
             $lines[] = I18n::t('report.noVisits', ['previous' => $previous, 'n' => $d['visitsPrevious']]);
             if ($d['directLinkHits'] > 0) {

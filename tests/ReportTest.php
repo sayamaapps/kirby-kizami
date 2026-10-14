@@ -19,6 +19,7 @@ require_once $base . '/src/I18n.php';
 require_once $base . '/src/Store.php';
 require_once $base . '/src/Names.php';
 require_once $base . '/src/Events.php';
+require_once $base . '/src/Gaps.php';
 require_once $base . '/src/Report.php';
 
 // Kirby logs failed logins via error_log (auth.debug). The intended failed
@@ -418,6 +419,18 @@ try {
     same([200, 'week', '2026-09-21', '2026-09-27', 'sample-inn', 1], [$code, $json['kind'], $json['from'], $json['to'], $json['site'], $json['visits']], 'Week via date, identifier from the configuration');
     same(7, count($json['perDay']), 'Week: seven days');
     same(true, array_key_exists('mobileShare', $json), 'Week: field mobileShare');
+
+    // Measurement gaps (kizami.gaps, since 1.5.0) through the route: flags, list, text line.
+    $plainDay = $request($url)[1];
+    [$code, $withGap, , $gapBody] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage']]]);
+    same([200, true, false], [$code, $withGap['gap'], $withGap['gapPrevious']], 'Gaps: the report day is flagged, its comparison is not');
+    same([['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage', 'current' => true, 'previous' => false]], $withGap['gaps'], 'Gaps: field gaps');
+    same('Measurement gap 30 Sep 2026 00:21–15:40: Server outage', explode("\n", $withGap['text'])[1], 'Gaps: text line after the heading');
+    same(true, str_contains($gapBody, '"gap": true') && str_contains($gapBody, '"gaps": [') && str_contains($gapBody, '"current": true'), 'Gaps: JSON keys written');
+    same($plainDay['text'], implode("\n", array_filter(explode("\n", $withGap['text']), fn ($line) => !str_starts_with($line, 'Measurement gap'))), 'Gaps: the text gains only the gap line');
+    same([false, []], [$plainDay['gap'], $plainDay['gaps']], 'Gaps: flag false and empty list without kizami.gaps');
+    [, $open] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-29 12:00', 'reason' => 'Still open']]]);
+    same([true, null, 'Measurement gap since 29 Sep 2026 12:00: Still open'], [$open['gap'], $open['gaps'][0]['to'], explode("\n", $open['text'])[1]], 'Gaps: an open gap runs until the report time');
 
     same(true, in_array('k/report', array_column($app()->extensions('routes'), 'pattern'), true), 'Route registered');
 
