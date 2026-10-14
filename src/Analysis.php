@@ -129,6 +129,23 @@ final class Analysis
         $events = (array) ($settings['events'] ?? []);
         $events = $events === [] ? null : Events::summary($store, $events, $days, I18n::language());
 
+        // Measurement gaps (kizami.gaps, since 1.5.0): every shown day they
+        // touch is marked in both trend charts, and the gaps of the shown
+        // range are listed under the charts. The template only prints this.
+        $gaps = (array) ($settings['gaps'] ?? []);
+        $now = $settings['now'] ?? new \DateTimeImmutable('now', $berlin);
+        $gapMarks = [];
+        foreach ($visitsPerDay as $i => $day) {
+            $hits = Gaps::onDay($gaps, $day['day'], $now);
+            if ($hits !== []) {
+                $gapMarks[$i] = implode(' · ', array_map(fn ($g) => Gaps::line($g, $now), $hits));
+            }
+        }
+        $shownStart = new \DateTimeImmutable($from . ' 00:00', $berlin);
+        $shownEnd = (new \DateTimeImmutable($to . ' 00:00', $berlin))->modify('+1 day');
+        $gapList = array_map(fn ($g) => ['period' => Gaps::period($g, $now), 'reason' => $g['reason'], 'open' => $g['to'] === null],
+            Gaps::overlapping($gaps, $shownStart, $shownEnd, $now));
+
         $lt = $store->longTerm();
         $months = array_reverse(array_slice($lt['months'], 0, 24));
         $months = array_map(fn ($m) => ['name' => I18n::monthYear($m['month']), 'value' => $m['devices']], $months);
@@ -146,7 +163,9 @@ final class Analysis
             'trend' => [
                 'visits' => array_map(fn ($t) => ['name' => $t['day'], 'value' => $t['count']], $visitsPerDay),
                 'actions' => array_map(fn ($t) => ['name' => $t['day'], 'value' => $t['count']], $actionsPerDay),
+                'gapMarks' => $gapMarks,
             ],
+            'gaps' => $gapList,
             'weekGrid' => ['rows' => array_map(fn ($i) => I18n::weekday($i), range(1, 7)),
                 'columns' => array_map('strval', range(self::HOURS_FROM, self::HOURS_TO)), 'values' => $grid],
             'devices' => $devices,

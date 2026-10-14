@@ -5,10 +5,19 @@
  *   php tests/GapsTest.php
  */
 require_once __DIR__ . '/../src/I18n.php';
+require_once __DIR__ . '/../src/Capture.php';
+require_once __DIR__ . '/../src/Store.php';
+require_once __DIR__ . '/../src/Names.php';
+require_once __DIR__ . '/../src/Comparison.php';
+require_once __DIR__ . '/../src/Chart.php';
 require_once __DIR__ . '/../src/Gaps.php';
+require_once __DIR__ . '/../src/Analysis.php';
 
+use Kizami\Analysis;
 use Kizami\Gaps;
 use Kizami\I18n;
+use Kizami\Names;
+use Kizami\Store;
 
 // Every warning or notice is a failure: a bad entry is ignored by design,
 // not by accident of a function returning null.
@@ -36,6 +45,12 @@ function logged(): array
     return $lines;
 }
 $berlin = new DateTimeZone('Europe/Berlin');
+function render(array $data): string
+{
+    ob_start();
+    include __DIR__ . '/../views/dashboard.php';
+    return ob_get_clean();
+}
 $at = fn (string $time) => new DateTimeImmutable($time, $berlin);
 
 try {
@@ -145,6 +160,42 @@ try {
     same('13.10.2026 00:21–15:40', Gaps::period($outage, $now), 'Period (de): same day');
     same('seit 13.10.2026 00:21', Gaps::period($open, $now), 'Period (de): open gap');
     same('Zählpause 13.10.2026 00:21–15:40: Server outage', Gaps::line($outage, $now), 'Line (de): with reason');
+    I18n::setLanguage('en');
+
+    // Dashboard: a marker in both trend charts on each shown day a gap touches,
+    // and a note under the charts. Relative days, like the other dashboard tests.
+    $today = new DateTimeImmutable('today', $berlin);
+    $dayAt = fn (int $offset, int $hour, int $minute = 0) => $today->modify("$offset days")->setTime($hour, $minute);
+    $utc = fn (DateTimeImmutable $time) => $time->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $names = new Names([], [], []);
+    $store = new Store("$tmp/dashboard.sqlite");
+    for ($offset = -6; $offset <= 0; $offset++) {
+        $store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => "s$offset", 'created_at' => $utc($dayAt($offset, 10))]);
+    }
+    $yesterday = $today->modify('-1 days')->format('Y-m-d');
+    $gapList = Gaps::config([
+        ['from' => "$yesterday 00:21", 'to' => "$yesterday 15:40", 'reason' => 'Server <b>outage</b>'],
+        ['from' => '2026-08-01 10:00', 'to' => '2026-08-01 11:00', 'reason' => 'Old outage'],
+    ]);
+    $gapYesterday = $gapList[1]; // sorted by start: the August gap comes first
+    $now = new DateTimeImmutable('now', $berlin);
+    $html = render(Analysis::data($store, $names, 7, ['gaps' => $gapList]));
+    same(2, substr_count($html, 'class="gap-band"'), 'Dashboard: one band per chart on the gap day, none for the gap outside the range');
+    same(true, str_contains($html, 'x="450" y="0" width="100" height="160"'), 'Dashboard: the band sits on the day slot (6th of 7 days)');
+    same(true, str_contains($html, '<title>' . htmlspecialchars(Gaps::line($gapYesterday, $now), ENT_QUOTES, 'UTF-8') . '</title>'), 'Dashboard: band tooltip with period and escaped reason');
+    same(true, str_contains($html, '<h3>Measurement gaps</h3>') && str_contains($html, '<ul class="gap-notes">'), 'Dashboard: note heading and list');
+    same(true, str_contains($html, '<strong>' . htmlspecialchars(Gaps::period($gapYesterday, $now), ENT_QUOTES, 'UTF-8') . '</strong>: Server &lt;b&gt;outage&lt;/b&gt;'),
+        'Dashboard: note with period, reason escaped');
+    same(false, str_contains($html, '<b>outage') || str_contains($html, 'Old outage'), 'Dashboard: no raw reason, no gap outside the shown range');
+    $plain = render(Analysis::data($store, $names, 7, []));
+    same(false, str_contains($plain, 'gap-band') || str_contains($plain, 'gap-notes') || str_contains($plain, 'Measurement gaps'), 'Dashboard: nothing without kizami.gaps');
+    // A gap on a day without any visit still shows: the charts are drawn for it.
+    $quiet = render(Analysis::data(new Store("$tmp/quiet.sqlite"), $names, 7, ['gaps' => $gapList]));
+    same(2, substr_count($quiet, 'class="gap-band"'), 'Dashboard: a gap on a day without visits is marked');
+    same(true, str_contains($quiet, '<ul class="gap-notes">'), 'Dashboard: note also without visits');
+    I18n::setLanguage('de');
+    $de = render(Analysis::data($store, $names, 7, ['gaps' => $gapList]));
+    same(true, str_contains($de, '<h3>Zählpausen</h3>') && str_contains($de, 'Zählpause ' . Gaps::period($gapYesterday, $now)), 'Dashboard: German heading and tooltip');
     I18n::setLanguage('en');
 
     echo "Gaps: all $n checks passed\n";

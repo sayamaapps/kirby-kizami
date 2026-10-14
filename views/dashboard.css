@@ -51,6 +51,11 @@ h3.small { margin-top: .6rem; }
 .area-fill { fill: var(--shade-2); opacity: .6; }
 .area-line { fill: none; stroke: var(--base); stroke-width: 2; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
 .area-hit { fill: transparent; }
+.gap-band { fill: var(--down); fill-opacity: .16; }
+.gaps { margin-top: 1rem; }
+.gap-notes { margin: .3rem 0 0; padding: 0; list-style: none; font-size: .9rem; }
+.gap-notes li { margin: .25rem 0; }
+.gap-swatch { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; background: var(--down); opacity: .45; vertical-align: -.1rem; margin-right: .2rem; }
 .area-hit:hover { fill: rgba(55, 53, 44, .06); }
 .axis { display: flex; justify-content: space-between; font-size: .8rem; color: var(--ink-soft); margin-top: .3rem; padding-left: 2rem; }
 .scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
