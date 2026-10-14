@@ -194,4 +194,13 @@ return [
     'technical.how' => 'No analytics cookies and no browser storage. Page views and link clicks are recorded on the server. With image counting enabled, the image gallery reports deliberate full-size views to the same server. With actions configured, the site’s script reports selected clicks and plays there too. A device is only recognisable within one day. Browsers with “Do Not Track” or “Global Privacy Control” and known bots are not counted. Missing pages do not count as visits.',
     'technical.storageOk' => 'Storage: OK.',
     'technical.storageProblem' => 'Storage: problem, please tell the site operator.',
+
+    // Measurement gaps (kizami.gaps, since 1.5.0)
+    'gap.title' => 'Measurement gaps',
+    'gap.hint' => 'Periods in which counting was interrupted. The numbers of the days they touch are too low; those days are marked in the chart.',
+    'gap.span' => '{from}–{to}',
+    'gap.since' => 'since {from}',
+    'gap.line' => 'Measurement gap {period}',
+    'gap.lineReason' => 'Measurement gap {period}: {reason}',
+    'report.gapPrevious' => 'The comparison period contains a measurement gap, so its numbers are too low.',
 ];

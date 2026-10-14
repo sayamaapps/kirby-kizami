@@ -193,4 +193,13 @@ return [
     'technical.how' => 'Ohne Analyse-Cookies und ohne Browser-Speicher. Seitenaufrufe und Linkklicks werden serverseitig erfasst. Bei aktivierter Bildzählung meldet die Bildergalerie bewusste Großansichten an denselben Server. Sind Aktionen eingerichtet, meldet das Skript der Website dorthin auch ausgewählte Klicks und Wiedergaben. Ein Gerät ist nur innerhalb eines Tages wiedererkennbar. Browser mit „Do Not Track“ oder „Global Privacy Control“ und bekannte Bots werden nicht gezählt. Fehlseiten zählen nicht als Besuche.',
     'technical.storageOk' => 'Speicher: in Ordnung.',
     'technical.storageProblem' => 'Speicher: Problem, bitte Betreiber informieren.',
+
+    // Zählpausen (kizami.gaps, seit 1.5.0)
+    'gap.title' => 'Zählpausen',
+    'gap.hint' => 'Zeiträume, in denen die Zählung unterbrochen war. Die Zahlen der betroffenen Tage sind zu niedrig; diese Tage sind im Diagramm markiert.',
+    'gap.span' => '{from}–{to}',
+    'gap.since' => 'seit {from}',
+    'gap.line' => 'Zählpause {period}',
+    'gap.lineReason' => 'Zählpause {period}: {reason}',
+    'report.gapPrevious' => 'Im Vergleichszeitraum liegt eine Zählpause, seine Zahlen sind daher zu niedrig.',
 ];
