@@ -13,6 +13,28 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.5.0] — unreleased
+
+### Added
+
+- **Measurement gaps**: `kizami.gaps` records periods in which counting was
+  interrupted, for example an outage, so a dip is explained and an automated
+  comparison can skip it. Off by default.
+  - **`kizami.gaps`**: a list of `['from' => 'Y-m-d H:i', 'to' => 'Y-m-d H:i',
+    'reason' => '…']` in site time (Europe/Berlin). `to` may be left out for an
+    open gap that runs until now. `from` is included, `to` is not. Entries with
+    a date that does not exist, a `to` that is not after `from`, a reason that
+    is not text, or a value that is not a list are logged and ignored. The
+    reason is plain text, at most 200 characters, escaped in the dashboard.
+  - **Dashboard**: every shown day a gap touches gets a band in both trend
+    charts, and a note under them lists the gaps of the shown range.
+  - **`/k/report`**: `gaps` (the gaps touching the period or its comparison,
+    with `current` and `previous`), `gap` and `gapPrevious` (booleans) and
+    `gap` on each `perDay` entry of a week. The text gets a `Measurement gap …`
+    line, and one more when the comparison was affected.
+  - Gaps change no number: they only mark. The JSON `format` stays 2, as only
+    fields were added.
+
 ## [1.4.0] — 2026-10-13
 
 ### Added

@@ -84,6 +84,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `images` | `[]` | Allowed image IDs for gallery-open counting (needs the site's gallery script, see [Beacons](#beacons)). |
 | `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
 | `events` | `[]` | Allowed actions for `/k/event`: `key => ['label' => ['de' => …, 'en' => …], 'detail' => true\|false]`. See [Actions](#actions). |
+| `gaps` | `[]` | Measurement gaps: periods in which counting was interrupted, `['from' => 'Y-m-d H:i', 'to' => 'Y-m-d H:i', 'reason' => '…']` (`to` may be left out for an open gap). See [Measurement gaps](#measurement-gaps). |
 | `ownHosts` | `[]` | Additional own domains whose referrers count as internal. |
 | `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
 | `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
@@ -183,6 +184,24 @@ The rules of `/k/event` apply, except `Origin` and `Sec-Fetch-Site`, which only 
 
 The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same five-year retention as single events. They are not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
 
+### Measurement gaps
+
+If counting was interrupted for a while (an outage, a migration), record the period. The days it touches are then marked in the dashboard, and the report flags them, so a dip is explained and an automated comparison can skip it:
+
+```php
+'kizami.gaps' => [
+    ['from' => '2026-10-13 00:21', 'to' => '2026-10-13 15:40', 'reason' => 'Server outage'],
+    ['from' => '2026-10-20 08:00', 'reason' => 'Migration, still running'], // no 'to': open until now
+],
+```
+
+Times are site time (Europe/Berlin, like the day identifiers), `from` is included, `to` is not. `reason` is plain text, at most 200 characters, escaped in the dashboard. An entry with a date that does not exist, a `to` that is not after `from`, a reason that is not text, or a `gaps` value that is not a list is logged to PHP's error log and ignored; the rest still counts.
+
+- **Dashboard:** every shown day that a gap touches gets a band in both trend charts, and a note under the charts lists the gaps of the shown range.
+- **Report:** `gap` (the reported period touches a gap), `gapPrevious` (the comparison does), `gaps` (every gap touching either, with `current` and `previous`), and `gap` on each `perDay` entry of a week. The text gets a `Measurement gap …` line, and one more when the comparison was affected.
+
+Gaps don't change any number. They only mark: visits on a gap day are as recorded.
+
 ## Report route
 
 `GET /k/report?kind=day|week&date=YYYY-MM-DD`, with HTTP Basic Auth against a Kirby account that has an allowed role. HTTPS only. Kirby's login throttling applies.
@@ -206,6 +225,8 @@ The dashboard section "Actions" lists every configured action with its total and
 ```
 
 `events` (since 1.4.0) lists every configured action, most reported first: `{"key": "download", "name": "Download", "count": n, "visits": n, "detail": true, "details": [{"name": "prices.pdf", "count": n, "visits": n}], "detailsOmitted": 0}`. `details` holds the ten most frequent details for actions with `detail`, and `detailsOmitted` counts the rest. Without `kizami.events` the list is empty. When anything was reported, the `text` gets a line `Actions: Download 3 · Video played 1` (`Aktionen:` in German) after the page views and link clicks.
+
+`gaps` (since 1.5.0) lists the measurement gaps that touch the period or its comparison: `{"from": "…", "to": "…" or null while open, "reason": "…", "current": true|false, "previous": true|false}`. `gap` and `gapPrevious` are `true` when the period or the comparison is touched. See [Measurement gaps](#measurement-gaps).
 
 `kind=week` adds `perDay` (`[{"day": "…", "visits": 3}, …]`) and `mobileShare` (percent or `null`). `from` is the first day that was actually delivered, so a reader can check it against the day it asked for. Errors are `{"ok": false, "error": "…"}` with a 4xx/5xx status. `format` changes only when a field is removed, renamed or changes meaning. New fields don't change it.
 
