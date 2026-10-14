@@ -12,11 +12,14 @@ require_once __DIR__ . '/../src/Comparison.php';
 require_once __DIR__ . '/../src/Chart.php';
 require_once __DIR__ . '/../src/Gaps.php';
 require_once __DIR__ . '/../src/Analysis.php';
+require_once __DIR__ . '/../src/Events.php';
+require_once __DIR__ . '/../src/Report.php';
 
 use Kizami\Analysis;
 use Kizami\Gaps;
 use Kizami\I18n;
 use Kizami\Names;
+use Kizami\Report;
 use Kizami\Store;
 
 // Every warning or notice is a failure: a bad entry is ignored by design,
@@ -197,6 +200,45 @@ try {
     $de = render(Analysis::data($store, $names, 7, ['gaps' => $gapList]));
     same(true, str_contains($de, '<h3>Zählpausen</h3>') && str_contains($de, 'Zählpause ' . Gaps::period($gapYesterday, $now)), 'Dashboard: German heading and tooltip');
     I18n::setLanguage('en');
+
+    // Report: flags for the period and its comparison (one period earlier,
+    // seven days back), a flag per day of a week, the gaps list, text lines.
+    $reportStore = new Store("$tmp/report.sqlite");
+    foreach ([-8, -1] as $offset) {
+        $reportStore->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => "r$offset", 'created_at' => $utc($dayAt($offset, 9))]);
+    }
+    $gapA = ['from' => $dayAt(-1, 0, 21)->format('Y-m-d H:i'), 'to' => $dayAt(-1, 15, 40)->format('Y-m-d H:i'), 'reason' => 'Server outage'];
+    $gapB = ['from' => $dayAt(-8, 10)->format('Y-m-d H:i'), 'to' => $dayAt(-8, 12)->format('Y-m-d H:i'), 'reason' => 'Comparison outage'];
+    $gapC = ['from' => $dayAt(-20, 10)->format('Y-m-d H:i'), 'to' => $dayAt(-20, 11)->format('Y-m-d H:i'), 'reason' => 'Unrelated'];
+    $reportGaps = Gaps::config([$gapA, $gapB, $gapC]);
+    $reportNow = new DateTimeImmutable('now', $berlin);
+    $day = Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test', 'gaps' => $reportGaps, 'now' => $reportNow]);
+    same([true, true], [$day['gap'], $day['gapPrevious']], 'Report: the day and its comparison are flagged');
+    same([
+        ['from' => $gapB['from'], 'to' => $gapB['to'], 'reason' => 'Comparison outage', 'current' => false, 'previous' => true],
+        ['from' => $gapA['from'], 'to' => $gapA['to'], 'reason' => 'Server outage', 'current' => true, 'previous' => false],
+    ], $day['gaps'], 'Report: gaps touching the period or its comparison, unrelated gaps left out');
+    same([Gaps::line(Gaps::config([$gapA])[0], $reportNow), I18n::t('report.gapPrevious')], array_slice(explode("\n", $day['text']), 1, 2),
+        'Report: text names the gap of the day, then the flagged comparison');
+    $quiet = Report::data($reportStore, $names, 'day', $today->modify('-2 days'), ['brand' => 'Test', 'gaps' => $reportGaps, 'now' => $reportNow]);
+    same([false, false, []], [$quiet['gap'], $quiet['gapPrevious'], $quiet['gaps']], 'Report: a day without gap and without a gap in its comparison is not flagged');
+    same(false, str_contains($quiet['text'], 'Measurement gap'), 'Report: no gap line for a clean day');
+    same(false, str_contains(Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test'])['text'], 'Measurement gap'), 'Report: no gaps configured, no line');
+    same(['gaps' => [], 'gap' => false], array_intersect_key(Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test']), ['gap' => 1, 'gaps' => 1]),
+        'Report: fields present without gaps');
+    // Week: the gap on a Wednesday of the last full week flags that day only.
+    $thisMonday = $today->modify('-' . ((int) $today->format('N') - 1) . ' days');
+    $wednesday = $thisMonday->modify('-5 days');
+    $weekGaps = Gaps::config([['from' => $wednesday->format('Y-m-d') . ' 06:00', 'to' => $wednesday->format('Y-m-d') . ' 08:00', 'reason' => 'Wednesday']]);
+    $week = Report::data(new Store("$tmp/week.sqlite"), $names, 'week', $today, ['brand' => 'Test', 'gaps' => $weekGaps, 'now' => $reportNow]);
+    same([true, false], [$week['gap'], $week['gapPrevious']], 'Week: the week is flagged');
+    same(
+        [$wednesday->format('Y-m-d')],
+        array_values(array_map(fn ($d) => $d['day'], array_filter($week['perDay'], fn ($d) => $d['gap']))),
+        'Week: exactly that day carries the flag'
+    );
+    same(Gaps::line($weekGaps[0], $reportNow), explode("\n", $week['text'])[1], 'Week: text line for the gap');
+    same(true, array_key_exists('gap', $week) && array_key_exists('gapPrevious', $week), 'Week: fields present');
 
     echo "Gaps: all $n checks passed\n";
 } catch (Throwable $e) {
