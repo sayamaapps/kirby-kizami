@@ -168,11 +168,16 @@ set_error_handler(function (int $severity, string $message) use (&$notices) { $n
 $invalidReferrers = [
     'invalid byte in the host'           => "https://foo\xFF.example/",
     'truncated sequence at the host end' => "https://foo.example\xC3/",
-    'a host parse_url() breaks'          => "https://a\u{200B}b.example/", // parse_url() turns two of its three bytes into "_"
 ];
 foreach ($invalidReferrers as $what => $url) {
     check('Referrer with ' . $what . ' is discarded', '', Capture::cleanReferrer($url));
 }
+// A zero-width space in the host depends on the PHP build: an older
+// parse_url() turns two of its three bytes into "_" (invalid UTF-8, the
+// host is discarded), a newer one passes it through (the format character
+// is removed). Both are fine; neither may raise a notice.
+$zeroWidth = Capture::cleanReferrer("https://a\u{200B}b.example/");
+check('Referrer with a zero-width space in the host: discarded or cleaned, never stored as is', true, in_array($zeroWidth, ['', 'ab.example'], true));
 restore_error_handler();
 check('Discarding an invalid referrer raises no PHP notice or deprecation', [], $notices);
 check('Referrer: control character is gone', 'foo_bar.example', Capture::cleanReferrer("https://foo\x01bar.example/"));
