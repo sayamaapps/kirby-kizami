@@ -18,7 +18,7 @@ return [
 
     'source.direct' => 'Direkt',
     'source.directUnknown' => 'Direkt / unbekannt',
-    'source.unknown' => 'Unbekannt',
+    'source.unknown' => 'Einstieg nicht erfasst',
     'source.internal' => 'Interne Navigation',
     'source.campaign' => 'Kampagne „{name}“',
     'page.home' => 'Startseite',
@@ -110,7 +110,7 @@ return [
     'direct.discarded' => 'Nicht gezählt: {n} Linkaufrufe ohne bestätigten Klick und ohne Seitenaufruf am selben Tag — sehr wahrscheinlich automatische Linkverfolger. Die Weiterleitung selbst hat funktioniert.',
 
     'contact.title' => 'Welche Herkunft zu Kontakt führt',
-    'contact.hint' => 'Kontakt: {targets}. Jeder Tagesbesuch gehört zur Herkunft seiner ersten erfassten Seite. Spätere Kontaktklicks am selben Tag werden ihr zugeordnet.',
+    'contact.hint' => 'Kontakt: {targets}. Jeder Tagesbesuch gehört zur Herkunft seiner ersten erfassten Seite. Spätere Kontaktklicks am selben Tag werden ihr zugeordnet; dasselbe Ziel zählt je Besuch einmal. „Einstieg nicht erfasst“: Die erste erfasste Seite wurde von einer eigenen Seite aus aufgerufen, etwa bei einem Besuch über Mitternacht, nach einer Fehlseite oder aus der Vorschau.',
     'contact.region' => 'Herkunft und Kontakt',
     'contact.source' => 'Herkunft',
     'contact.clicks' => 'Kontaktklicks',

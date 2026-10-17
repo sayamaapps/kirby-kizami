@@ -69,7 +69,13 @@ function kizami_option(string $key, mixed $default = null): mixed
 /** Opens the site's database with the configured journal mode (`kizami.journal`). */
 function kizami_store(): Store
 {
-    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')));
+    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')), kizami_own_hosts());
+}
+
+/** The site's own hosts (index URL plus `kizami.ownHosts`): referrers from them are internal, not a source. */
+function kizami_own_hosts(): array
+{
+    return [parse_url(App::instance()->url('index'), PHP_URL_HOST), ...(array) kizami_option('ownHosts', [])];
 }
 
 /**
@@ -437,10 +443,7 @@ App::plugin('sayamaapps/kizami', [
                     'type'         => 'page',
                     'action'       => 'view',
                     'path'         => Capture::cleanPath('/' . ltrim((string) $path, '/')),
-                    'referrer'     => Capture::cleanReferrer($_SERVER['HTTP_REFERER'] ?? null, [
-                        parse_url(App::instance()->url('index'), PHP_URL_HOST),
-                        ...(array) kizami_option('ownHosts', []),
-                    ]),
+                    'referrer'     => Capture::cleanReferrer($_SERVER['HTTP_REFERER'] ?? null, kizami_own_hosts()),
                     'utm_source'   => Capture::cleanId(get('utm_source')),
                     'utm_medium'   => Capture::cleanId(get('utm_medium')),
                     'utm_campaign' => kizami_campaign(),

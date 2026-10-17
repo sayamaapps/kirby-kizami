@@ -85,7 +85,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
 | `events` | `[]` | Allowed actions for `/k/event`: `key => ['label' => ['de' => …, 'en' => …], 'detail' => true\|false]`. See [Actions](#actions). |
 | `gaps` | `[]` | Measurement gaps: periods in which counting was interrupted, `['from' => 'Y-m-d H:i', 'to' => 'Y-m-d H:i', 'reason' => '…']` (`to` may be left out for an open gap). See [Measurement gaps](#measurement-gaps). |
-| `ownHosts` | `[]` | Additional own domains whose referrers count as internal. |
+| `ownHosts` | `[]` | Additional own domains whose referrers count as internal — at capture and in the dashboard, with or without `www.`, so rows recorded before a host was listed do not show the own site as a source. |
 | `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
 | `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
 | `brand` | site title | Name in the dashboard title and the report (string or closure). |

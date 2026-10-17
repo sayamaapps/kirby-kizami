@@ -56,6 +56,7 @@ try {
     $put('redirect', 'google', 2, ['target'=>'call', 'position'=>'header']);
     $put('redirect', 'google', 3, ['target'=>'route', 'position'=>'contact']);
     $put('redirect', 'google', 4, ['target'=>'instagram']);
+    $put('redirect', 'google', 5, ['target'=>'call']); // repeated target: once per visit
     $put('page', 'qr', 0, ['utm_source'=>'qr', 'referrer'=>'google.com']);
     $put('page', 'qr', 1, ['utm_source'=>'later']);
     $put('redirect', 'qr', 2, ['target'=>'call']);
@@ -77,7 +78,7 @@ try {
     $put('redirect', 'boundary', 0, ['target'=>'call']);
     $k = $store->contactSources(7, ['call','route']);
     $q = array_column($k['sources'], null, 'source');
-    same(['source'=>'google.com','visits'=>1,'clicks'=>2,'withContact'=>1], $q['google.com'], 'Several clicks one contact visit, social excluded');
+    same(['source'=>'google.com','visits'=>1,'clicks'=>2,'withContact'=>1], $q['google.com'], 'Several clicks one contact visit, repeat capped, social excluded');
     same(['source'=>'utm:qr','visits'=>2,'clicks'=>2,'withContact'=>2], $q['utm:qr'], 'UTM before referrer, first entry wins');
     same(0, $q['bing.com']['clicks'], 'No later entry retroactively');
     same(0, $q['example.org']['clicks'], 'No link across the day boundary');
@@ -96,6 +97,21 @@ try {
     same(0, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type='image' AND path='/elsewhere'"), 'Second handle does not count twice');
     same($before, [$store->visits(7), $store->clicks(7), $store->devices(7), $store->longTerm()['total']], 'Images do not affect visits, actions and archive');
     same(1, count(array_filter($store->linkPositions(7), fn ($z) => $z['position']==='header' && $z['count']===1)), 'Link position stored');
+    // Own hosts stored as bare referrers (rows from before the host was
+    // listed, www., preview host) are internal for the dashboard too.
+    $put('page', 'self-www', 0, ['referrer'=>'www.example.de']);
+    $put('page', 'self-preview', 0, ['referrer'=>'preview.example']);
+    $put('page', 'self-preview', 1, ['referrer'=>'preview.example']);
+    $own = new Store("$tmp/k.sqlite", null, ['Example.de.', 'www.preview.example', '', 42, "x'y"]);
+    $own->setNow($today->setTime(12, 0));
+    $q = array_column($own->contactSources(7, ['call'])['sources'], 'visits', 'source');
+    same(2, $q[Names::ENTRY_UNKNOWN] ?? 0, 'Own hosts are an unrecorded entry, with or without www');
+    same(false, isset($q['www.example.de']) || isset($q['preview.example']), 'Own hosts are no source of their own');
+    same(4, array_column($own->sources(7), 'count', 'source')[Names::INTERNAL] ?? 0, 'Own hosts are internal navigation among all page views');
+    same(1, array_column($store->contactSources(7, ['call'])['sources'], 'visits', 'source')['www.example.de'] ?? 0, 'Without own hosts the bare host stays a source');
+    $labels = array_column(Kizami\Analysis::data($own, new Names([], [], []), 7, ['contactTargets'=>['call']])['contact']['sources'], 'visits', 'name');
+    same(2, $labels[Kizami\I18n::t('source.unknown')] ?? 0, 'Unrecorded entries get their own label');
+    same(true, Kizami\I18n::t('source.unknown') !== Kizami\I18n::t('source.directUnknown'), 'Label differs from direct / unknown');
     for ($i=0; $i<19; $i++) { $put('page', 'g'.$i, 0, ['referrer'=>'www.google.com']); }
     $a = Kizami\Analysis::data($store, new Names([], ['google.com'=>'Google'], []), 7,
         ['contactTargets'=>['call','route'], 'images'=>['yard'=>'<Photo>'], 'positionNames'=>['header'=>'<Header>']]);
@@ -108,6 +124,6 @@ try {
     same(true, str_contains($html,'&lt;Photo&gt;') && str_contains($html,'&lt;Header&gt;') && !str_contains($html,'<Photo>'), 'New tables HTML-escaped');
     echo "Interactions: all $n checks passed\n";
 } finally {
-    unset($store,$store2,$db);
+    unset($store,$store2,$own,$db);
     foreach (glob("$tmp/*") as $f) { unlink($f); } rmdir($tmp);
 }

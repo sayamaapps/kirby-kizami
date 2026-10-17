@@ -13,6 +13,27 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.6.0] — 2026-10-17
+
+### Changed
+
+- **Own site as a source**: a referrer that is one of the site's own hosts
+  (the index URL and `kizami.ownHosts`, with or without `www.`) now counts as
+  internal in the dashboard and the report as well, not only at capture.
+  Rows recorded before a host was listed, or through a preview host, no
+  longer form a source of their own: among all page views they are
+  "Internal navigation", as the entry of a visit "Entry not recorded".
+- **"Unknown" is now "Entry not recorded"** ("Unbekannt" → "Einstieg nicht
+  erfasst"): the row for visits whose first recorded page was opened from an
+  own page (a visit across midnight, after a 404 page, from the preview) was
+  hard to tell from "Direct / unknown". The hint of "Which sources lead to
+  contact" explains the row.
+- **Contact clicks once per visit and target**: the "Contact clicks" column
+  of "Which sources lead to contact" counts each target once per visit, so
+  one visit clicking the phone number 41 times no longer dominates the
+  column. Visits, "Visits with contact", the share, the tiles and the report
+  are unchanged; the report JSON `format` stays 2.
+
 ## [1.5.0] — 2026-10-14
 
 ### Added

@@ -114,6 +114,8 @@ final class Store
     public const JOURNAL_DELETE = 'delete';
 
     private SQLite3 $db;
+    /** @var list<string> own hosts without `www.`; their referrers are internal (see ownReferrerSql) */
+    private array $ownHosts = [];
 
     /**
      * @param string $journal `wal` (default) or `delete`. WAL lets readers and
@@ -127,8 +129,9 @@ final class Store
      *        without Kirby options) keeps the mode the file already has; a new
      *        file starts in WAL.
      */
-    public function __construct(string $dbPath, ?string $journal = null)
+    public function __construct(string $dbPath, ?string $journal = null, array $ownHosts = [])
     {
+        $this->ownHosts = self::normaliseHosts($ownHosts);
         $journal ??= self::journalOfFile($dbPath);
         $directory = dirname($dbPath);
         if (!is_dir($directory)) {
@@ -557,7 +560,7 @@ final class Store
             "SELECT source, COUNT(*) AS n FROM (
                 SELECT CASE
                     WHEN utm_source <> '' THEN 'utm:' || utm_source
-                    WHEN referrer = '(internal)' THEN '" . Names::INTERNAL . "'
+                    WHEN " . $this->ownReferrerSql('referrer') . " THEN '" . Names::INTERNAL . "'
                     WHEN referrer <> '' THEN referrer
                     ELSE '" . Names::DIRECT . "'
                 END AS source
@@ -831,7 +834,7 @@ final class Store
             SELECT berlin_day(a.created_at) AS day, a.session AS session
             FROM kizami_events a WHERE a.type='redirect' AND a.session <> ''
                 AND a.created_at >= :since AND a.created_at < :until
-                AND EXISTS (SELECT 1 FROM (" . self::entriesSql() . ") e
+                AND EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ") e
                     WHERE " . self::afterEntrySql() . ")
             GROUP BY berlin_day(a.created_at), a.session)", $days, $offset);
     }
@@ -899,7 +902,7 @@ final class Store
     {
         $classes = ['mobile' => 0, 'tablet' => 0, 'desktop' => 0, 'unknown' => 0];
         foreach ($this->fetch("SELECT CASE WHEN device IN ('mobile','tablet','desktop') THEN device ELSE 'unknown' END AS class,
-            COUNT(*) AS n FROM (" . self::entriesSql() . ")
+            COUNT(*) AS n FROM (" . $this->entriesSql() . ")
             GROUP BY class", $days,
             fn ($r) => [(string) $r['class'], (int) $r['n']], $offset) as [$class, $n]) {
             $classes[$class] = $n;
@@ -907,13 +910,48 @@ final class Store
         return $classes;
     }
 
+    /**
+     * Own hosts the way referrers are stored: lower case, without trailing
+     * dot and `www.`, only characters a host name may carry — so they can be
+     * written into the shared SQL fragments as literals (bound parameters
+     * would have to be threaded through every query using entriesSql()).
+     * @return list<string>
+     */
+    private static function normaliseHosts(array $hosts): array
+    {
+        $out = [];
+        foreach ($hosts as $host) {
+            if (!is_string($host)) { continue; }
+            $host = preg_replace('/^www\./', '', strtolower(rtrim(trim($host), '.')));
+            $host = preg_replace('/[^a-z0-9.-]/', '', (string) $host);
+            if ($host !== '') { $out[$host] = true; }
+        }
+        return array_keys($out);
+    }
+
+    /**
+     * SQL condition: the referrer is an own page. Capture stores `(internal)`
+     * for the hosts it knows; rows from before a host was listed, from a
+     * preview host or with `www.` still carry the bare host — those count as
+     * internal here as well, so the own site never shows up as a source.
+     */
+    private function ownReferrerSql(string $column): string
+    {
+        $literals = [];
+        foreach ($this->ownHosts as $host) {
+            $literals[] = "'$host'";
+            $literals[] = "'www.$host'";
+        }
+        return "$column = '(internal)'" . ($literals === [] ? '' : " OR $column IN (" . implode(',', $literals) . ')');
+    }
+
     /** First recorded page per Berlin day and day identifier, stable within the same second. */
-    private static function entriesSql(): string
+    private function entriesSql(): string
     {
         // Derived table instead of a window function/CTE: old hosters have SQLite 3.7.17.
         return "SELECT e.*, berlin_day(e.created_at) AS day,
             CASE WHEN e.utm_source <> '' THEN 'utm:' || e.utm_source
-                WHEN e.referrer = '(internal)' THEN '" . Names::ENTRY_UNKNOWN . "'
+                WHEN " . $this->ownReferrerSql('e.referrer') . " THEN '" . Names::ENTRY_UNKNOWN . "'
                 WHEN e.referrer <> '' THEN e.referrer ELSE '" . Names::DIRECT . "' END AS source
             FROM kizami_events e WHERE e.type='page' AND e.action='view' AND e.session <> ''
                 AND e.created_at >= :since AND e.created_at < :until
@@ -926,7 +964,7 @@ final class Store
     /** @return list<array{path:string,count:int}> */
     public function entryPages(int $days): array
     {
-        return $this->fetch("SELECT path, COUNT(*) AS n FROM (" . self::entriesSql() . ")
+        return $this->fetch("SELECT path, COUNT(*) AS n FROM (" . $this->entriesSql() . ")
             GROUP BY path ORDER BY n DESC, path", $days,
             fn ($r) => ['path' => (string) $r['path'], 'count' => (int) $r['n']]);
     }
@@ -946,7 +984,7 @@ final class Store
     {
         return $this->fetch("SELECT a.target AS target, COUNT(*) AS n FROM kizami_events a
             WHERE a.type='redirect' AND a.created_at >= :since AND a.created_at < :until
-                AND NOT EXISTS (SELECT 1 FROM (" . self::entriesSql() . ") e
+                AND NOT EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ") e
                     WHERE " . self::afterEntrySql() . ")
             GROUP BY a.target ORDER BY n DESC, a.target", $days,
             fn ($r) => ['target' => (string) $r['target'], 'count' => (int) $r['n']], $offset);
@@ -954,7 +992,8 @@ final class Store
 
     /**
      * Only configured contact targets, only AFTER the entry and on the same
-     * day.
+     * day. `clicks` counts each target once per visit: one visit hammering
+     * the phone link must not dominate the column.
      * @return array{sources:list<array{source:string,visits:int,clicks:int,withContact:int}>,withoutEntry:int}
      */
     public function contactSources(int $days, array $targets, int $offset = 0): array
@@ -963,7 +1002,7 @@ final class Store
         $extra = [];
         foreach (array_values($targets) as $i => $target) { $extra['target' . $i] = (string) $target; }
         $in = implode(',', array_map(fn ($k) => ':' . $k, array_keys($extra)));
-        $entries = '(' . self::entriesSql() . ')';
+        $entries = '(' . $this->entriesSql() . ')';
         $contacts = "(SELECT * FROM kizami_events WHERE type='redirect' AND target IN ($in)
                 AND created_at >= :since AND created_at < :until)";
         $after = self::afterEntrySql();
@@ -971,7 +1010,8 @@ final class Store
         // column "e.source", and the dashboard broke with "Undefined array
         // key" (28.09.2026).
         $sources = $this->fetch("SELECT e.source AS source, COUNT(DISTINCT e.id) AS visits,
-            COUNT(a.id) AS clicks, COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id END) AS with_contact
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id || ':' || a.target END) AS clicks,
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id END) AS with_contact
             FROM $entries e LEFT JOIN $contacts a ON $after
             GROUP BY e.source ORDER BY visits DESC, e.source", $days,
             fn ($r) => ['source' => (string) $r['source'], 'visits' => (int) $r['visits'],
