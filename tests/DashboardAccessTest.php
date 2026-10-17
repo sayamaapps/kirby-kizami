@@ -65,6 +65,16 @@ try {
     }
     same(false, is_file($tmp . '/storage/kizami/logins.json'), 'Refused over HTTP: nothing counted');
 
+    // Where the dashboard answers Kirby's 404 anyway, plain HTTP does not turn it into a 403.
+    $previewOptions = ['kizami.previewAccess' => ['user' => 'client', 'hash' => password_hash('client-password', PASSWORD_DEFAULT)]];
+    foreach (['k/dashboard', 'k/dashboard.css'] as $route) {
+        same(404, $get($route, "http://example.invalid/$route", options: $previewOptions)[0], "$route in preview over HTTP: real 404");
+    }
+    rename($tmp . '/site/config/kizami.php', $tmp . '/site/config/kizami.off');
+    same(404, $get('k/dashboard', 'http://example.invalid/k/dashboard')[0], 'No access file over HTTP: real 404');
+    rename($tmp . '/site/config/kizami.off', $tmp . '/site/config/kizami.php');
+    same(403, $get('k/dashboard', 'http://example.invalid/k/dashboard')[0], 'With the access file over HTTP: 403 (counter-check)');
+
     // Kirby's own options set the limit.
     $url = 'https://example.invalid/k/dashboard';
     $limit = ['auth.trials' => 2, 'auth.timeout' => 600];

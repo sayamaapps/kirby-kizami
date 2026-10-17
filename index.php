@@ -647,8 +647,12 @@ App::plugin('sayamaapps/kizami', [
                         }
                     }
 
-                    // Under a subdirectory install /k/ lives below the index URL.
-                    $data['cssUrl'] = $kirby->url('index') . '/k/dashboard.css';
+                    // Under a subdirectory install /k/ lives below the index
+                    // URL. A path, not the full URL, like redirectLink(): if the
+                    // `url` option differs from the host of the request or says
+                    // http://, an absolute link would load cross-origin or as
+                    // mixed content, and the browser would not send the login.
+                    $data['cssUrl'] = rtrim((string) parse_url($kirby->url('index'), PHP_URL_PATH), '/') . '/k/dashboard.css';
 
                     $html = (function () use ($data) {
                         ob_start();
@@ -809,12 +813,18 @@ unset($kizamiTranslations);
  * browser ask for exactly that. So over HTTP nobody is prompted and nobody is
  * checked — the Panel cookie included; the dashboard is HTTPS only for
  * everyone. Same rule and same escape hatch (`kizami.reportWithoutHttps`) as
- * /k/report and /k/snapshot.
+ * /k/report and /k/snapshot. Where the dashboard would answer Kirby's 404
+ * anyway (preview, no access file), that 404 stays: a 403 would give away
+ * that the module runs here.
  */
 function kizami_dashboard_refused(): ?Response
 {
     $kirby = App::instance();
     if ($kirby->request()->ssl() === false && kizami_option('reportWithoutHttps', false) !== true) {
+        $denial = kizami_deny();
+        if ($denial->code() !== 401) {
+            return $denial;
+        }
         return new Response('HTTPS only.', 'text/plain', 403, [
             'Cache-Control' => 'no-store',
             'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
@@ -873,8 +883,25 @@ function kizami_access_denied(): ?Response
     $kirby = App::instance();
     $ip = (string) $kirby->visitor()->ip();
     try {
+        $directory = kizami_directory();
+    } catch (SetupError $e) {
+        // No usable storage, so no counters and no login: deny without
+        // checking the password. A 503 with a pointer instead of a 401 that
+        // would make the browser ask again for ever; no path, the visitor is
+        // not authenticated.
+        error_log($e->getMessage());
+        $denial = kizami_deny();
+        if ($denial->code() !== 401) {
+            return $denial;
+        }
+        return new Response('Kizami: setup error, see the error log.', 'text/plain', 503, ['Cache-Control' => 'no-store']);
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+        return kizami_deny();
+    }
+    try {
         $lockout = new Lockout(
-            kizami_directory() . '/' . Lockout::FILE,
+            $directory . '/' . Lockout::FILE,
             max(1, (int) $kirby->option('auth.trials', 10)),
             max(1, (int) $kirby->option('auth.timeout', 3600))
         );

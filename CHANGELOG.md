@@ -27,7 +27,13 @@ All notable changes to this project are documented here. Versions follow
   and again whenever free pages exist, because SQLite does not rewrite a page
   that becomes free. `/k/report` now runs `compact()` like the dashboard (after
   authentication), so a site that only fetches the report still gets this
-  maintenance. The visitor's request never runs `VACUUM`: leftovers from the
+  maintenance; if the rebuild fails, the failure is logged and the report and
+  dashboard are still delivered. The rebuild needs up to twice the file size
+  in free disk space for a while and blocks writers while it runs (5 s busy
+  timeout, after that page views are lost): on a large file run
+  `maintenance.php compact` first, so the first rebuild does not happen in a
+  dashboard call. The deleted contents are no longer contained in the database
+  file; journal and WAL files are deleted, not zeroed. The visitor's request never runs `VACUUM`: leftovers from the
   daily roll-up in a visitor's request stay until the next of these runs. `Store::snapshot()`
   rebuilds the copy with `VACUUM` before `integrity_check`, so a snapshot
   carries no free pages whatever the state of the source; the checksum of
@@ -75,15 +81,22 @@ All notable changes to this project are documented here. Versions follow
   exist yet is judged by its nearest existing parent) before anything is
   read or written. If the storage root is missing, equal to or inside the
   index root, pages still render and redirects still redirect, nothing is
-  written, the error log gets the reason, and the dashboard shows it under the
-  warning. **Operators: a storage root inside the web root is no longer
+  written and the error log gets the reason. A Panel user sees it in the
+  dashboard under the warning; the file login (no storage, so no lockout
+  counters) is denied without checking the password and answers 503 pointing to
+  the error log, no challenge and no path. **Operators: a storage root inside the web root is no longer
   supported; move it outside** (the README shows an `index.php` with
-  `storage` as a sibling of `public/`). No schema change.
+  `storage` as a sibling of `public/`). On upgrade, data already below the web
+  root stays where it is and nothing is counted until the root lies outside.
+  No schema change.
 - **Contact links and the dashboard stylesheet work under a subdirectory
   install**: with the index URL `https://example.invalid/subsite`,
   `redirectLink()` and `redirectAnchor()` returned `/call?from=%2F`, the
   domain root, and the dashboard linked `/k/dashboard.css`. Both now start
-  with the path of Kirby's index URL (`/subsite/call?from=%2F`); a root
+  with the path of Kirby's index URL (`/subsite/call?from=%2F`,
+  `/subsite/k/dashboard.css`), as a path and not a full URL, so a `url`
+  option that differs from the request host or says `http://` cannot make the
+  stylesheet load cross-origin or as mixed content; a root
   install produces the same bytes as before. The `from` value stays the page
   path (`/`, `/contact`), so the statistics paths do not change. No schema
   change.

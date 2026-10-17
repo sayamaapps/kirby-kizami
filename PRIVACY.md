@@ -49,7 +49,7 @@ total with no other data**.
 
 ## Retention
 
-Single events are removed from the active database after five years; the deleted contents are overwritten in the database file at the latest at the next maintenance run (dashboard, report route or the job), and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
+Single events are removed from the active database after five years; the deleted contents are no longer contained in the database file at the latest at the next maintenance run (dashboard, report route or the job), and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
 that, full days are condensed into daily totals (page views, redirect clicks,
 estimated devices). Actions and their details are deleted after five years as
 well and are not part of the daily totals. Backups need their own limited retention and must not

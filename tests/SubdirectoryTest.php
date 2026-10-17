@@ -56,7 +56,7 @@ try {
         $kirby->impersonate('kirby');
         $response = $kirby->call('k/dashboard', 'GET');
         same(200, $response->code(), "Dashboard ($index)");
-        same(true, str_contains($response->body(), 'href="' . rtrim($index, '/') . '/k/dashboard.css"'), "Stylesheet link ($index)");
+        same(true, str_contains($response->body(), 'href="' . rtrim((string) parse_url($index, PHP_URL_PATH), '/') . '/k/dashboard.css"'), "Stylesheet link ($index)");
     }
 
     // The redirect below the subdirectory counts the page path, not the URL path.
@@ -79,7 +79,7 @@ try {
     $kirby->impersonate('kirby');
     $response = $kirby->call('k/dashboard', 'GET');
     same(503, $response->code(), 'Unavailable dashboard');
-    same(true, str_contains($response->body(), 'href="https://example.invalid/subsite/k/dashboard.css"'), 'Stylesheet link on the 503 page');
+    same(true, str_contains($response->body(), 'href="/subsite/k/dashboard.css"'), 'Stylesheet link on the 503 page');
 } catch (Throwable $e) {
     fwrite(STDERR, 'Subdirectory: ' . $e->getMessage() . "\n" . $e->getTraceAsString() . "\n");
     $failed = true;

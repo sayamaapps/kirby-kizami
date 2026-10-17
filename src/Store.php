@@ -584,6 +584,11 @@ final class Store
      * Roll old complete days up into daily totals, then delete the single
      * events. One shared transaction prevents loss and double totals on abort
      * or parallel maintenance. Single events are kept for five years.
+     *
+     * The rebuild that follows (purgeResidue) is best effort: the roll-up is
+     * already committed, so a failing VACUUM (no room for the temporary copy,
+     * a locked or read-only file) is logged and the result still returned.
+     * The next run tries again.
      */
     public function compact(): int
     {
@@ -595,7 +600,11 @@ final class Store
             $this->exec('ROLLBACK');
             throw $e;
         }
-        $this->purgeResidue();
+        try {
+            $this->purgeResidue();
+        } catch (\Throwable $e) {
+            error_log('Kizami: residue purge failed: ' . $e->getMessage());
+        }
         return $deleted;
     }
 

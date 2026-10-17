@@ -372,6 +372,17 @@ try {
     [$code, $json, $headers] = $request($url);
     same([200, true, 2, 'example.invalid', 'day', '2026-09-30', '2026-09-30'], [$code, $json['ok'], $json['format'], $json['site'], $json['kind'], $json['from'], $json['to']], 'Previous day without date');
     same(['no-store', 'noindex, nofollow, noarchive'], [$headers['Cache-Control'] ?? null, $headers['X-Robots-Tag'] ?? null], 'Not cached, not indexed');
+    // Maintenance in the report is best effort: a database the process cannot
+    // write (as root, permissions do not bite) still gives the report.
+    if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+        // The journal files too: with a writable -wal/-shm SQLite still writes.
+        $dbFiles = array_filter([$tmp . '/storage/kizami/' . Store::FILE, $tmp . '/storage/kizami/' . Store::FILE . '-wal', $tmp . '/storage/kizami/' . Store::FILE . '-shm'], 'is_file');
+        foreach ($dbFiles as $f) { chmod($f, 0444); }
+        [$code, $json] = $request($url);
+        foreach ($dbFiles as $f) { chmod($f, 0644); }
+        same([200, true], [$code, $json['ok'] ?? null], 'Report on a read-only database file: still 200');
+        same(true, str_contains((string) @file_get_contents($logFile), 'Kizami: maintenance in report skipped'), '... and the skipped maintenance is logged');
+    }
     // respond() sets the language itself — a site may call it from a route
     // of its own (alias), and a German site must still get German text.
     same(true, str_starts_with((string) $request($url, options: ['locale' => 'de_DE.utf8'])[1]['text'], 'Sample Inn · Mi 30.09.'), 'German locale: German report text via respond()');

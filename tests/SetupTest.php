@@ -74,7 +74,7 @@ try {
         'user' => 'client', 'hash' => password_hash('client-password', PASSWORD_DEFAULT),
     ], true) . ';');
 
-    $app = function (?string $storage, string $url, array $request = []) use ($tmp) {
+    $app = function (?string $storage, string $url, array $request = [], array $extra = []) use ($tmp) {
         $roots = ['index' => $tmp . '/public', 'base' => $tmp, 'content' => $tmp . '/content', 'site' => $tmp . '/site'];
         if ($storage !== null) { $roots['storage'] = $storage; }
         return new Kirby\Cms\App([
@@ -83,7 +83,7 @@ try {
             'options' => [
                 'url' => 'https://example.invalid', 'kizami.active' => true,
                 'kizami.redirects' => ['call' => 'tel:+4912345'],
-            ],
+            ] + $extra,
         ]);
     };
     $visitor = fn () => $_SERVER = array_merge($_SERVER, ['HTTP_USER_AGENT' => 'Mozilla/5.0 (X11; Linux x86_64) Firefox/120.0', 'REMOTE_ADDR' => '203.0.113.7', 'HTTP_SEC_FETCH_USER' => '?1']);
@@ -107,13 +107,19 @@ try {
         same([302, 'tel:+4912345'], [$response->code(), $response->headers()['Location'] ?? null], "Redirect still redirects ($label)");
 
         // The file login needs the storage directory (lockout counters), so
-        // without a usable root it is denied and logged, as for any broken
-        // storage. The Panel login does not, and shows the cause.
+        // without a usable root it is denied without checking the password:
+        // 503 with a pointer to the error log, no challenge, no path. The
+        // Panel login does not need it and shows the cause.
         $login();
         file_put_contents($logFile, '');
         $response = $app($storage, 'https://example.invalid/k/dashboard')->call('k/dashboard', 'GET');
-        same(401, $response->code(), "File login without a usable root is denied ($label)");
-        same(true, str_contains((string) file_get_contents($logFile), 'login lockout file not usable: Kizami: ' . $message), "...and the cause is logged ($label)");
+        same(503, $response->code(), "File login without a usable root: 503 ($label)");
+        same('Kizami: setup error, see the error log.', $response->body(), "...with a pointer and no path ($label)");
+        same(false, isset($response->headers()['WWW-Authenticate']), "...and no challenge ($label)");
+        same(true, str_contains((string) file_get_contents($logFile), 'Kizami: ' . $message), "...the cause is logged ($label)");
+        // In preview mode the module hides behind Kirby's 404.
+        $response = $app($storage, 'https://example.invalid/k/dashboard', [], ['kizami.previewAccess' => ['user' => 'client', 'hash' => password_hash('client-password', PASSWORD_DEFAULT)]])->call('k/dashboard', 'GET');
+        same(404, $response->code(), "Preview mode with a setup error: real 404 ($label)");
         unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
 
         $kirby = $app($storage, 'https://example.invalid/k/dashboard');
@@ -122,7 +128,7 @@ try {
         same(503, $response->code(), "Dashboard for the Panel user answers 503 ($label)");
         $html = $response->body();
         same(true, str_contains($html, htmlspecialchars('Kizami: ' . $message, ENT_QUOTES)), "Dashboard shows the setup message, escaped ($label)");
-        same(true, str_contains($html, 'href="https://example.invalid/k/dashboard.css"'), "503 page keeps the stylesheet ($label)");
+        same(true, str_contains($html, 'href="/k/dashboard.css"'), "503 page keeps the stylesheet ($label)");
         same(false, str_contains($html, 'a&b'), "No raw ampersand in the 503 page ($label)");
     }
 

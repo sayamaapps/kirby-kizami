@@ -77,8 +77,8 @@ entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
 Einzelereignisse werden bei der Bereinigung nach fünf Jahren aus der aktiven
 Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
-nächsten Wartung (Dashboard, Report, Wartungsjob) in der Datenbankdatei
-überschrieben, und neue Snapshots werden ohne solche Reste neu aufgebaut.
+nächsten Wartung (Dashboard, Report, Wartungsjob) nicht mehr in der
+Datenbankdatei enthalten, und neue Snapshots werden ohne solche Reste neu aufgebaut.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe

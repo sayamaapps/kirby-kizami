@@ -19,7 +19,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 
 - PHP 8.2–8.4 with the `sqlite3` extension
 - Kirby 5
-- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the dashboard says why and the error log gets the message.
+- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the error log gets the message, a Panel user sees it in the dashboard and the file login answers 503 and points to the error log.
 
 ## Installation
 
@@ -83,7 +83,7 @@ Dashboard access: create `site/config/kizami.php` (keep it out of git) with a bc
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
 
-The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one.
+The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one. Whoever knows the user name can lock the file login for an hour with ten failed attempts from any address (the Panel login is not affected). The limit slows guessing from one address; it does not replace a strong password, as changing addresses and invented names are not counted together.
 
 ### Options
 
@@ -258,7 +258,7 @@ Gaps don't change any number. They only mark: visits on a gap day are as recorde
 
 Both use SQLite's online backup API (available since 3.6.11), rebuild the copy with `VACUUM` so it carries no free pages (and no bytes of deleted events), and run `PRAGMA integrity_check` on it. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
 
-Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day. Deleted events are overwritten in the database file (`secure_delete`) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file once with `VACUUM` to clear bytes left by earlier versions, and again whenever free pages exist. The job also replaces a stale daily key, so schedule it daily if the site may go days without a counted visit. Without any of these the previous key stays on disk.
+Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day. Deleted events are no longer contained in the database file (`secure_delete`, then a rebuild) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file once with `VACUUM` to clear bytes left by earlier versions, and again whenever free pages exist. A rebuild needs up to twice the file size in free disk space for a while and blocks writers while it runs (5 s busy timeout, after that page views are lost), so on a large file run the CLI job first and not as the first dashboard call. The job also replaces a stale daily key, so schedule it daily if the site may go days without a counted visit. Without any of these the previous key stays on disk.
 
 ## Counting rules
 

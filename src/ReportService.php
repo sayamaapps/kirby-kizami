@@ -68,7 +68,13 @@ final class ReportService
             $store = kizami_store();
             // As in the dashboard: a site whose dashboard is rarely opened
             // still gets its maintenance from the daily script call.
-            $store->compact();
+            // Maintenance must not cost the report: before it existed here, the
+            // report also worked on a read-only database.
+            try {
+                $store->compact();
+            } catch (\Throwable $e) {
+                error_log('Kizami: maintenance in report skipped: ' . $e->getMessage());
+            }
             $names = new Names(
                 (array) Options::get($kirby, 'targetNames', []),
                 (array) Options::get($kirby, 'sourceNames', []),
