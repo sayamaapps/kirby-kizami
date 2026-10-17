@@ -19,7 +19,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 
 - PHP 8.2–8.4 with the `sqlite3` extension
 - Kirby 5
-- A writable Kirby `storage` root, ideally outside the web root. Data lives in `<storage>/kizami/`.
+- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the dashboard says why and the error log gets the message.
 
 ## Installation
 
@@ -36,6 +36,23 @@ Until the package is on Packagist, add the repository first:
 ```
 
 Manual installation (download into `site/plugins/kizami/`) also works. The plugin loads its own classes and has no runtime dependencies.
+
+A stock Kirby has no `storage` root, so the `kizami.active` example below does nothing on it. Define the root in `index.php`, with the web server pointing at `public/` and `storage/` as its sibling:
+
+```php
+<?php
+$base = dirname(__DIR__);
+require $base . '/vendor/autoload.php';
+echo (new Kirby\Cms\App([
+    'roots' => [
+        'index'   => __DIR__,
+        'base'    => $base,
+        'content' => $base . '/content',
+        'site'    => $base . '/site',
+        'storage' => $base . '/storage',
+    ],
+]))->render();
+```
 
 ## Configuration
 

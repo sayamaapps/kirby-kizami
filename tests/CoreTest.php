@@ -516,6 +516,23 @@ check('Dashboard shows an invalid missing-page path with U+FFFD',
 check('Dashboard output stays valid UTF-8 with invalid stored bytes',
     1, preg_match('//u', $htmlBad));
 
+// Setup message and stylesheet URL of the unavailable page.
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test']);
+check('No setup message by default',
+    1, substr_count($unavailable, 'class="warning"'));
+check('Stylesheet defaults to the domain root',
+    true, str_contains($unavailable, '<link rel="stylesheet" href="/k/dashboard.css">'));
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'setup' => 'Kizami: storage root /a&b/<x> is "bad"', 'cssUrl' => 'https://example.invalid/sub/k/dashboard.css']);
+check('Setup message is shown escaped under the warning',
+    true, str_contains($unavailable, '<p class="warning">Kizami: storage root /a&amp;b/&lt;x&gt; is &quot;bad&quot;</p>'));
+check('Setup message is never printed raw',
+    false, str_contains($unavailable, '<x>'));
+check('Stylesheet URL from the data package',
+    true, str_contains($unavailable, '<link rel="stylesheet" href="https://example.invalid/sub/k/dashboard.css">'));
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'cssUrl' => '"><script>x</script>']);
+check('Stylesheet URL is escaped',
+    false, str_contains($unavailable, '<script>x'));
+
 // Readable names for redirects (kizami.targetNames), "Home" instead of "/".
 $stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'call', 'path' => '/']);
 $stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'route', 'path' => '/contact']);

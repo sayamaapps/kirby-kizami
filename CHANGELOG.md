@@ -64,6 +64,29 @@ All notable changes to this project are documented here. Versions follow
   says so. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
   share one address unless Kirby sees the real one. The Panel-cookie login
   is not affected. No schema change.
+- **A storage root inside the web root, or none at all, is now refused with
+  a clear message**: Kizami wrote `kizami.sqlite` and `secret.txt` wherever
+  `roots.storage` pointed, so a root below the document root let a web server
+  without a deny rule serve both as plain files. And Kirby defines no
+  `storage` root by itself: without one the call died in a `TypeError`, the
+  page rendered, nothing was counted and the dashboard only said "not
+  available". New `Kizami\Setup::storageRoot()` compares the real paths of the
+  `storage` and `index` roots (symlinks resolved; a storage root that does not
+  exist yet is judged by its nearest existing parent) before anything is
+  read or written. If the storage root is missing, equal to or inside the
+  index root, pages still render and redirects still redirect, nothing is
+  written, the error log gets the reason, and the dashboard shows it under the
+  warning. **Operators: a storage root inside the web root is no longer
+  supported; move it outside** (the README shows an `index.php` with
+  `storage` as a sibling of `public/`). No schema change.
+- **Contact links and the dashboard stylesheet work under a subdirectory
+  install**: with the index URL `https://example.invalid/subsite`,
+  `redirectLink()` and `redirectAnchor()` returned `/call?from=%2F`, the
+  domain root, and the dashboard linked `/k/dashboard.css`. Both now start
+  with the path of Kirby's index URL (`/subsite/call?from=%2F`); a root
+  install produces the same bytes as before. The `from` value stays the page
+  path (`/`, `/contact`), so the statistics paths do not change. No schema
+  change.
 
 ## [1.6.1] — 2026-10-17
 

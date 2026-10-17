@@ -11,6 +11,7 @@ require_once __DIR__ . '/src/Gaps.php';
 require_once __DIR__ . '/src/Secret.php';
 require_once __DIR__ . '/src/Store.php';
 require_once __DIR__ . '/src/Migration.php';
+require_once __DIR__ . '/src/Setup.php';
 require_once __DIR__ . '/src/Redirect.php';
 require_once __DIR__ . '/src/Access.php';
 require_once __DIR__ . '/src/Lockout.php';
@@ -35,6 +36,8 @@ use Kizami\Gaps;
 use Kizami\I18n;
 use Kizami\Lockout;
 use Kizami\Migration;
+use Kizami\Setup;
+use Kizami\SetupError;
 use Kizami\Names;
 use Kizami\Options;
 use Kizami\Redirect;
@@ -82,12 +85,15 @@ function kizami_own_hosts(): array
 }
 
 /**
- * Directory of the SQLite file and the secret, outside the web root. Moves
- * the pre-1.0 directory storage/kennzahlen/ on first use (src/Migration.php).
+ * Directory of the SQLite file and the secret, outside the web root. Throws
+ * SetupError for a missing storage root or one inside the web root
+ * (src/Setup.php). Moves the pre-1.0 directory storage/kennzahlen/ on first
+ * use (src/Migration.php).
  */
 function kizami_directory(): string
 {
-    return Migration::storage(App::instance()->root('storage'));
+    $kirby = App::instance();
+    return Migration::storage(Setup::storageRoot($kirby->root('storage'), $kirby->root('index')));
 }
 
 /**
@@ -196,7 +202,8 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
     } catch (\Throwable $e) {
         // A missing statistics row has no consequences. A broken page and a
         // lost phone call do.
-        error_log('Kizami: ' . $e->getMessage());
+        // A setup error's message already says "Kizami: …".
+        error_log($e instanceof SetupError ? $e->getMessage() : 'Kizami: ' . $e->getMessage());
     }
 }
 
@@ -391,7 +398,11 @@ App::plugin('sayamaapps/kizami', [
             // Noticed on a real project on 20.09.2026.
             $origin = $this->isHomePage() ? '/' : '/' . $this->uri();
 
-            return '/' . $name . '?from=' . rawurlencode($origin)
+            // Under a subdirectory install the route lives below the index
+            // URL; `from` stays the page path, so the statistics do not change.
+            $base = rtrim((string) parse_url(App::instance()->url('index'), PHP_URL_PATH), '/');
+
+            return $base . '/' . $name . '?from=' . rawurlencode($origin)
                 . (array_key_exists($position, (array) kizami_option('positionNames', [])) ? '&position=' . rawurlencode($position) : '');
         },
         /**
@@ -631,7 +642,13 @@ App::plugin('sayamaapps/kizami', [
                         error_log('Kizami: dashboard not available: ' . $e->getMessage());
                         kizami_log_error($e);
                         $data = ['days' => $days, 'error' => true, 'brand' => Options::brand($kirby)];
+                        if ($e instanceof SetupError) {
+                            $data['setup'] = $e->getMessage();
+                        }
                     }
+
+                    // Under a subdirectory install /k/ lives below the index URL.
+                    $data['cssUrl'] = $kirby->url('index') . '/k/dashboard.css';
 
                     $html = (function () use ($data) {
                         ob_start();
