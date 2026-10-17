@@ -119,5 +119,12 @@ check('de: Other is "Sonstige"', str_contains(Chart::bars($many, 8), '<title>Son
 check('de: grid tooltip', str_contains(Chart::grid($matrix, ['Mo','Di','Mi','Do','Fr','Sa','So'], array_map('strval', range(6, 22))), 'title="Mi 11 Uhr: 40"'));
 I18n::setLanguage('en');
 
+// Names from stored rows may hold invalid UTF-8 (before 1.6.1): shown with
+// U+FFFD, not dropped — htmlspecialchars() without ENT_SUBSTITUTE returns ''.
+$invalidBars = Chart::bars([['name' => "foo\xFF.example", 'value' => 3]]);
+check('Bars: invalid UTF-8 in a name becomes U+FFFD, not empty', str_contains($invalidBars, "<span class=\"bar-name\">foo\u{FFFD}.example</span>") && str_contains($invalidBars, "<title>foo\u{FFFD}.example: 3</title>"));
+check('Bars: output with an invalid name stays valid UTF-8', preg_match('//u', $invalidBars) === 1);
+check('Column titles: invalid UTF-8 becomes U+FFFD', str_contains(Chart::columns([['name' => "a\xFFb", 'value' => 2]]), "<title>a\u{FFFD}b: 2</title>"));
+
 if ($failures) { fwrite(STDERR, implode("\n", $failures) . "\n"); exit(1); }
 echo "Charts: all $n checks passed\n";

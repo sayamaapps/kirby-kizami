@@ -420,6 +420,28 @@ try {
     same(7, count($json['perDay']), 'Week: seven days');
     same(true, array_key_exists('mobileShare', $json), 'Week: field mobileShare');
 
+    // ReportService::json() encodes the body itself. Kirby's
+    // Response::json() turns a failed json_encode() into an empty body and
+    // keeps the status — a 200 with no JSON, which a reading script cannot tell
+    // from a working route. Invalid UTF-8 now becomes U+FFFD; anything else that
+    // cannot be encoded is a logged 500 with a fixed JSON body.
+    // (json_validate() needs PHP 8.3; the suite also runs on 8.2.)
+    $validJson = function (string $body): bool { json_decode($body); return json_last_error() === JSON_ERROR_NONE; };
+    $badBytes = ReportService::json(['ok' => true, 'sources' => ["foo\xFF.example" => 1]], 200);
+    same([200, true], [$badBytes->code(), $validJson($badBytes->body())], 'Invalid UTF-8 in the data: 200 and valid JSON');
+    same(["foo\u{FFFD}.example" => 1], json_decode($badBytes->body(), true)['sources'], 'Invalid UTF-8 in the data: substituted by U+FFFD');
+    same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$badBytes->type(), $badBytes->headers()['Cache-Control'] ?? null, $badBytes->headers()['X-Robots-Tag'] ?? null], 'Invalid UTF-8: content type and headers kept');
+    $logBefore = (string) @file_get_contents($logFile);
+    $notEncodable = ReportService::json(['ok' => true, 'x' => NAN], 200);
+    same([500, '{"ok":false,"error":"Internal error."}', true], [$notEncodable->code(), $notEncodable->body(), $validJson($notEncodable->body())], 'Data that cannot be encoded: 500 and a fixed JSON body, never 200 without JSON');
+    same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$notEncodable->type(), $notEncodable->headers()['Cache-Control'] ?? null, $notEncodable->headers()['X-Robots-Tag'] ?? null], 'Fallback 500: content type and headers kept');
+    $logNew = substr((string) file_get_contents($logFile), strlen($logBefore));
+    same(true, str_contains($logNew, 'Kizami: ') && str_contains($logNew, 'Inf and NaN'), 'Data that cannot be encoded: logged with the json error');
+    $plainData = ['ok' => true, 'format' => 2, 'url' => 'a/b/c', 'list' => [], 'object' => new stdClass(), 'nested' => ['n' => 1.5, 'text' => "\u{E4}\u{20AC}"]];
+    same(json_encode($plainData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), ReportService::json($plainData, 200)->body(), 'Valid data: body byte for byte as before');
+    $unauthorized = ReportService::json(['ok' => false, 'error' => 'Authentication required.'], 401);
+    same([401, 'Basic realm="Kizami", charset="UTF-8"'], [$unauthorized->code(), $unauthorized->headers()['WWW-Authenticate'] ?? null], 'Status and login prompt of a 401 unchanged');
+
     // Measurement gaps (kizami.gaps, since 1.5.0) through the route: flags, list, text line.
     $plainDay = $request($url)[1];
     [$code, $withGap, , $gapBody] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage']]]);

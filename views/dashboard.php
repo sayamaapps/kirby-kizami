@@ -12,7 +12,7 @@
 use Kizami\Chart;
 use Kizami\I18n;
 
-$e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+$e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $t = fn (string $key, array $values = []) => $e(I18n::t($key, $values));
 $days = (int) ($data['days'] ?? 30);
 $failed = !empty($data['error']) || !empty($data['technical']['schema'] ?? []) || (($data['technical']['writeError'] ?? null) !== null);

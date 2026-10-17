@@ -138,6 +138,69 @@ check('Referrer without a value gives an empty string',
 check('utm value loses special characters',
     'scriptalert1script', Capture::cleanId('<script>alert(1)</script>'));
 
+// Referrer host and path are stored as valid UTF-8 only: invalid
+// bytes in a stored value used to make json_encode() fail, so /k/report
+// answered 200 with an empty body. Valid hosts and paths stay byte for byte
+// what they were.
+$printable = fn (string $s) => json_encode($s, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
+foreach ([
+    ['https://google.com/search?q=doctor', 'google.com'],
+    ['https://WWW.Example.COM./x', 'www.example.com'],
+    ['https://xn--mnchen-3ya.example/', 'xn--mnchen-3ya.example'],
+    ['http://192.0.2.1:8080/x', '192.0.2.1'],
+    ['http://[::1]/x', '[::1]'],
+    ['https://user:pw@example.org/', 'example.org'],
+    ['android-app://com.example.app/', 'com.example.app'],
+    ["https://m\u{FC}nchen.example/", "m\u{FC}nchen.example"],
+    ["https://example.org/\xFF", 'example.org'],            // only the host counts, not what follows it
+    ['https://' . str_repeat('a', 120) . '.example/', str_repeat('a', 100)],
+    ['garbage', ''],
+    ['https://', ''],
+] as [$url, $host]) {
+    check('Referrer host stays as it was: ' . $printable($url), $host, Capture::cleanReferrer($url));
+}
+check('Own host stays "(internal)"', '(internal)', Capture::cleanReferrer('https://own.example/x', ['own.example']));
+
+// The cleaning must discard invalid input by itself: a deprecation here
+// (a null from a failed preg_replace() passed on) would be a log line per request.
+$notices = [];
+set_error_handler(function (int $severity, string $message) use (&$notices) { $notices[] = $message; return true; });
+$invalidReferrers = [
+    'invalid byte in the host'           => "https://foo\xFF.example/",
+    'truncated sequence at the host end' => "https://foo.example\xC3/",
+    'a host parse_url() breaks'          => "https://a\u{200B}b.example/", // parse_url() turns two of its three bytes into "_"
+];
+foreach ($invalidReferrers as $what => $url) {
+    check('Referrer with ' . $what . ' is discarded', '', Capture::cleanReferrer($url));
+}
+restore_error_handler();
+check('Discarding an invalid referrer raises no PHP notice or deprecation', [], $notices);
+check('Referrer: control character is gone', 'foo_bar.example', Capture::cleanReferrer("https://foo\x01bar.example/"));
+check('Referrer: <, >, " and \' are removed from the host', 'abcd.example', Capture::cleanReferrer("https://a<b>\"c'd.example/"));
+check('Referrer: format character (BOM) is removed from the host', 'ab.example', Capture::cleanReferrer("https://a\u{FEFF}b.example/"));
+check('Referrer: nothing left after cleaning gives an empty string', '', Capture::cleanReferrer('https://<>"\'/'));
+$cutReferrer = Capture::cleanReferrer('https://a' . str_repeat("\u{E4}", 150) . '/');
+check('Referrer is cut at 100 characters, not in the middle of one', [100, 1], [preg_match_all('/./us', $cutReferrer), preg_match('//u', $cutReferrer)]);
+check('Referrer cut keeps whole characters', 'a' . str_repeat("\u{E4}", 99), $cutReferrer);
+
+foreach ([
+    ['/services?utm_source=google', '/services'],
+    ['/a%FFb', '/a%FFb'],                                   // Kirby keeps percent-encoding: pure ASCII
+    ["/caf\u{E9}", "/caf\u{E9}"],
+    ["/\u{20AC}", "/\u{20AC}"],
+    ["/ok?x=\xFF", '/ok'],                                  // the query is dropped before the check
+    ['/' . str_repeat('a', 255), '/' . str_repeat('a', 254)],
+] as [$path, $expected]) {
+    check('Path stays as it was: ' . $printable($path), $expected, Capture::cleanPath($path));
+}
+check('Path with an invalid byte is discarded', '', Capture::cleanPath("/a\xFFb"));
+check('Path with a truncated sequence is discarded', '', Capture::cleanPath("/a\xE2\x82"));
+check('Path of an invalid byte: nothing is "repaired" into U+FFFD', false, str_contains(Capture::cleanPath("/a\xFFb"), "\u{FFFD}"));
+$cutPath = Capture::cleanPath('/' . str_repeat("\u{20AC}", 100));
+check('Path is cut at 255 bytes on a character boundary', [1 + 3 * 84, 1], [strlen($cutPath), preg_match('//u', $cutPath)]);
+check('Path cut keeps whole characters', '/' . str_repeat("\u{20AC}", 84), $cutPath);
+check('Path of 400 ASCII characters still ends at 255 bytes', 255, strlen(Capture::cleanPath('/' . str_repeat('a', 400))));
+
 check('utm value is capped at 50 characters',
     50, strlen(Capture::cleanId(str_repeat('a', 80))));
 
@@ -398,6 +461,22 @@ check('No inline event handler in the output (CSP break)',
     false, str_contains(strtolower($html), 'onclick='));
 check('The redirect count is in the output',
     true, str_contains($html, '>7<'));
+
+// Rows stored before 1.6.1 can hold invalid UTF-8 in referrer and path. The
+// dashboard shows them with U+FFFD: htmlspecialchars() without
+// ENT_SUBSTITUTE would return an empty string for the whole value.
+$stBad = new Store(':memory:');
+$stBad->write(['type' => 'page', 'action' => 'view', 'path' => "/a\xFFb", 'referrer' => "foo\xFF.example", 'session' => 'bad', 'device' => 'desktop']);
+$stBad->write(['type' => 'notfound', 'action' => 'view', 'path' => "/missing\xFFpage", 'session' => 'bad2']);
+$htmlBad = renderDashboard(Analysis::data($stBad, new Names([], [], []), 30, []));
+check('Dashboard shows an invalid source with U+FFFD, not empty',
+    true, str_contains($htmlBad, "foo\u{FFFD}.example"));
+check('Dashboard shows an invalid page path with U+FFFD, not empty',
+    true, str_contains($htmlBad, "/a\u{FFFD}b"));
+check('Dashboard shows an invalid missing-page path with U+FFFD',
+    true, str_contains($htmlBad, "<td>/missing\u{FFFD}page</td>"));
+check('Dashboard output stays valid UTF-8 with invalid stored bytes',
+    1, preg_match('//u', $htmlBad));
 
 // Readable names for redirects (kizami.targetNames), "Home" instead of "/".
 $stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'call', 'path' => '/']);
