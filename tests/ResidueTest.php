@@ -109,9 +109,10 @@ try {
         same("legacy $mode: rebuild recorded", 1, scalar($file, 'PRAGMA user_version'));
     }
 
-    // Later deletions: the first rebuild has run and no page is free, so
-    // only secure_delete can clean a few rows deleted from a page that stays
-    // in use (a rebuild runs only when a free page exists).
+    // Later deletions: the first rebuild has run and no page becomes free,
+    // yet a few rows deleted from a page that stays in use must not leave
+    // bytes either (secure_delete, and on old SQLite builds the rebuild that
+    // follows every deleting roll-up).
     foreach (['wal', 'delete'] as $mode) {
         $dir = "$root/later-$mode";
         mkdir($dir, 0700);
@@ -144,6 +145,7 @@ try {
     $raw->close();
     $store->compactDaily();
     same('daily: counter-check, compactDaily() leaves free pages behind', true, scalar($file, 'PRAGMA freelist_count') > 0);
+    same('daily: a deleting roll-up clears the rebuild mark', 0, scalar($file, 'PRAGMA user_version'));
     $store->compact();
     unset($store);
     same('daily: the next compact() clears the free pages and the marker', [0, false], [scalar($file, 'PRAGMA freelist_count'), hasMarker($file)]);

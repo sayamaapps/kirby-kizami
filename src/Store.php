@@ -611,10 +611,12 @@ final class Store
     /**
      * Rebuild the file when deleted content may still sit in it: once per
      * database file (events deleted before secure_delete was switched on),
-     * and whenever free pages exist. secure_delete zeroes deleted cells, but
-     * SQLite hands a page that became empty back to the free list as it was,
-     * so a plain DELETE of old events can still leave their bytes there.
-     * Explicit maintenance only (dashboard, CLI), never the visitor's
+     * after every roll-up that deleted something (rollUpOldDays clears the
+     * mark, also when it ran in a visitor's request), and whenever free pages
+     * exist. secure_delete zeroes deleted cells, but SQLite hands a page that
+     * became empty back to the free list as it was, and old builds (3.7.17)
+     * leave parts of a deleted row in a page that stays in use.
+     * Explicit maintenance only (dashboard, report, CLI), never the visitor's
      * request: VACUUM rewrites the whole file. It cannot run inside a
      * transaction, so it follows the COMMIT. The done-mark is the file's own
      * `user_version` header field: no table, no migration, it survives
@@ -656,6 +658,13 @@ final class Store
         $stmt = $this->db->prepare('DELETE FROM kizami_custom_events WHERE created_at < :limit');
         $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
         $stmt->execute()->finalize();
+        // Something was deleted: clear the rebuild mark, so the next explicit
+        // maintenance runs VACUUM once more (purgeResidue). secure_delete
+        // alone is not enough on every SQLite build: 3.7.17 leaves parts of a
+        // deleted row in a page that stays in use.
+        if ($deleted > 0 || $this->db->changes() > 0) {
+            $this->db->exec('PRAGMA user_version = 0');
+        }
         return $deleted;
     }
 

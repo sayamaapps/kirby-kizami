@@ -24,8 +24,10 @@ All notable changes to this project are documented here. Versions follow
   connection now runs with `PRAGMA secure_delete = ON`. `compact()`, and so
   the dashboard and `maintenance.php compact`, also rebuilds the file with
   `VACUUM` once per database file (marked in the header field `user_version`),
-  and again whenever free pages exist, because SQLite does not rewrite a page
-  that becomes free. `/k/report` now runs `compact()` like the dashboard (after
+  after every roll-up that deleted events (the mark is cleared, also by the
+  roll-up in a visitor's request) and whenever free pages exist, because
+  SQLite does not rewrite a page that becomes free and old builds (3.7.17)
+  leave parts of a deleted row in a page that stays in use. `/k/report` now runs `compact()` like the dashboard (after
   authentication), so a site that only fetches the report still gets this
   maintenance; if the rebuild fails, the failure is logged and the report and
   dashboard are still delivered. The rebuild needs up to twice the file size
