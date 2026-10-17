@@ -65,9 +65,11 @@ Browserkennung mit dem Datum und einem geheimen, täglich erneuerten Schlüssel
 verrechnet. Die unveränderte IP-Adresse und Browserkennung werden in der
 Kennzahlen-Datenbank nicht gespeichert. Der Schlüssel des Vortags wird in der
 aktiven Installation überschrieben: beim ersten erfassten Aufruf eines Tages
-und zusätzlich beim Öffnen von Dashboard, Report und Snapshot sowie durch den
-Wartungsjob. Ohne einen dieser Anlässe, etwa bei einer Seite ohne erfasste
-Aufrufe, kann der bisherige Schlüssel liegen bleiben. Das verringert die Verknüpfbarkeit zwischen
+und zusätzlich beim Öffnen von Dashboard, Report und Snapshot. Ohne Ersatz
+gelöscht wird er bei jedem Seitenaufruf, auch bei einem ausgefilterten (Do Not
+Track, Global Privacy Control, Bot), und durch den Wartungsjob. Ohne einen
+dieser Anlässe, etwa bei einer Seite ohne Aufrufe, kann der bisherige Schlüssel
+liegen bleiben. Das verringert die Verknüpfbarkeit zwischen
 Tagen; es garantiert keine vollständige Anonymität. Tageskennzeichen erlauben
 nur eine ungefähre Geräteschätzung. Dasselbe Gerät kann an mehreren Tagen erneut
 gezählt werden. Tagesgrenzen verwenden Europe/Berlin.
@@ -101,8 +103,10 @@ nicht archivieren.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
   kann zusätzlich täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
   Wartungsfehler. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
-  Der Job erneuert außerdem einen veralteten Tagesschlüssel; er ist dann nötig,
-  wenn die Seite Tage ohne erfassten Aufruf haben kann. Wird die Erfassung
+  Der Job löscht außerdem einen veralteten Tagesschlüssel (er erzeugt keinen,
+  damit keine Datei mit dem Cron-Benutzer als Eigentümer entsteht) und meldet
+  `stale daily key removed` bzw. `daily key current`; er ist dann nötig, wenn
+  die Seite Tage ohne Aufruf haben kann. Wird die Erfassung
   dauerhaft abgeschaltet, `storage/kizami/secret.txt` löschen.
 - Zusammenfassung und Entfernung der Einzelereignisse erfolgen gemeinsam in
   einer Transaktion. Bei Fehlern bleiben die Einzelereignisse erhalten. Die

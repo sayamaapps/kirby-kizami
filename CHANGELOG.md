@@ -13,6 +13,27 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.7.1] — 2026-10-17
+
+### Fixed
+
+- **A stale daily key is now also removed on a filtered visit, and the
+  maintenance job no longer creates one** **[privacy text]**: since 1.7.0 the
+  key rotated outside counted visits only through the authenticated
+  dashboard, `/k/report` and `/k/snapshot` and through `maintenance.php`, so a
+  site that only gets filtered visitors (Do Not Track, Global Privacy
+  Control, bots) and whose operator opens none of these kept yesterday's key.
+  `maintenance.php` runs as the cron user: the `secret.txt` it created
+  belonged to that user, the web server could not read it and made its own at
+  the next visit. New `Secret::expire()` removes a stale key and never
+  creates one (a missing or current file is untouched). `kizami_write()`
+  calls it before it returns for a filtered request, and `maintenance.php`
+  uses it instead of `rotate()`: it reports `stale daily key removed`,
+  `daily key current` or `no daily key` (instead of `stale daily key
+  replaced`) and exits 1 only when a stale key cannot be removed. Dashboard,
+  report and snapshot still replace the key after authentication. No schema
+  change.
+
 ## [1.7.0] — 2026-10-17
 
 ### Fixed

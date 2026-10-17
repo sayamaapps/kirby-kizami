@@ -154,22 +154,28 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
             return;
         }
 
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin'));
+        $directory = kizami_directory();
+
+        // A filtered request is still a request: yesterday's key must not
+        // outlive the day because nobody was counted. Removed, not replaced:
+        // no key is needed here.
         $server = $_SERVER;
         if (Capture::optedOut($server)) {
+            Secret::expire($directory, $now->format('Y-m-d'));
             return;
         }
         $ua = $server['HTTP_USER_AGENT'] ?? '';
         if (Capture::isBot($ua)) {
+            Secret::expire($directory, $now->format('Y-m-d'));
             return;
         }
 
         $row = is_callable($row) ? $row() : $row;
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin'));
 
         // Pass the date: the secret rotates daily (see Secret.php). The same
         // zone as in the hash, otherwise secret and hash rotate at different
         // times.
-        $directory = kizami_directory();
         $secret = Secret::get($directory, $now->format('Y-m-d'));
         if ($secret === '') {
             return; // no secret, no capture

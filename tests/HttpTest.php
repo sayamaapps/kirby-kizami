@@ -385,6 +385,28 @@ try {
     requestHttp('/k/dashboard', $auth);
     checkHttp(str_starts_with((string) file_get_contents($keyFile), (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\n")
         && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE'), 'Dashboard with login replaces a stale daily key');
+    // A filtered request (DNT, bot) removes a stale key without counting and
+    // without making a new one; a current key stays; a counted visit still
+    // replaces it.
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    $stale = "2010-01-01\nSTALE-SECRET-VALUE";
+    $rowsBeforeFiltered = rowCount();
+    foreach (['DNT' => 'DNT: 1', 'GPC' => 'Sec-GPC: 1', 'bot' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)'] as $what => $header) {
+        file_put_contents($keyFile, $stale);
+        requestHttp('/', [$header]);
+        checkHttp(!file_exists($keyFile), "A filtered visit ($what) removes a stale daily key");
+        checkHttp(rowCount() === $rowsBeforeFiltered, "A filtered visit ($what) counts nothing");
+    }
+    $currentKey = $today . "\nCURRENT-SECRET-VALUE";
+    file_put_contents($keyFile, $currentKey);
+    requestHttp('/', ['DNT: 1']);
+    requestHttp('/', ['User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)']);
+    checkHttp(file_get_contents($keyFile) === $currentKey, 'A filtered visit leaves a current daily key byte for byte');
+    file_put_contents($keyFile, $stale);
+    requestHttp('/');
+    checkHttp(str_starts_with((string) file_get_contents($keyFile), $today . "\n")
+        && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE') && rowCount() === $rowsBeforeFiltered + 1,
+        'A counted visit still replaces a stale daily key');
     [$status, $html] = requestHttp('/k/dashboard', $auth);
     checkHttp($status === 200 && str_contains($html, 'class="tiles"'), 'Dashboard with login');
     checkHttp(str_contains($html, 'name="viewport"'), 'Dashboard viewport');

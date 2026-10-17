@@ -203,6 +203,29 @@ archiveCase('daily_cli_backup_restore', function ($dir) {
     archiveCheck('Counts unchanged after restored cleanup', $expected, $restored->longTerm());
 });
 
+archiveCase('cli_daily_key', function ($dir) {
+    new Store($dir . '/' . Store::FILE);
+    $keyFile = $dir . '/secret.txt';
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    // The job runs as another user than the web server: it removes a stale
+    // key and never creates one.
+    [$exit, $out, $err] = archiveCli(['compact', $dir]);
+    archiveCheck('CLI without a key file succeeds: ' . $err, 0, $exit);
+    archiveCheck('… reports no daily key', true, str_contains($out, 'no daily key'));
+    archiveCheck('… and creates none', false, file_exists($keyFile));
+    file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
+    [$exit, $out, $err] = archiveCli(['compact', $dir]);
+    archiveCheck('CLI with a stale key succeeds: ' . $err, 0, $exit);
+    archiveCheck('… reports it removed', true, str_contains($out, 'stale daily key removed'));
+    archiveCheck('… and the file is gone', false, file_exists($keyFile));
+    $current = $today . "\nCURRENT-SECRET-VALUE";
+    file_put_contents($keyFile, $current);
+    [$exit, $out, $err] = archiveCli(['compact', $dir]);
+    archiveCheck('CLI with a current key succeeds: ' . $err, 0, $exit);
+    archiveCheck('… reports it current', true, str_contains($out, 'daily key current') && !str_contains($out, 'stale'));
+    archiveCheck('… and leaves the file untouched', $current, (string) file_get_contents($keyFile));
+});
+
 archiveCase('empty', function ($dir) {
     $store = new Store($dir . '/' . Store::FILE);
     archiveCheck('Empty installation has honest zero totals', ['total'=>['views'=>0,'clicks'=>0,'devices'=>0], 'months'=>[]], $store->longTerm());

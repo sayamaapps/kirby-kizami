@@ -14,9 +14,10 @@ namespace Kizami;
  *
  * The key rotates on the first counted visit of a day, and also through
  * rotate(), which the dashboard, the report and snapshot routes (after
- * authentication) and the maintenance job call. Without any of these the last
- * key stays on disk, so a site that may go days without a counted visit
- * needs the maintenance job.
+ * authentication) call. expire() removes a stale key where nobody needs a new
+ * one: a filtered request (DNT/GPC, bot) and the maintenance job. Without any
+ * of these the last key stays on disk, so a site that may go days without a
+ * page request needs the maintenance job.
  *
  * Rotation limits linkability. It is no guarantee of anonymity: backups can
  * preserve old keys, and additional knowledge can still allow matching. So
@@ -34,8 +35,8 @@ final class Secret
     /**
      * Retire a stale key without a counted visit. Replaces the file when its
      * date is not `$date`; a current key is left untouched. A missing file
-     * stays missing (nothing to retire, and maintenance must not create keys
-     * on an installation that never counted). False only when a stale key
+     * stays missing (nothing to retire, and an operator route must not create
+     * keys on an installation that never counted). False only when a stale key
      * could not be replaced.
      */
     public static function rotate(string $directory, string $date): bool
@@ -44,6 +45,31 @@ final class Secret
             return true;
         }
         return self::get($directory, $date) !== '';
+    }
+
+    /**
+     * Remove a stale key without making a new one. Used where no one needs a
+     * key right now (filtered visitors, the CLI job): the CLI runs as another
+     * user than the web server, so a key it created would be unreadable for
+     * the server, which then makes its own at the next visit anyway. A
+     * missing or current file is left alone; a file without a readable date
+     * line counts as stale. The counted path keeps rotating through get()'s
+     * atomic rename(); the tiny race against a parallel rename() costs at most
+     * the one extra "distinct visitor" already accepted above. False only when
+     * a stale key could not be removed.
+     */
+    public static function expire(string $directory, string $date): bool
+    {
+        $file = $directory . '/' . self::FILE;
+        $existing = @file_get_contents($file);
+        if (is_string($existing) && explode("\n", trim($existing), 2)[0] === $date) {
+            return true;
+        }
+        if (!file_exists($file)) {
+            return true;
+        }
+        @unlink($file);
+        return !file_exists($file);
     }
 
     public static function get(string $directory, string $date): string
