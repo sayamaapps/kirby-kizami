@@ -485,6 +485,123 @@ try {
     same('download|menu.pdf', $copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events"), 'Snapshot includes the reported actions');
     $copy->close();
     same([], glob($tmp . '/storage/kizami/.snapshot-*'), 'Intermediate file deleted');
+
+    // The answer is streamed (SnapshotResponse), not held as a string.
+    $storageDir = $tmp . '/storage/kizami';
+    $respond = fn () => Kizami\SnapshotService::respond($app([
+        'method' => 'GET', 'url' => 'http://example.invalid/k/snapshot',
+        'auth' => 'Basic ' . base64_encode('snapshot@example.invalid:report-password-very-long-123'),
+    ], $on));
+    // Runs send() like production, but counts and hashes the output in a buffer callback instead of keeping it.
+    $stream = function (Kirby\Http\Response $response): array {
+        $bytes = 0;
+        $context = hash_init('sha256');
+        ob_start(function (string $chunk) use (&$bytes, $context): string {
+            hash_update($context, $chunk);
+            $bytes += strlen($chunk);
+            return '';
+        }, 65536);
+        $returned = $response->send();
+        ob_end_flush();
+        return [$returned, $bytes, hash_final($context)];
+    };
+    $streamed = $respond();
+    same(true, $streamed instanceof Kizami\SnapshotResponse, 'Snapshot: streamed response class');
+    same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: the copy is already unlinked while the answer is not yet sent');
+    $announced = $streamed->headers();
+    [$returned, $bytes, $streamedHash] = $stream($streamed);
+    same('', $returned, 'Snapshot: send() has already written the body, returns nothing');
+    same(true, $bytes > 0 && $bytes === (int) ($announced['Content-Length'] ?? -1), 'Snapshot: streamed bytes = Content-Length');
+    same($announced['X-Kizami-Sha256'] ?? null, $streamedHash, 'Snapshot: streamed bytes hash to X-Kizami-Sha256');
+    same(hash('sha256', $respond()->body()), $streamedHash, 'Snapshot: streaming and body() deliver the same copy');
+    same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: no file left after send()');
+    $reread = $respond();
+    $inMemory = $reread->body();
+    same(strlen($inMemory), (int) ($reread->headers()['Content-Length'] ?? -1), 'Snapshot: Content-Length = length of the copy');
+    same($inMemory, $reread->body(), 'Snapshot: body() can be read twice');
+    same([true, hash('sha256', $inMemory)], [$stream($reread)[1] === strlen($inMemory), $stream($respond())[2]], 'Snapshot: send() still works after body()');
+    unset($streamed, $reread);
+
+    // Leftovers of aborted downloads: removed after an hour, younger ones stay (a parallel download may run).
+    $leave = function (string $name, int $age) use ($storageDir) {
+        file_put_contents($storageDir . '/' . $name, 'x');
+        touch($storageDir . '/' . $name, time() - $age);
+    };
+    $leave('.snapshot-stale.sqlite', 7200);
+    $leave('.snapshot-stale.sqlite-wal', 7200);
+    $leave('.snapshot-fresh.sqlite', 0);
+    $snapshot(null, options: $on);
+    same([true, true, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: no clean-up without a login');
+    $snapshot(options: $on);
+    same([false, false, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: stale leftovers swept, fresh ones stay');
+    same([true, true], [is_file($storageDir . '/' . Store::FILE), is_file($storageDir . '/secret.txt')], 'Snapshot: sweep leaves the database and the secret alone');
+    unlink($storageDir . '/.snapshot-fresh.sqlite');
+
+    // cleanup() and sweep() directly.
+    $dir = $tmp . '/sweep';
+    mkdir($dir, 0700);
+    $make = function (string $name, int $age) use ($dir) {
+        file_put_contents($dir . '/' . $name, 'x');
+        touch($dir . '/' . $name, time() - $age);
+    };
+    $listing = fn () => array_values(array_diff(scandir($dir), ['.', '..']));
+    foreach (['', '-wal', '-shm', '-journal'] as $suffix) { $make('.snapshot-gone.sqlite' . $suffix, 0); }
+    $make('.snapshot-other.sqlite', 0);
+    same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
+    same(['.snapshot-other.sqlite'], $listing(), 'cleanup(): the copy and its side files go, other files stay');
+    same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
+    unlink($dir . '/.snapshot-other.sqlite');
+    foreach (['', '-wal', '-shm', '-journal'] as $suffix) { $make('.snapshot-old.sqlite' . $suffix, 7200); }
+    $make('.snapshot-over.sqlite', 3700);
+    $make('.snapshot-edge.sqlite', 3500);
+    $make('.snapshot-new.sqlite', 60);
+    $make(Store::FILE, 7200);
+    $make('secret.txt', 7200);
+    $make('snapshot-without-dot', 7200);
+    mkdir($dir . '/.snapshot-directory');
+    same(5, Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
+    same(['.snapshot-directory', '.snapshot-edge.sqlite', '.snapshot-new.sqlite', Store::FILE, 'secret.txt', 'snapshot-without-dot'], $listing(), 'sweep(): only .snapshot-* files older than an hour go');
+    same(0, Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
+    same(0, Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
+
+    // Memory: a copy larger than twice the memory_limit still comes through, in a child
+    // process with that limit. The helper boots Kirby plus respond() in ~6.5 MB; the limit
+    // leaves about 9 MB of room, a string holding the copy (the old way) needs 40 MB.
+    $limitMb = 16;
+    $bigStorage = $tmp . '/big-storage';
+    mkdir($bigStorage . '/kizami', 0700, true);
+    $bigDb = $bigStorage . '/kizami/' . Store::FILE;
+    new Store($bigDb);
+    $big = new SQLite3($bigDb);
+    $big->exec('PRAGMA synchronous = OFF');
+    $pageSize = (int) $big->querySingle('PRAGMA page_size');
+    $columns = Store::columns();
+    $insert = $big->prepare('INSERT INTO kizami_events (' . implode(',', $columns) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ')');
+    $big->exec('BEGIN');
+    for ($i = 0; $big->querySingle('PRAGMA page_count') * $pageSize < $limitMb * 2.5 * 1048576; ) {
+        for ($k = 0; $k < 5000; $k++, $i++) {
+            // 255-byte path (it is indexed, so it counts twice), everything else small.
+            $row = [gmdate('Y-m-d H:i:s'), 'page', 'view', '/' . substr(str_repeat(sha1((string) $i), 7), 0, 254), null, null, null, null, null, md5((string) $i), 'desktop', '', 0];
+            foreach ($row as $c => $value) { $insert->bindValue($c + 1, $value, $value === null ? SQLITE3_NULL : (is_int($value) ? SQLITE3_INTEGER : SQLITE3_TEXT)); }
+            $insert->execute();
+        }
+    }
+    $big->exec('COMMIT');
+    $big->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    $big->close();
+    same(true, filesize($bigDb) >= 2 * $limitMb * 1048576, 'Memory test: the database is more than twice the memory limit');
+    $child = proc_open([PHP_BINARY, '-d', 'memory_limit=' . $limitMb . 'M', $base . '/tests/helpers/snapshot-stream.php', $tmp, $bigStorage], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $childOut = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $childErr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    $childExit = proc_close($child);
+    same(0, $childExit, 'Memory test: child process under memory_limit=' . $limitMb . 'M ends normally: ' . substr(trim($childOut . ' ' . $childErr), 0, 300));
+    $result = json_decode(trim($childOut), true);
+    same(true, is_array($result), 'Memory test: child reports JSON: ' . substr($childOut, 0, 300));
+    same([200, 'SQLite format 3', ''], [$result['code'], $result['head'], $result['returned']], 'Memory test: status, SQLite header, send() result');
+    same(true, $result['bytes'] >= 2 * $limitMb * 1048576 && $result['bytes'] === (int) $result['length'], 'Memory test: all bytes of the copy arrive, as many as Content-Length says');
+    same($result['sha256'], $result['hash'], 'Memory test: the bytes that arrive match X-Kizami-Sha256');
+    same(true, $result['peak'] < $result['bytes'] / 2, 'Memory test: peak memory (' . $result['peak'] . ') far below the size of the copy (' . $result['bytes'] . ')');
+    same([], glob($bigStorage . '/kizami/.snapshot-*'), 'Memory test: no file left in the storage');
     same(true, in_array('k/snapshot', array_column($app()->extensions('routes'), 'pattern'), true), 'Snapshot route registered');
 } catch (Throwable $e) {
     fwrite(STDERR, 'Report (Kirby): ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n");

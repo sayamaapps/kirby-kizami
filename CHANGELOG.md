@@ -34,6 +34,14 @@ All notable changes to this project are documented here. Versions follow
 - **Dashboard with earlier rows**: source, page and missing-page names that
   hold invalid UTF-8 from before this version show U+FFFD instead of an
   empty cell.
+- **`/k/snapshot` streams the copy**: the route read the whole database copy
+  into a string, so a database larger than PHP's `memory_limit` ended the
+  request in a fatal error and left the full copy in `storage/kizami/`. The
+  copy is now sent in chunks, the memory use no longer depends on the size of
+  the database, and the file is unlinked as soon as it is open. Leftover
+  `.snapshot-*` files of aborted requests are removed after one hour. The
+  bytes, `X-Kizami-Sha256` and the other headers are unchanged, plus a
+  `Content-Length`; no schema change.
 
 ## [1.6.0] — 2026-10-17
 
