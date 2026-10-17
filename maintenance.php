@@ -20,14 +20,19 @@ try {
         $store->snapshot($argv[3]);
     }
     // Also retire a stale daily key: a site without counted visits would
-    // keep yesterday's key otherwise.
+    // keep yesterday's key otherwise. Removed, not replaced: this job runs as
+    // another user than the web server, so a key it created would belong to
+    // the wrong owner and the server could not read it.
     $day = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
     $keyFile = rtrim($directory, '/') . '/' . Kizami\Secret::FILE;
-    $stale = is_file($keyFile) && strtok((string) file_get_contents($keyFile), "\n") !== $day;
-    if (!Kizami\Secret::rotate($directory, $day)) {
-        throw new RuntimeException('Stale daily key could not be replaced (secret.txt not writable)');
+    $keyNote = 'no daily key';
+    if (is_file($keyFile)) {
+        $current = strtok((string) @file_get_contents($keyFile), "\n") === $day;
+        if (!Kizami\Secret::expire($directory, $day)) {
+            throw new RuntimeException('Stale daily key could not be removed');
+        }
+        $keyNote = $current ? 'daily key current' : 'stale daily key removed';
     }
-    $keyNote = $stale ? 'stale daily key replaced' : 'daily key current';
     echo "Kizami: {$deleted} old single events rolled up into daily totals and removed; {$keyNote}; {$action} succeeded.\n";
 } catch (Throwable $e) {
     fwrite(STDERR, 'Kizami: ' . $e->getMessage() . "\n");

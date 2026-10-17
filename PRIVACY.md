@@ -36,7 +36,7 @@ web address only domain and path are kept, without query or fragment; e-mail
 addresses and phone numbers from `mailto:`/`tel:` links are not stored.
 
 The day identifier is a hash of the IP address and user agent the server
-receives, the date, and a secret key that is **replaced every day**: on the first counted visit of a day, and also when the dashboard, the report or snapshot route is opened and by the maintenance job. Without any of these (a site with no counted visits) the previous key can stay on disk. The raw IP
+receives, the date, and a secret key that is **replaced every day**: on the first counted visit of a day, and also when the dashboard, the report or snapshot route is opened. A key from an earlier day is also deleted, without a replacement, on every page request, a filtered one (Do Not Track, Global Privacy Control, bot) included, and by the maintenance job. Without any of these (a site nobody visits) the previous key can stay on disk. The raw IP
 address and user agent are not stored in the statistics database. Rotating the
 key reduces linkability between days. It does not guarantee anonymity.
 

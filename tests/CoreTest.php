@@ -276,6 +276,33 @@ if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
 @unlink($rot . '/' . Secret::FILE);
 @rmdir($rot);
 
+// expire(): remove a stale key, never make one (filtered visitors, the CLI job).
+$exp = sys_get_temp_dir() . '/kizami-expire-' . bin2hex(random_bytes(6));
+check('expire() with no directory: true', true, Secret::expire($exp, '2026-09-22'));
+check('… and it creates neither directory nor key', false, file_exists($exp));
+mkdir($exp, 0755, true);
+check('expire() in an existing directory without a key: true, still no file', [true, false],
+    [Secret::expire($exp, '2026-09-22'), is_file($exp . '/' . Secret::FILE)]);
+file_put_contents($exp . '/' . Secret::FILE, "2026-09-22\nCURRENT-SECRET-VALUE");
+check('expire() with a current key: true', true, Secret::expire($exp, '2026-09-22'));
+check('… the file is untouched byte for byte', "2026-09-22\nCURRENT-SECRET-VALUE", (string) file_get_contents($exp . '/' . Secret::FILE));
+file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('expire() removes a stale key', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+check('… and leaves nothing else behind', [], glob($exp . '/*'));
+file_put_contents($exp . '/' . Secret::FILE, "garbage without date line");
+check('expire() removes a file without a date line', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+file_put_contents($exp . '/' . Secret::FILE, '');
+check('expire() removes an empty file', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+    file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+    chmod($exp, 0555);
+    check('expire() reports false when a stale key cannot be removed', false, Secret::expire($exp, '2026-09-23'));
+    check('… and the stale key stays', "2010-01-01\nSTALE-SECRET-VALUE", (string) file_get_contents($exp . '/' . Secret::FILE));
+    chmod($exp, 0755);
+}
+@unlink($exp . '/' . Secret::FILE);
+@rmdir($exp);
+
 // Clean up (never more than our own throwaway file):
 @unlink($tmp . '/' . Secret::FILE);
 @rmdir($tmp);
@@ -594,15 +621,12 @@ function maintenanceCli(array $args): int {
     return proc_close($process);
 }
 check('Maintenance CLI compacts successfully', 0, maintenanceCli(['compact', $dbDir]));
-// The job also retires a stale daily key; it never creates one.
+// The job also retires a stale daily key; it removes it and never creates one.
 check('Maintenance CLI without a key file creates none', [0, false], [maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
 file_put_contents($dbDir . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
-check('Maintenance CLI with a stale key succeeds', 0, maintenanceCli(['compact', $dbDir]));
-[$cliDate, $cliValue] = explode("\n", (string) file_get_contents($dbDir . '/' . Secret::FILE), 2);
-check('Maintenance CLI: the key is from today (Berlin) and new',
-    [(new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'), false],
-    [$cliDate, $cliValue === 'STALE-SECRET-VALUE']);
-$cliBefore = (string) file_get_contents($dbDir . '/' . Secret::FILE);
+check('Maintenance CLI with a stale key succeeds and removes it', [0, false], [maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+$cliBefore = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\nCURRENT-SECRET-VALUE";
+file_put_contents($dbDir . '/' . Secret::FILE, $cliBefore);
 maintenanceCli(['compact', $dbDir]);
 check('Maintenance CLI leaves a current key alone', $cliBefore, (string) file_get_contents($dbDir . '/' . Secret::FILE));
 @unlink($dbDir . '/' . Secret::FILE);
