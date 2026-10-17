@@ -87,32 +87,56 @@ final class Capture
      * Path without query string, without HTML-dangerous characters, capped.
      * Cleaning is also the XSS protection at the source: what doesn't get in
      * here can't do anything in the dashboard.
+     *
+     * Only valid UTF-8 is kept (since 1.6.1): a path with invalid bytes would
+     * break the JSON of the report, so it is discarded (empty), not repaired.
+     * The cap is 255 bytes, cut on a character boundary.
      */
     public static function cleanPath(mixed $path): string
     {
         if (!is_string($path)) { return ''; }
-        $path = explode('?', $path, 2)[0];
+        $path = explode('?', $path, 2)[0]; // before the check: the query is dropped anyway
+        if (preg_match('//u', $path) !== 1) { return ''; }
         $path = str_replace(['<', '>', '"', "'"], '', $path);
-        return substr($path, 0, 255);
+        $path = substr($path, 0, 255);
+        // substr() may have cut a multibyte character in half: drop the stub (at most 3 bytes).
+        while ($path !== '' && preg_match('//u', $path) !== 1) {
+            $path = substr($path, 0, -1);
+        }
+        return $path;
     }
 
-    /** Referrer reduced to the bare referring domain (no full URL). */
+    /**
+     * Referrer reduced to the bare referring domain (no full URL).
+     *
+     * The host comes straight from a request header, so (since 1.6.1):
+     *  - not valid UTF-8 → empty (discarded, not repaired): an invalid byte
+     *    in a stored host made json_encode() fail, and /k/report answered
+     *    with an empty body;
+     *  - control and format characters (zero-width, bidi overrides) and
+     *    `<>"'` are removed — the host reaches the dashboard and the report;
+     *  - at most 100 characters, cut between characters.
+     */
     public static function cleanReferrer(mixed $referrer, array $ownHosts = []): string
     {
         if (!is_string($referrer) || $referrer === '') {
             return '';
         }
         $host = parse_url($referrer, PHP_URL_HOST);
-        if (!is_string($host) || $host === '') {
+        if (!is_string($host) || $host === '' || preg_match('//u', $host) !== 1) {
             return '';
         }
-        $host = strtolower(rtrim($host, '.'));
+        $host = strtolower(rtrim(preg_replace('/[\p{Cc}\p{Cf}<>"\']+/u', '', $host), '.'));
+        if ($host === '') {
+            return '';
+        }
         foreach ($ownHosts as $own) {
             if (is_string($own) && $host === strtolower(rtrim($own, '.'))) {
                 return '(internal)'; // kept apart from external and unknown sources
             }
         }
-        return substr($host, 0, 100);
+        preg_match('/^.{0,100}/us', $host, $cut);
+        return $cut[0] ?? '';
     }
 
     /** utm/ID value: harmless characters only, capped. */

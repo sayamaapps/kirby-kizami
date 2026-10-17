@@ -50,7 +50,7 @@ function rowCount(): int {
 }
 try {
     if (!is_file($repo . '/vendor/autoload.php')) { throw new RuntimeException('Composer dependencies missing; run composer install first'); }
-    foreach (['public', 'site/config', 'site/plugins', 'site/templates', 'content/home', 'content/error', 'storage'] as $dir) {
+    foreach (['public', 'site/config', 'site/plugins', 'site/templates', 'site/accounts', 'content/home', 'content/error', 'storage'] as $dir) {
         mkdir($tmp . '/' . $dir, 0700, true);
     }
     symlink($repo, $tmp . '/site/plugins/kizami');
@@ -444,6 +444,87 @@ try {
     checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: empty option is not set');
     writeConfig($config);
     checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'Without campaignParam, cam is ignored');
+
+    // Invalid UTF-8. An anonymous request can send any bytes in
+    // Referer and in the redirect's ?from=. They must not reach kizami_events
+    // as invalid UTF-8: json_encode() of the report failed on them, and
+    // /k/report answered 200 with an empty body.
+    $lastRow = function (string $column, string $where = "type='page'"): string {
+        global $tmp;
+        $d = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+        $value = (string) $d->querySingle("SELECT $column FROM kizami_events WHERE $where ORDER BY id DESC LIMIT 1");
+        $d->close();
+        return $value;
+    };
+    $beforeBad = rowCount();
+    checkHttp(requestHttp('/', ['Referer: https://foo' . "\xFF" . '.example/'])[0] === 200, 'Referer with an invalid byte: the page still answers 200');
+    checkHttp(rowCount() === $beforeBad + 1, 'Referer with an invalid byte: the visit is still counted');
+    checkHttp($lastRow('referrer') === '', 'Referer with an invalid byte: no host stored');
+    checkHttp(requestHttp('/', ['Referer: https://foo.example/' . "\xFF"])[0] === 200 && $lastRow('referrer') === 'foo.example', 'Invalid byte after the host: the host is kept');
+    checkHttp(requestHttp('/', ['Referer: https://Search.Example.org/?q=1'])[0] === 200 && $lastRow('referrer') === 'search.example.org', 'Valid referrer unchanged');
+    // Paths. The page path: Kirby keeps percent-encoding, so %FF arrives as
+    // ASCII text and is stored as sent. A raw invalid byte never gets that far
+    // (PHP's test server drops the connection; Kirby's router throws "No
+    // route found" before route:after). The way in with real bytes is the
+    // redirect's ?from=: PHP decodes %FF there, and cleanPath() stores it.
+    foreach (['/%FF', '/a%FFb', '/caf%C3%A9'] as $address) {
+        checkHttp(requestHttp($address)[0] === 404, 'Percent-encoded path answers 404: ' . $address);
+        checkHttp($lastRow('path', "type='notfound'") === $address, 'Percent-encoded path stored as sent (ASCII): ' . $address . ' → ' . $lastRow('path', "type='notfound'"));
+    }
+    $beforeFrom = rowCount();
+    foreach (['%FFx' => '', '%2Fa%FFb' => '', '%2Fa%E2%82' => '', '%2Fcaf%C3%A9' => "/caf\u{E9}", '%2Fok%3Fx%3D%FF' => '/ok'] as $from => $stored) {
+        [$status, , $headers] = requestHttp('/call?from=' . $from, ['Sec-Fetch-User: ?1']);
+        checkHttp($status === 302 && in_array('Location: tel:+498000000', $headers, true), 'Redirect with from=' . $from . ' still redirects');
+        checkHttp($lastRow('path', "type='redirect'") === $stored, 'Redirect from=' . $from . ' stores ' . json_encode($stored, JSON_UNESCAPED_UNICODE) . ', got ' . bin2hex($lastRow('path', "type='redirect'")));
+    }
+    checkHttp(rowCount() === $beforeFrom + 5, 'Redirect with an invalid from= is still counted, just without a path');
+    $db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+    // SQLite has no UTF-8 validity check, so look at the rows in PHP.
+    $invalid = 0;
+    $rows = $db->query('SELECT referrer, path FROM kizami_events');
+    while ($row = $rows->fetchArray(SQLITE3_NUM)) {
+        $invalid += preg_match('//u', (string) $row[0]) === 1 && preg_match('//u', (string) $row[1]) === 1 ? 0 : 1;
+    }
+    checkHttp($invalid === 0, 'No referrer or path with invalid UTF-8 in the database (' . $invalid . ' rows)');
+    $db->close();
+
+    // The report with a row from before the fix: the database may still hold
+    // a host with an invalid byte. Needs the report switched on and an account
+    // with the bundled role (the plugin registers it only with kizami.report).
+    $config['kizami.report'] = true;
+    $config['kizami.reportWithoutHttps'] = true;
+    writeConfig($config);
+    require_once $repo . '/vendor/autoload.php';
+    $setup = new Kirby\Cms\App([
+        'roots' => ['index' => $tmp . '/public', 'base' => $tmp, 'site' => $tmp . '/site', 'content' => $tmp . '/content', 'storage' => $tmp . '/storage', 'accounts' => $tmp . '/site/accounts'],
+        'options' => ['url' => 'http://127.0.0.1:' . $port] + $config,
+    ]);
+    $setup->impersonate('kirby');
+    $setup->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
+    Kirby\Cms\App::destroy();
+    $reportAuth = ['Authorization: Basic ' . base64_encode('report@example.invalid:report-password-very-long-123')];
+    $yesterday = (new DateTimeImmutable('yesterday 12:00', new DateTimeZone('Europe/Berlin')))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+    // CAST(… AS TEXT): a row written by Store is TEXT, a bare X'…' would be a BLOB.
+    $db->exec("INSERT INTO kizami_events (created_at, type, action, path, target, referrer, utm_source, utm_medium, utm_campaign, session, device, position, seconds)
+        VALUES ('$yesterday', 'page', 'view', '/', '', CAST(X'666F6FFF2E6578616D706C65' AS TEXT), '', '', '', 'legacy-1', 'desktop', '', 0)");
+    $db->exec("INSERT INTO kizami_events (created_at, type, action, path, target, referrer, utm_source, utm_medium, utm_campaign, session, device, position, seconds)
+        VALUES ('$yesterday', 'page', 'view', CAST(X'2F61FF62' AS TEXT), '', 'google.com', '', '', '', 'legacy-2', 'desktop', '', 0)");
+    checkHttp($db->querySingle("SELECT typeof(referrer) || ':' || hex(referrer) FROM kizami_events WHERE session='legacy-1'") === 'text:666F6FFF2E6578616D706C65', 'Fixture row: the invalid host really is stored as TEXT');
+    $db->close();
+    [$status, $body, $headers] = requestHttp('/k/report?kind=day', $reportAuth);
+    checkHttp($status === 200 && strlen($body) > 0, 'Report with a stored invalid host: a body, not an empty 200 (status ' . $status . ', ' . strlen($body) . ' bytes)');
+    checkHttp(preg_grep('#^Content-Type: application/json#i', $headers) !== [], 'Report with a stored invalid host: JSON content type');
+    $report = json_decode($body, true);
+    checkHttp(json_last_error() === JSON_ERROR_NONE && is_array($report) && $report['ok'] === true && $report['format'] === 2, 'Report with a stored invalid host: valid JSON, ok, format 2');
+    checkHttp(($report['sources']["foo\u{FFFD}.example"] ?? null) === 1, 'Report: the invalid host appears with U+FFFD: ' . json_encode(array_keys($report['sources'] ?? []), JSON_UNESCAPED_UNICODE));
+    checkHttp(($report['pages']["/a\u{FFFD}b"] ?? null) === 1, 'Report: the invalid path appears with U+FFFD: ' . json_encode(array_keys($report['pages'] ?? []), JSON_UNESCAPED_UNICODE));
+    checkHttp(str_contains($report['text'], "foo\u{FFFD}.example"), 'Report: the text shows the substituted host');
+    // The dashboard shows the same row, not an empty cell.
+    [$status, $html] = requestHttp('/k/dashboard?days=7', $auth);
+    checkHttp($status === 200 && str_contains($html, "foo\u{FFFD}.example"), 'Dashboard shows the stored invalid host with U+FFFD');
+    unset($config['kizami.report'], $config['kizami.reportWithoutHttps']);
+    writeConfig($config);
 
     // Server handles sequential requests, no open request/DB writer here.
     foreach (glob($tmp . '/storage/kizami/kizami.sqlite*') as $file) { unlink($file); }

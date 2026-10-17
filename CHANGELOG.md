@@ -13,6 +13,36 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.6.1] — 2026-10-17
+
+### Fixed
+
+- **`/k/report` never answers 200 without JSON**: one request with an
+  invalid UTF-8 byte in the `Referer` header was enough to store a host that
+  made `json_encode()` fail, and the route then answered 200 with an empty
+  body. The route now encodes the body itself: invalid bytes in rows stored
+  earlier appear as U+FFFD, and anything else that cannot be encoded is
+  logged and answered with a 500 and `{"ok":false,"error":"Internal error."}`.
+  The report JSON `format` stays 2; valid data gives the same bytes as before.
+- **Referrer and path only as valid UTF-8**: a referrer host with invalid
+  UTF-8 is no longer stored; control and format characters and `<>"'` are
+  removed from it, and the 100-character cap no longer cuts a multibyte
+  character in half. A path, such as the `from` parameter of a redirect, is
+  discarded if it is not valid UTF-8, and the 255-byte cap cuts between
+  characters. Valid hosts and paths are stored exactly as before; no schema
+  change.
+- **Dashboard with earlier rows**: source, page and missing-page names that
+  hold invalid UTF-8 from before this version show U+FFFD instead of an
+  empty cell.
+- **`/k/snapshot` streams the copy**: the route read the whole database copy
+  into a string, so a database larger than PHP's `memory_limit` ended the
+  request in a fatal error and left the full copy in `storage/kizami/`. The
+  copy is now sent in chunks, the memory use no longer depends on the size of
+  the database, and the file is unlinked as soon as it is open. Leftover
+  `.snapshot-*` files of aborted requests are removed after one hour. The
+  bytes, `X-Kizami-Sha256` and the other headers are unchanged, plus a
+  `Content-Length`; no schema change.
+
 ## [1.6.0] — 2026-10-17
 
 ### Changed

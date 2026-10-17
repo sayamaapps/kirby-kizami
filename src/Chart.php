@@ -11,7 +11,7 @@ final class Chart
 {
     private static function e(string $s): string
     {
-        return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
     /** $decimals forces a fixed number of decimals (for example for uniform comparison values). */

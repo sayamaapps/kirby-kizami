@@ -144,14 +144,33 @@ final class ReportService
         }
     }
 
+    /** Body of the 500 when the data cannot be encoded: a literal, so it cannot fail itself. */
+    public const ENCODING_ERROR_BODY = '{"ok":false,"error":"Internal error."}';
+
+    /**
+     * The JSON response, encoded here and not by Kirby (since 1.6.1):
+     * Response::json() turns a failed json_encode() into an empty body and
+     * keeps the status — a 200 with no JSON, which a reading script cannot
+     * tell from a working route. Invalid UTF-8 (a stored value from before
+     * the input was checked) becomes U+FFFD; anything else that cannot be
+     * encoded is logged and answered with a 500 and a fixed JSON body. Never
+     * a 200 without JSON. Same flags as Kirby's pretty printing, so valid
+     * data gives the same bytes as before.
+     */
     public static function json(array $data, int $status): Response
     {
+        $body = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($body === false) {
+            error_log('Kizami: report not encodable: ' . json_last_error_msg());
+            $body = self::ENCODING_ERROR_BODY;
+            $status = 500;
+        }
         // Pass headers on creation: Kirby's Response::header() only reads,
         // a later header('Cache-Control', …) would set nothing.
         $headers = ['Cache-Control' => 'no-store', 'X-Robots-Tag' => 'noindex, nofollow, noarchive'];
         if ($status === 401) {
             $headers['WWW-Authenticate'] = 'Basic realm="Kizami", charset="UTF-8"';
         }
-        return Response::json($data, $status, true, $headers);
+        return Response::json($body, $status, null, $headers);
     }
 }

@@ -21,6 +21,7 @@ require_once __DIR__ . '/src/Analysis.php';
 require_once __DIR__ . '/src/Report.php';
 require_once __DIR__ . '/src/ReportError.php';
 require_once __DIR__ . '/src/ReportService.php';
+require_once __DIR__ . '/src/SnapshotResponse.php';
 require_once __DIR__ . '/src/SnapshotService.php';
 
 use Kizami\Access;
