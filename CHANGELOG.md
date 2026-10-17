@@ -41,6 +41,29 @@ All notable changes to this project are documented here. Versions follow
   anonymous requests) and `maintenance.php` call it. The job reports
   `stale daily key replaced` or `daily key current`, and exits 1 when a stale
   key cannot be replaced. No schema change.
+- **The dashboard's login no longer works over plain HTTP**: `/k/dashboard`
+  and `/k/dashboard.css` checked the Basic Auth login whatever the protocol,
+  so a reusable password could travel unencrypted, and the 401 made the
+  browser ask for it. Both routes now answer `403` `HTTPS only.` (no
+  `WWW-Authenticate`, `Cache-Control: no-store`) before any challenge or
+  check, the Panel cookie included, with the same rule and the same option as
+  `/k/report` and `/k/snapshot`: `kizami.reportWithoutHttps`, now documented
+  for the dashboard too. Behind a reverse proxy Kirby must see HTTPS
+  (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option). A site with
+  the module off still answers Kirby's real 404. No schema change.
+- **Failed dashboard logins are now limited**: the file login
+  (`site/config/kizami.php`, or `kizami.previewAccess`) ran `password_verify()`
+  for every request, with no limit on wrong passwords. New `Kizami\Lockout`
+  counts failed logins per client address and per user name in
+  `storage/kizami/logins.json` (hashes only, no address or name in plain text)
+  and uses Kirby's own limits, `auth.trials` (10) and `auth.timeout` (3600
+  seconds). Once reached, the login answers `429` with `Retry-After` and no
+  challenge, without running `password_verify()`; a request without
+  credentials never counts, a successful login does not reset the counters.
+  If the file cannot be read or written, access is denied and the error log
+  says so. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
+  share one address unless Kirby sees the real one. The Panel-cookie login
+  is not affected. No schema change.
 
 ## [1.6.1] — 2026-10-17
 

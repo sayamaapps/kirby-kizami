@@ -66,6 +66,8 @@ Dashboard access: create `site/config/kizami.php` (keep it out of git) with a bc
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
 
+The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one.
+
 ### Options
 
 All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set".
@@ -97,7 +99,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `reportRoles` | `['kizami-report']` | Roles allowed to read the report. Admins are deliberately not allowed by default. |
 | `journal` | `'wal'` | SQLite journal mode: `'wal'` or `'delete'`. Use `'delete'` on shared hosters where WAL is unreliable (old SQLite, network file systems, "disk I/O error" in `storage/kizami/errors.log`): one file, no `-wal`/`-shm`. Takes effect on the next request. |
 | `siteId` | site hostname | Site identifier (`site`) in the report. Set it explicitly so it survives a domain change. |
-| `reportWithoutHttps` | `false` | Allow the report and snapshot over plain HTTP. Local testing only. |
+| `reportWithoutHttps` | `false` | Allow the dashboard, report and snapshot over plain HTTP. Local testing only. |
 | `snapshot` | `false` | Enable `/k/snapshot` (also requires `active`). Registers the Panel role `kizami-snapshot` (no Panel access). |
 | `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. Separate from the report role on purpose: the snapshot contains raw events. |
 

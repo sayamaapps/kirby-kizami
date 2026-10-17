@@ -68,6 +68,9 @@ try {
     $config = [
         'debug' => false, 'cache' => false,
         'kizami.active' => true,
+        // The test server speaks plain HTTP; the dashboard, report and
+        // snapshot refuse that unless this is set (checked explicitly below).
+        'kizami.reportWithoutHttps' => true,
         'kizami.dwellTime' => true,
         'kizami.images' => ['yard' => 'Yard', 'garden' => 'Garden'],
         'kizami.contactTargets' => ['call'],
@@ -431,6 +434,71 @@ try {
     checkHttp(requestHttp('/k/dashboard', $previewAuth)[0] === 401, 'previewAccess null: preview login no longer accepted');
     writeConfig($config);
 
+    // Dashboard over plain HTTP: refused before any challenge or check.
+    $loginsFile = $tmp . '/storage/kizami/logins.json';
+    @unlink($loginsFile);
+    $noHttps = ['kizami.reportWithoutHttps' => false] + $config;
+    writeConfig($noHttps);
+    foreach (['/k/dashboard', '/k/dashboard.css'] as $route) {
+        [$status, $body, $headers] = requestHttp($route, $auth);
+        checkHttp($status === 403 && $body === 'HTTPS only.', "$route with valid login over HTTP: 403 HTTPS only");
+        checkHttp(preg_grep('/^WWW-Authenticate:/i', $headers) === [], "$route over HTTP sends no challenge");
+        checkHttp(preg_grep('/^Cache-Control: no-store/i', $headers) !== [] && preg_grep('/^X-Robots-Tag: noindex/i', $headers) !== [], "$route refusal not cached or indexed");
+        [$status, $body, $headers] = requestHttp($route);
+        checkHttp($status === 403 && $body === 'HTTPS only.' && preg_grep('/^WWW-Authenticate:/i', $headers) === [], "$route without login over HTTP: 403, not 401");
+        checkHttp(requestHttp($route, ['Authorization: Basic ' . base64_encode('fixture:wrong')])[0] === 403, "$route with wrong login over HTTP: 403");
+    }
+    checkHttp(!is_file($loginsFile), 'Refusal over HTTP counts no failed login');
+    // The escape hatch is the same option as for report and snapshot.
+    writeConfig($config);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200 && requestHttp('/k/dashboard.css', $auth)[0] === 200, 'reportWithoutHttps lets the dashboard work over HTTP');
+    // Module off: Kirby's real 404, also over HTTP (no hint that the module exists).
+    writeConfig(['kizami.active' => false] + $noHttps);
+    foreach (['/k/dashboard', '/k/dashboard.css'] as $route) {
+        [$status, $body] = requestHttp($route, $auth);
+        checkHttp($status === 404 && $body === 'Fixture 404', "$route with the module off stays a real 404 over HTTP");
+    }
+    writeConfig($config);
+
+    // Failed-login limit (default 10 within an hour), per address and per user name.
+    $wrongAuth = ['Authorization: Basic ' . base64_encode('fixture:wrong')];
+    @unlink($loginsFile);
+    for ($i = 1; $i <= 15; $i++) {
+        checkHttp(requestHttp('/k/dashboard')[0] === 401, "Request $i without credentials asks for login");
+    }
+    checkHttp(!is_file($loginsFile), 'Requests without credentials count nothing');
+    for ($i = 1; $i <= 9; $i++) {
+        checkHttp(requestHttp('/k/dashboard', $wrongAuth)[0] === 401, "Wrong password $i: 401");
+    }
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Right password after 9 failures still works');
+    checkHttp(requestHttp('/k/dashboard', $wrongAuth)[0] === 401, 'Wrong password 10: 401');
+    [$status, $body, $headers] = requestHttp('/k/dashboard', $auth);
+    checkHttp($status === 429 && $body === 'Too many failed logins. Try again later.', 'Right password after 10 failures: 429');
+    $retry = array_values(preg_grep('/^Retry-After:/i', $headers));
+    checkHttp(count($retry) === 1 && (int) trim(substr($retry[0], 12)) > 3500 && (int) trim(substr($retry[0], 12)) <= 3600, 'Blocked login says how long to wait');
+    checkHttp(preg_grep('/^WWW-Authenticate:/i', $headers) === [] && preg_grep('/^Cache-Control: no-store/i', $headers) !== [], 'Block sends no challenge and is not cached');
+    [$status, , $headers] = requestHttp('/k/dashboard.css', $auth);
+    checkHttp($status === 429 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'The stylesheet is blocked the same way');
+    checkHttp(requestHttp('/k/dashboard')[0] === 401, 'Without credentials a blocked address still gets the usual challenge');
+    checkHttp(is_file($loginsFile), 'Lockout file is written to storage/kizami');
+    $logins = (string) file_get_contents($loginsFile);
+    checkHttp(is_array(json_decode($logins, true)) && !str_contains($logins, 'fixture') && !str_contains($logins, '127.0.0.1'), 'Lockout file holds neither user name nor address');
+    // Counter-check: the block lives in the file, not in the code.
+    unlink($loginsFile);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Without the lockout file the right password works again');
+    // Blocking by user name alone: another address (here: the counter reset to a
+    // file that only knows the name) is blocked as well.
+    $key = substr(hash('sha256', 'fixture'), 0, 50);
+    file_put_contents($loginsFile, json_encode(['ip' => [], 'user' => [$key => ['time' => time(), 'trials' => 10]]]));
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 429, 'A blocked user name is refused from any address');
+    // A damaged file fails closed.
+    file_put_contents($loginsFile, 'not json');
+    [$status, , $headers] = requestHttp('/k/dashboard', $auth);
+    checkHttp($status === 401, 'Unusable lockout file: no access even with the right password');
+    unlink($loginsFile);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Lockout file removed: access again');
+    unlink($loginsFile);
+
     // Campaign tag: utm_campaign wins; kizami.campaignParam names one more
     // parameter, used only while utm_campaign is empty after cleaning.
     $lastCampaign = function (): string {
@@ -500,7 +568,6 @@ try {
     // a host with an invalid byte. Needs the report switched on and an account
     // with the bundled role (the plugin registers it only with kizami.report).
     $config['kizami.report'] = true;
-    $config['kizami.reportWithoutHttps'] = true;
     writeConfig($config);
     require_once $repo . '/vendor/autoload.php';
     $setup = new Kirby\Cms\App([
@@ -531,7 +598,7 @@ try {
     // The dashboard shows the same row, not an empty cell.
     [$status, $html] = requestHttp('/k/dashboard?days=7', $auth);
     checkHttp($status === 200 && str_contains($html, "foo\u{FFFD}.example"), 'Dashboard shows the stored invalid host with U+FFFD');
-    unset($config['kizami.report'], $config['kizami.reportWithoutHttps']);
+    unset($config['kizami.report']); // reportWithoutHttps stays: the fixture speaks HTTP
     writeConfig($config);
 
     // Server handles sequential requests, no open request/DB writer here.

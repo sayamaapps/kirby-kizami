@@ -13,6 +13,7 @@ require_once __DIR__ . '/src/Store.php';
 require_once __DIR__ . '/src/Migration.php';
 require_once __DIR__ . '/src/Redirect.php';
 require_once __DIR__ . '/src/Access.php';
+require_once __DIR__ . '/src/Lockout.php';
 require_once __DIR__ . '/src/Names.php';
 require_once __DIR__ . '/src/Comparison.php';
 require_once __DIR__ . '/src/Chart.php';
@@ -32,6 +33,7 @@ use Kizami\Events;
 use Kizami\Fonts;
 use Kizami\Gaps;
 use Kizami\I18n;
+use Kizami\Lockout;
 use Kizami\Migration;
 use Kizami\Names;
 use Kizami\Options;
@@ -589,8 +591,8 @@ App::plugin('sayamaapps/kizami', [
                         return kizami_not_found();
                     }
 
-                    if (!kizami_access_granted()) {
-                        return kizami_deny();
+                    if ($refused = kizami_dashboard_refused()) {
+                        return $refused;
                     }
 
                     $days = (int) (get('days') ?? 30);
@@ -682,8 +684,8 @@ App::plugin('sayamaapps/kizami', [
                     if (kizami_option('active', false) !== true) {
                         return kizami_not_found();
                     }
-                    if (!kizami_access_granted()) {
-                        return kizami_deny();
+                    if ($refused = kizami_dashboard_refused()) {
+                        return $refused;
                     }
 
                     $base = (string) kizami_option('color', '#2f4f2a');
@@ -782,6 +784,29 @@ App::plugin('sayamaapps/kizami', [
 unset($kizamiTranslations);
 
 /**
+ * The dashboard's gate for /k/dashboard and /k/dashboard.css, after the check
+ * that the module is on: null = let in, otherwise the response to send.
+ *
+ * HTTPS first and before any challenge: a Basic Auth password sent over plain
+ * HTTP travels in the clear, and a 401 with WWW-Authenticate would make the
+ * browser ask for exactly that. So over HTTP nobody is prompted and nobody is
+ * checked — the Panel cookie included; the dashboard is HTTPS only for
+ * everyone. Same rule and same escape hatch (`kizami.reportWithoutHttps`) as
+ * /k/report and /k/snapshot.
+ */
+function kizami_dashboard_refused(): ?Response
+{
+    $kirby = App::instance();
+    if ($kirby->request()->ssl() === false && kizami_option('reportWithoutHttps', false) !== true) {
+        return new Response('HTTPS only.', 'text/plain', 403, [
+            'Cache-Control' => 'no-store',
+            'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
+        ]);
+    }
+    return kizami_access_denied();
+}
+
+/**
  * Build phase vs. live:
  * - Build phase (`kizami.previewAccess` returns credentials, the site sits
  *   behind its own preview protection): check the same preview credentials
@@ -790,19 +815,24 @@ unset($kizamiTranslations);
  *   secrets).
  * - Live (`kizami.previewAccess` unset or null): own bcrypt auth from
  *   site/config/kizami.php OR Panel login.
+ *
+ * Returns null when access is granted, otherwise the response to send: the
+ * usual denial (kizami_deny), or 429 once the failed-login limit is reached
+ * (src/Lockout.php). Only submitted credentials that turn out wrong count;
+ * a request without credentials (the browser's first visit) does not.
  */
-function kizami_access_granted(): bool
+function kizami_access_denied(): ?Response
 {
     try {
         $preview = Options::previewCredentials(App::instance());
         if ($preview === null && App::instance()->user()) {
-            return true;
+            return null;
         }
         $file = Options::accessFile(App::instance());
         $credentials = $preview ?? (file_exists($file) ? require $file : null);
     } catch (\Throwable $e) {
         error_log('Kizami: access configuration unusable');
-        return false;
+        return kizami_deny();
     }
 
     $user = $_SERVER['PHP_AUTH_USER'] ?? null;
@@ -817,8 +847,50 @@ function kizami_access_granted(): bool
             }
         }
     }
+    if ($user === null || $password === null) {
+        return kizami_deny();
+    }
 
-    return Access::checkFile(is_array($credentials) ? $credentials : null, $user, $password);
+    // Kirby's own limit would only fit Kirby accounts (see src/Lockout.php),
+    // but its two options stay the one place to configure it.
+    $kirby = App::instance();
+    $ip = (string) $kirby->visitor()->ip();
+    try {
+        $lockout = new Lockout(
+            kizami_directory() . '/' . Lockout::FILE,
+            max(1, (int) $kirby->option('auth.trials', 10)),
+            max(1, (int) $kirby->option('auth.timeout', 3600))
+        );
+        // Checked before password_verify(): a blocked request costs the same
+        // whatever it sends.
+        $wait = $lockout->retryAfter($ip, $user);
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+        return kizami_deny();
+    }
+    if ($wait > 0) {
+        // Where the module hides behind Kirby's 404 (preview, no access file),
+        // a 429 would give it away.
+        $denial = kizami_deny();
+        if ($denial->code() !== 401) {
+            return $denial;
+        }
+        // Not another 401: the browser would ask again and never say why.
+        return new Response('Too many failed logins. Try again later.', 'text/plain', 429, [
+            'Retry-After'   => (string) max(1, $wait),
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    if (Access::checkFile(is_array($credentials) ? $credentials : null, $user, $password)) {
+        return null;
+    }
+    try {
+        $lockout->fail($ip, $user);
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+    }
+    return kizami_deny();
 }
 
 /**
