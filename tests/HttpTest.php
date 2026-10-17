@@ -374,6 +374,14 @@ try {
     // Kirby keeps percent-encoding in the path; it must not be interpreted
     // as HTML afterwards when rendering.
     requestHttp('/contact%3Cscript%3Ealert(1)%3C/script%3E');
+    // The dashboard retires a stale daily key; an anonymous request does not.
+    $keyFile = $tmp . '/storage/kizami/secret.txt';
+    file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
+    requestHttp('/k/dashboard');
+    checkHttp(file_get_contents($keyFile) === "2010-01-01\nSTALE-SECRET-VALUE", 'Dashboard without login leaves a stale key alone');
+    requestHttp('/k/dashboard', $auth);
+    checkHttp(str_starts_with((string) file_get_contents($keyFile), (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\n")
+        && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE'), 'Dashboard with login replaces a stale daily key');
     [$status, $html] = requestHttp('/k/dashboard', $auth);
     checkHttp($status === 200 && str_contains($html, 'class="tiles"'), 'Dashboard with login');
     checkHttp(str_contains($html, 'name="viewport"'), 'Dashboard viewport');

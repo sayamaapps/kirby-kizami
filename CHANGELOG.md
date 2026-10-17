@@ -13,6 +13,35 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.7.0] — 2026-10-17
+
+### Fixed
+
+- **Deleted events no longer stay behind in the database file and in new
+  snapshots** **[privacy text]**: `compact()` removed events older than five
+  years with a plain `DELETE`, and SQLite keeps the bytes of deleted rows in
+  the file (and the backup API copies them into every snapshot). Every
+  connection now runs with `PRAGMA secure_delete = ON`. `compact()`, and so
+  the dashboard and `maintenance.php compact`, also rebuilds the file with
+  `VACUUM` once per database file (marked in the header field `user_version`),
+  and again whenever free pages exist, because SQLite does not rewrite a page
+  that becomes free. `/k/report` now runs `compact()` like the dashboard (after
+  authentication), so a site that only fetches the report still gets this
+  maintenance. The visitor's request never runs `VACUUM`: leftovers from the
+  daily roll-up in a visitor's request stay until the next of these runs. `Store::snapshot()`
+  rebuilds the copy with `VACUUM` before `integrity_check`, so a snapshot
+  carries no free pages whatever the state of the source; the checksum of
+  `/k/snapshot` is computed on that file. No schema change.
+- **The daily key now also rotates without a counted visit**
+  **[privacy text]**: `Secret::get()` replaced the key only on a counted
+  visit, so a quiet site, a switched-off module or only filtered visitors left
+  the last day's key on disk indefinitely. New `Secret::rotate()` replaces a
+  stale key (a missing file stays missing, a current key is untouched); the
+  dashboard, `/k/report` and `/k/snapshot` (after authentication, never for
+  anonymous requests) and `maintenance.php` call it. The job reports
+  `stale daily key replaced` or `daily key current`, and exits 1 when a stale
+  key cannot be replaced. No schema change.
+
 ## [1.6.1] — 2026-10-17
 
 ### Fixed

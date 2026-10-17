@@ -64,7 +64,10 @@ Für das Tageskennzeichen werden die vom Server empfangene IP-Adresse und
 Browserkennung mit dem Datum und einem geheimen, täglich erneuerten Schlüssel
 verrechnet. Die unveränderte IP-Adresse und Browserkennung werden in der
 Kennzahlen-Datenbank nicht gespeichert. Der Schlüssel des Vortags wird in der
-aktiven Installation überschrieben. Das verringert die Verknüpfbarkeit zwischen
+aktiven Installation überschrieben: beim ersten erfassten Aufruf eines Tages
+und zusätzlich beim Öffnen von Dashboard, Report und Snapshot sowie durch den
+Wartungsjob. Ohne einen dieser Anlässe, etwa bei einer Seite ohne erfasste
+Aufrufe, kann der bisherige Schlüssel liegen bleiben. Das verringert die Verknüpfbarkeit zwischen
 Tagen; es garantiert keine vollständige Anonymität. Tageskennzeichen erlauben
 nur eine ungefähre Geräteschätzung. Dasselbe Gerät kann an mehreren Tagen erneut
 gezählt werden. Tagesgrenzen verwenden Europe/Berlin.
@@ -73,7 +76,11 @@ Sendet der Browser Do Not Track oder Global Privacy Control mit dem Wert 1,
 entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
 Einzelereignisse werden bei der Bereinigung nach fünf Jahren aus der aktiven
-Datenbank entfernt. Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
+Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
+nächsten Wartung (Dashboard, Report, Wartungsjob) in der Datenbankdatei
+überschrieben, und neue Snapshots werden ohne solche Reste neu aufgebaut.
+Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
+Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe
 der für den jeweiligen Tag geschätzten Geräte. Diese Zählwerte bleiben für
 Gesamtzahlen und langfristige Monatsvergleiche erhalten. Gerätekennzeichen,
@@ -82,7 +89,7 @@ werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nac
 fünf Jahren ohne Zusammenfassung gelöscht.
 
 Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages, beim Öffnen
-des Dashboards und optional über einen separat eingerichteten Wartungsjob.
+des Dashboards, beim Abruf des Reports und optional über einen separat eingerichteten Wartungsjob.
 Ohne solche Aufrufe kann sich die Bereinigung verzögern. Sicherungen brauchen
 eine eigene, begrenzte Aufbewahrungsfrist und dürfen die täglichen Schlüssel
 nicht archivieren.
@@ -94,6 +101,9 @@ nicht archivieren.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
   kann zusätzlich täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
   Wartungsfehler. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
+  Der Job erneuert außerdem einen veralteten Tagesschlüssel; er ist dann nötig,
+  wenn die Seite Tage ohne erfassten Aufruf haben kann. Wird die Erfassung
+  dauerhaft abgeschaltet, `storage/kizami/secret.txt` löschen.
 - Zusammenfassung und Entfernung der Einzelereignisse erfolgen gemeinsam in
   einer Transaktion. Bei Fehlern bleiben die Einzelereignisse erhalten. Die
   Langzeitansicht kombiniert aktuelle Details und Tageszahlen ohne Doppelzählung.
@@ -108,7 +118,7 @@ nicht archivieren.
 - `php site/plugins/kizami/bin/kizami-snapshot /absolut/storage/kizami /sicherungen/NEU.sqlite`
   erstellt denselben Snapshot ohne vorheriges Zusammenfassen. Für Hoster ohne Shell
   liefert `GET /k/snapshot` (Schalter `kizami.snapshot`, Basic Auth, nur HTTPS) die
-  Kopie aus. Sie enthält alle Einzelereignisse — Empfänger und Aufbewahrung der
+  Kopie aus. Der Snapshot wird ohne freie Seiten neu aufgebaut. Sie enthält alle Einzelereignisse — Empfänger und Aufbewahrung der
   Sicherungen gehören in den Datenschutztext.
 - `storage/kizami/secret.txt` und temporäre Geheimnisdateien aus allgemeinen
   Dateisicherungen ausschließen. Hoster-Snapshots können Schlüssel trotzdem enthalten;

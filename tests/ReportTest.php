@@ -472,6 +472,61 @@ try {
     same(['kizami-snapshot', false], [$kirby->user('snapshot@example.invalid')->role()->name(), $kirby->user('snapshot@example.invalid')->role()->permissions()->for('access', 'panel')], 'Snapshot role created, without Panel');
     same(403, $snapshot(options: $on + ['kizami.reportWithoutHttps' => false])[0], 'Snapshot over HTTPS only');
     same(403, $snapshot(options: $on + ['kizami.snapshotRoles' => ['admin']])[0], 'Snapshot: own role list');
+    // The report route runs maintenance like the dashboard: free pages with
+    // leftovers of deleted events are rebuilt away, once authenticated.
+    $dbFile = $tmp . '/storage/kizami/' . Store::FILE;
+    $leave = function () use ($dbFile) {
+        $raw = new SQLite3($dbFile);
+        $raw->exec('PRAGMA secure_delete = OFF');
+        for ($i = 0; $i < 200; $i++) {
+            $raw->exec("INSERT INTO kizami_custom_events (created_at, event, detail, path, session) VALUES ('2010-01-01 10:00:00', 'download', 'EXPIRED_PRIVATE_DETAIL_$i', '/', 'old')");
+        }
+        $raw->exec('DELETE FROM kizami_custom_events WHERE session = \'old\'');
+        $raw->close();
+    };
+    $probe = function () use ($dbFile) {
+        $raw = new SQLite3($dbFile);
+        $raw->exec('PRAGMA wal_checkpoint(TRUNCATE)'); // other connections stay open: look at the main file
+        $state = [(int) $raw->querySingle('PRAGMA freelist_count'), (int) $raw->querySingle('PRAGMA user_version')];
+        $raw->close();
+        return [$state, str_contains((string) file_get_contents($dbFile) . (string) @file_get_contents($dbFile . '-wal'), 'EXPIRED_PRIVATE_DETAIL_')];
+    };
+    $leave();
+    [$freeBefore, $markerBefore] = $probe();
+    same([true, true], [$freeBefore[0] > 0, $markerBefore], 'Report maintenance: counter-check, free pages and leftovers present');
+    $request($url, null);
+    $request($url, 'report@example.invalid', 'wrong-password-very-long-123');
+    same([$freeBefore, $markerBefore], $probe(), 'Anonymous /k/report leaves the database file alone');
+    $request($url);
+    $after = $probe();
+    same([0, 1], $after[0], 'Authenticated /k/report rebuilds the file once (no free pages, marked)');
+    same(false, $after[1], 'Authenticated /k/report: leftovers of deleted events gone from the file');
+
+    // The daily key also rotates through the authenticated operator routes,
+    // never through anonymous requests.
+    $keyFile = $tmp . '/storage/kizami/secret.txt';
+    $stale = "2010-01-01\nSTALE-SECRET-VALUE";
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    $keyIsFresh = fn () => explode("\n", (string) file_get_contents($keyFile))[0] === $today && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE');
+    file_put_contents($keyFile, $stale);
+    $snapshot(null, options: $on);
+    $request($url, null);
+    $snapshot('report@example.invalid', 'report-password-very-long-123', $on);
+    $request($url, 'report@example.invalid', 'wrong-password-very-long-123');
+    same($stale, file_get_contents($keyFile), 'Unauthenticated, forbidden and failed logins leave the key alone');
+    $request($url);
+    same(true, $keyIsFresh(), 'Authenticated /k/report replaces a stale key');
+    file_put_contents($keyFile, $stale);
+    $snapshot(options: $on);
+    same(true, $keyIsFresh(), 'Authenticated /k/snapshot replaces a stale key');
+    $currentKey = (string) file_get_contents($keyFile);
+    $snapshot(options: $on);
+    $request($url);
+    same($currentKey, file_get_contents($keyFile), 'A current key is not touched again');
+    unlink($keyFile);
+    $request($url);
+    $snapshot(options: $on);
+    same(false, is_file($keyFile), 'The routes create no key on an installation that never counted');
     file_put_contents($tmp . '/storage/kizami/secret.txt', "2026-10-01\nSECRET-MARKER");
     [$code, $body, $headers] = $snapshot(options: $on);
     same([200, 'application/vnd.sqlite3', hash('sha256', $body)], [$code, $headers['Content-Type'] ?? null, $headers['X-Kizami-Sha256'] ?? null], 'Snapshot delivered, with checksum');

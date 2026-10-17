@@ -243,6 +243,39 @@ check('Directory that cannot be created → empty string, no crash',
 check('… and writes a log entry',
     true, str_contains((string) @file_get_contents($logFile), 'secret directory cannot be created'));
 
+// rotate(): retire a stale key without a counted visit.
+$rot = sys_get_temp_dir() . '/kizami-rotate-' . bin2hex(random_bytes(6));
+check('rotate() with no key file: nothing to do, true', true, Secret::rotate($rot, '2026-09-22'));
+check('… and it creates neither directory nor key', false, file_exists($rot));
+mkdir($rot, 0755, true);
+check('rotate() in an existing directory without a key: true, no file', [true, false],
+    [Secret::rotate($rot, '2026-09-22'), is_file($rot . '/' . Secret::FILE)]);
+file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('rotate() replaces a stale key', true, Secret::rotate($rot, '2026-09-22'));
+[$rotDate, $rotValue] = explode("\n", (string) file_get_contents($rot . '/' . Secret::FILE), 2);
+check('… the date line is the given day', '2026-09-22', $rotDate);
+check('… the value is new and full length', [false, 64], [$rotValue === 'STALE-SECRET-VALUE', strlen($rotValue)]);
+check('… and it is the key get() returns now', $rotValue, Secret::get($rot, '2026-09-22'));
+check('… file mode stays 0600', '0600', substr(sprintf('%o', fileperms($rot . '/' . Secret::FILE)), -4));
+$before = (string) file_get_contents($rot . '/' . Secret::FILE);
+check('rotate() with a current key: true', true, Secret::rotate($rot, '2026-09-22'));
+check('… the file is untouched byte for byte', $before, (string) file_get_contents($rot . '/' . Secret::FILE));
+check('rotate() leaves no temp files behind', [$rot . '/' . Secret::FILE], glob($rot . '/*'));
+file_put_contents($rot . '/' . Secret::FILE, "garbage without date line");
+check('rotate() replaces a file without a date line', [true, '2026-09-22'],
+    [Secret::rotate($rot, '2026-09-22'), explode("\n", (string) file_get_contents($rot . '/' . Secret::FILE))[0]]);
+// Counter-check for the failure path: as root, permissions do not bite.
+if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+    file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+    chmod($rot, 0555);
+    check('rotate() reports false when a stale key cannot be replaced', false, Secret::rotate($rot, '2026-09-23'));
+    check('… and the stale key stays (honest failure, not a silent success)', "2010-01-01\nSTALE-SECRET-VALUE", (string) file_get_contents($rot . '/' . Secret::FILE));
+    check('… with a log entry', true, str_contains((string) @file_get_contents($logFile), 'secret not writable'));
+    chmod($rot, 0755);
+}
+@unlink($rot . '/' . Secret::FILE);
+@rmdir($rot);
+
 // Clean up (never more than our own throwaway file):
 @unlink($tmp . '/' . Secret::FILE);
 @rmdir($tmp);
@@ -544,6 +577,18 @@ function maintenanceCli(array $args): int {
     return proc_close($process);
 }
 check('Maintenance CLI compacts successfully', 0, maintenanceCli(['compact', $dbDir]));
+// The job also retires a stale daily key; it never creates one.
+check('Maintenance CLI without a key file creates none', [0, false], [maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+file_put_contents($dbDir . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('Maintenance CLI with a stale key succeeds', 0, maintenanceCli(['compact', $dbDir]));
+[$cliDate, $cliValue] = explode("\n", (string) file_get_contents($dbDir . '/' . Secret::FILE), 2);
+check('Maintenance CLI: the key is from today (Berlin) and new',
+    [(new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d'), false],
+    [$cliDate, $cliValue === 'STALE-SECRET-VALUE']);
+$cliBefore = (string) file_get_contents($dbDir . '/' . Secret::FILE);
+maintenanceCli(['compact', $dbDir]);
+check('Maintenance CLI leaves a current key alone', $cliBefore, (string) file_get_contents($dbDir . '/' . Secret::FILE));
+@unlink($dbDir . '/' . Secret::FILE);
 check('Maintenance CLI snapshots successfully', 0, maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']));
 // Restore rehearsal: a separate offline directory, never the production DB.
 $restoreDir = $dbDir . '/restore';

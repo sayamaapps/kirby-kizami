@@ -12,6 +12,12 @@ namespace Kizami;
  * longer the one passed in, a new secret is generated and the old one is
  * overwritten.
  *
+ * The key rotates on the first counted visit of a day, and also through
+ * rotate(), which the dashboard, the report and snapshot routes (after
+ * authentication) and the maintenance job call. Without any of these the last
+ * key stays on disk, so a site that may go days without a counted visit
+ * needs the maintenance job.
+ *
  * Rotation limits linkability. It is no guarantee of anonymity: backups can
  * preserve old keys, and additional knowledge can still allow matching. So
  * never archive the key in your own backups.
@@ -24,6 +30,21 @@ namespace Kizami;
 final class Secret
 {
     public const FILE = 'secret.txt';
+
+    /**
+     * Retire a stale key without a counted visit. Replaces the file when its
+     * date is not `$date`; a current key is left untouched. A missing file
+     * stays missing (nothing to retire, and maintenance must not create keys
+     * on an installation that never counted). False only when a stale key
+     * could not be replaced.
+     */
+    public static function rotate(string $directory, string $date): bool
+    {
+        if (!is_file($directory . '/' . self::FILE)) {
+            return true;
+        }
+        return self::get($directory, $date) !== '';
+    }
 
     public static function get(string $directory, string $date): string
     {

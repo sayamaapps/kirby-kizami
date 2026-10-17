@@ -89,6 +89,23 @@ function kizami_directory(): string
 }
 
 /**
+ * Retire a stale daily key outside a counted visit (dashboard, report and
+ * snapshot after authentication). The Berlin day as in kizami_write(); never
+ * throws, a failure only reaches the error log.
+ */
+function kizami_rotate_secret(): void
+{
+    try {
+        $day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+        if (!Secret::rotate(kizami_directory(), $day)) {
+            error_log('Kizami: stale daily key could not be replaced');
+        }
+    } catch (\Throwable $e) {
+        error_log('Kizami: daily key rotation failed: ' . $e->getMessage());
+    }
+}
+
+/**
  * Also record dashboard and report errors in storage/kizami/errors.log.
  *
  * On some hosts error_log() ends up in no log anyone can read (28.09.2026:
@@ -586,6 +603,7 @@ App::plugin('sayamaapps/kizami', [
                     try {
                         $store = kizami_store();
                         $store->compact();
+                        kizami_rotate_secret();
                         $names = new Names(
                             (array) kizami_option('targetNames', []),
                             (array) kizami_option('sourceNames', []),

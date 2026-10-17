@@ -52,6 +52,7 @@ final class SnapshotService
         $temp = null;
         try {
             ReportService::authenticate($kirby, (array) Options::get($kirby, 'snapshotRoles', [self::ROLE]));
+            kizami_rotate_secret();
             self::sweep(kizami_directory());
             $db = kizami_directory() . '/' . Store::FILE;
             if (!is_file($db)) {

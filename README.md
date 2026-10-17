@@ -7,7 +7,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 - **Server-side.** Page views are counted in Kirby's `route:after` hook. Ad blockers don't affect it, and no tracking script is needed.
 - **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device. Data stays in one SQLite file outside the web root.
 - **Honours Do Not Track and Global Privacy Control.** With `DNT: 1` or `Sec-GPC: 1`, nothing is recorded.
-- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is overwritten every day (Europe/Berlin). Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
+- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is replaced every day (Europe/Berlin): on the first counted visit of a day, by the dashboard, the report and snapshot routes, and by the maintenance job. Set up the job when the site may go days without a visit. Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
 - **Counts what small businesses care about.** Phone calls, route requests and e-mail clicks go through counted redirects such as `/call` → `tel:…`. No JavaScript is involved, and the dashboard shows contact rates per source and landing page.
 - **Optional actions.** Downloads, video plays or newsletter openings can be counted with a small script from the site's own server (see [Actions](#actions)). Off unless configured.
 - **Bot and crawler filtering.** User-agent filtering plus a redirect-click filter based on Fetch Metadata and the visitor's same-day page views (see [Counting rules](#counting-rules)).
@@ -237,9 +237,9 @@ Gaps don't change any number. They only mark: visits on a gap day are as recorde
 - **CLI:** `php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite` (also `vendor/bin/kizami-snapshot`).
 - **HTTP**, for hosts without a shell or cron: `GET /k/snapshot` with Basic Auth (enable with `kizami.snapshot`). It returns the snapshot as `application/vnd.sqlite3` and puts the SHA-256 in `X-Kizami-Sha256`.
 
-Both use SQLite's online backup API (available since 3.6.11) and run `PRAGMA integrity_check` on the copy. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
+Both use SQLite's online backup API (available since 3.6.11), rebuild the copy with `VACUUM` so it carries no free pages (and no bytes of deleted events), and run `PRAGMA integrity_check` on it. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
 
-Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day.
+Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day. Deleted events are overwritten in the database file (`secure_delete`) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file once with `VACUUM` to clear bytes left by earlier versions, and again whenever free pages exist. The job also replaces a stale daily key, so schedule it daily if the site may go days without a counted visit. Without any of these the previous key stays on disk.
 
 ## Counting rules
 
