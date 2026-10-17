@@ -544,7 +544,14 @@ try {
         file_put_contents($dir . '/' . $name, 'x');
         touch($dir . '/' . $name, time() - $age);
     };
-    $listing = fn () => array_values(array_diff(scandir($dir), ['.', '..']));
+    // scandir() sorts with the locale (strcoll): under C.UTF-8 a leading dot
+    // is ignored, under C it sorts first. Sort by bytes, so the expected
+    // lists hold on every runner.
+    $listing = function () use ($dir): array {
+        $names = array_values(array_diff(scandir($dir), ['.', '..']));
+        sort($names, SORT_STRING);
+        return $names;
+    };
     foreach (['', '-wal', '-shm', '-journal'] as $suffix) { $make('.snapshot-gone.sqlite' . $suffix, 0); }
     $make('.snapshot-other.sqlite', 0);
     same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
