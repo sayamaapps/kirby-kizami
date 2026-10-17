@@ -497,10 +497,15 @@ try {
     };
     $probe = function () use ($dbFile) {
         $raw = new SQLite3($dbFile);
-        $raw->exec('PRAGMA wal_checkpoint(TRUNCATE)'); // other connections stay open: look at the main file
+        // Other connections of this process stay open, so the WAL is not
+        // checkpointed and deleted as it is at the end of a request: force
+        // the checkpoint and look at the main file only. The -wal file keeps
+        // its old frames until it is deleted or truncated, and TRUNCATE is
+        // SQLite 3.8.8+ (older builds fall back to a passive checkpoint).
+        $raw->exec('PRAGMA wal_checkpoint(TRUNCATE)');
         $state = [(int) $raw->querySingle('PRAGMA freelist_count'), (int) $raw->querySingle('PRAGMA user_version')];
         $raw->close();
-        return [$state, str_contains((string) file_get_contents($dbFile) . (string) @file_get_contents($dbFile . '-wal'), 'EXPIRED_PRIVATE_DETAIL_')];
+        return [$state, str_contains((string) file_get_contents($dbFile), 'EXPIRED_PRIVATE_DETAIL_')];
     };
     $leave();
     [$freeBefore, $markerBefore] = $probe();
