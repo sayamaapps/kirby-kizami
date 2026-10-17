@@ -13,6 +13,97 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.7.0] — 2026-10-17
+
+### Fixed
+
+- **Deleted events no longer stay behind in the database file and in new
+  snapshots** **[privacy text]**: `compact()` removed events older than five
+  years with a plain `DELETE`, and SQLite keeps the bytes of deleted rows in
+  the file (and the backup API copies them into every snapshot). Every
+  connection now runs with `PRAGMA secure_delete = ON`. `compact()`, and so
+  the dashboard and `maintenance.php compact`, also rebuilds the file with
+  `VACUUM` once per database file (marked in the header field `user_version`),
+  after every roll-up that deleted events (the mark is cleared, also by the
+  roll-up in a visitor's request) and whenever free pages exist, because
+  SQLite does not rewrite a page that becomes free and old builds (3.7.17)
+  leave parts of a deleted row in a page that stays in use. `/k/report` now runs `compact()` like the dashboard (after
+  authentication), so a site that only fetches the report still gets this
+  maintenance; if the rebuild fails, the failure is logged and the report and
+  dashboard are still delivered. The rebuild needs up to twice the file size
+  in free disk space for a while and blocks writers while it runs (5 s busy
+  timeout, after that page views are lost): on a large file run
+  `maintenance.php compact` first, so the first rebuild does not happen in a
+  dashboard call. The deleted contents are no longer contained in the database
+  file; journal and WAL files are deleted, not zeroed. The visitor's request never runs `VACUUM`: leftovers from the
+  daily roll-up in a visitor's request stay until the next of these runs. `Store::snapshot()`
+  rebuilds the copy with `VACUUM` before `integrity_check`, so a snapshot
+  carries no free pages whatever the state of the source; the checksum of
+  `/k/snapshot` is computed on that file. No schema change.
+- **The daily key now also rotates without a counted visit**
+  **[privacy text]**: `Secret::get()` replaced the key only on a counted
+  visit, so a quiet site, a switched-off module or only filtered visitors left
+  the last day's key on disk indefinitely. New `Secret::rotate()` replaces a
+  stale key (a missing file stays missing, a current key is untouched); the
+  dashboard, `/k/report` and `/k/snapshot` (after authentication, never for
+  anonymous requests) and `maintenance.php` call it. The job reports
+  `stale daily key replaced` or `daily key current`, and exits 1 when a stale
+  key cannot be replaced. No schema change.
+- **The dashboard's login no longer works over plain HTTP**: `/k/dashboard`
+  and `/k/dashboard.css` checked the Basic Auth login whatever the protocol,
+  so a reusable password could travel unencrypted, and the 401 made the
+  browser ask for it. Both routes now answer `403` `HTTPS only.` (no
+  `WWW-Authenticate`, `Cache-Control: no-store`) before any challenge or
+  check, the Panel cookie included, with the same rule and the same option as
+  `/k/report` and `/k/snapshot`: `kizami.reportWithoutHttps`, now documented
+  for the dashboard too. Behind a reverse proxy Kirby must see HTTPS
+  (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option). A site with
+  the module off still answers Kirby's real 404. No schema change.
+- **Failed dashboard logins are now limited**: the file login
+  (`site/config/kizami.php`, or `kizami.previewAccess`) ran `password_verify()`
+  for every request, with no limit on wrong passwords. New `Kizami\Lockout`
+  counts failed logins per client address and per user name in
+  `storage/kizami/logins.json` (hashes only, no address or name in plain text)
+  and uses Kirby's own limits, `auth.trials` (10) and `auth.timeout` (3600
+  seconds). Once reached, the login answers `429` with `Retry-After` and no
+  challenge, without running `password_verify()`; a request without
+  credentials never counts, a successful login does not reset the counters.
+  If the file cannot be read, the login answers `503` pointing to the error
+  log (no challenge, no password check); a failure only while counting a
+  wrong password is logged and answered with the usual `401`. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
+  share one address unless Kirby sees the real one. The Panel-cookie login
+  is not affected. No schema change.
+- **A storage root inside the web root, or none at all, is now refused with
+  a clear message**: Kizami wrote `kizami.sqlite` and `secret.txt` wherever
+  `roots.storage` pointed, so a root below the document root let a web server
+  without a deny rule serve both as plain files. And Kirby defines no
+  `storage` root by itself: without one the call died in a `TypeError`, the
+  page rendered, nothing was counted and the dashboard only said "not
+  available". New `Kizami\Setup::storageRoot()` compares the real paths of the
+  `storage` and `index` roots (symlinks resolved; a storage root that does not
+  exist yet is judged by its nearest existing parent) before anything is
+  read or written. If the storage root is missing, equal to or inside the
+  index root, pages still render and redirects still redirect, nothing is
+  written and the error log gets the reason. A Panel user sees it in the
+  dashboard under the warning; the file login (no storage, so no lockout
+  counters) is denied without checking the password and answers 503 pointing to
+  the error log, no challenge and no path. **Operators: a storage root inside the web root is no longer
+  supported; move it outside** (the README shows an `index.php` with
+  `storage` as a sibling of `public/`). On upgrade, data already below the web
+  root stays where it is and nothing is counted until the root lies outside.
+  No schema change.
+- **Contact links and the dashboard stylesheet work under a subdirectory
+  install**: with the index URL `https://example.invalid/subsite`,
+  `redirectLink()` and `redirectAnchor()` returned `/call?from=%2F`, the
+  domain root, and the dashboard linked `/k/dashboard.css`. Both now start
+  with the path of Kirby's index URL (`/subsite/call?from=%2F`,
+  `/subsite/k/dashboard.css`), as a path and not a full URL, so a `url`
+  option that differs from the request host or says `http://` cannot make the
+  stylesheet load cross-origin or as mixed content; a root
+  install produces the same bytes as before. The `from` value stays the page
+  path (`/`, `/contact`), so the statistics paths do not change. No schema
+  change.
+
 ## [1.6.1] — 2026-10-17
 
 ### Fixed

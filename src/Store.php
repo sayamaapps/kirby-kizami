@@ -46,6 +46,9 @@ final class Store
         devices INTEGER NOT NULL
     )';
 
+    /** `user_version` once the first rebuild has run, see purgeResidue(). */
+    private const RESIDUE_PURGED = 1;
+
     private const MAINTENANCE_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_maintenance (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL)';
 
     // Discarded redirect hits (link filter in index.php) per Berlin day.
@@ -158,6 +161,10 @@ final class Store
                 $this->db->exec('PRAGMA journal_mode = WAL');
                 $this->db->exec('PRAGMA synchronous = NORMAL');
             }
+            // Deleted rows are overwritten with zeros when they are deleted.
+            // Without it the bytes of a removed event stay in the free pages
+            // of the file (and of every snapshot copied from it).
+            $this->db->exec('PRAGMA secure_delete = ON');
         } catch (\Throwable) {
             // The write probe/schema report the relevant error.
         }
@@ -577,6 +584,11 @@ final class Store
      * Roll old complete days up into daily totals, then delete the single
      * events. One shared transaction prevents loss and double totals on abort
      * or parallel maintenance. Single events are kept for five years.
+     *
+     * The rebuild that follows (purgeResidue) is best effort: the roll-up is
+     * already committed, so a failing VACUUM (no room for the temporary copy,
+     * a locked or read-only file) is logged and the result still returned.
+     * The next run tries again.
      */
     public function compact(): int
     {
@@ -584,10 +596,42 @@ final class Store
         try {
             $deleted = $this->rollUpOldDays();
             $this->exec('COMMIT');
-            return $deleted;
         } catch (\Throwable $e) {
             $this->exec('ROLLBACK');
             throw $e;
+        }
+        try {
+            $this->purgeResidue();
+        } catch (\Throwable $e) {
+            error_log('Kizami: residue purge failed: ' . $e->getMessage());
+        }
+        return $deleted;
+    }
+
+    /**
+     * Rebuild the file when deleted content may still sit in it: once per
+     * database file (events deleted before secure_delete was switched on),
+     * after every roll-up that deleted something (rollUpOldDays clears the
+     * mark, also when it ran in a visitor's request), and whenever free pages
+     * exist. secure_delete zeroes deleted cells, but SQLite hands a page that
+     * became empty back to the free list as it was, and old builds (3.7.17)
+     * leave parts of a deleted row in a page that stays in use.
+     * Explicit maintenance only (dashboard, report, CLI), never the visitor's
+     * request: VACUUM rewrites the whole file. It cannot run inside a
+     * transaction, so it follows the COMMIT. The done-mark is the file's own
+     * `user_version` header field: no table, no migration, it survives
+     * VACUUM and older versions ignore it. Without the mark VACUUM runs
+     * again, which is harmless.
+     */
+    private function purgeResidue(): void
+    {
+        $marked = (int) $this->db->querySingle('PRAGMA user_version') >= self::RESIDUE_PURGED;
+        if ($marked && (int) $this->db->querySingle('PRAGMA freelist_count') === 0) {
+            return;
+        }
+        $this->db->exec('VACUUM');
+        if (!$marked) {
+            $this->db->exec('PRAGMA user_version = ' . self::RESIDUE_PURGED);
         }
     }
 
@@ -614,6 +658,13 @@ final class Store
         $stmt = $this->db->prepare('DELETE FROM kizami_custom_events WHERE created_at < :limit');
         $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
         $stmt->execute()->finalize();
+        // Something was deleted: clear the rebuild mark, so the next explicit
+        // maintenance runs VACUUM once more (purgeResidue). secure_delete
+        // alone is not enough on every SQLite build: 3.7.17 leaves parts of a
+        // deleted row in a page that stays in use.
+        if ($deleted > 0 || $this->db->changes() > 0) {
+            $this->db->exec('PRAGMA user_version = 0');
+        }
         return $deleted;
     }
 
@@ -689,8 +740,11 @@ final class Store
             $backup = new SQLite3($target);
             // The copy inherits WAL mode from the source header; DELETE makes
             // it ONE file without -wal/-shm (also for restoring).
+            // VACUUM on the copy: the backup API copies free pages too, and
+            // whatever the source still holds in them must not travel along.
             if (!$this->db->backup($backup)
                 || strtolower((string) $backup->querySingle('PRAGMA journal_mode=DELETE')) !== 'delete'
+                || $backup->exec('VACUUM') !== true
                 || $backup->querySingle('PRAGMA integrity_check') !== 'ok') {
                 throw new RuntimeException('SQLite snapshot failed');
             }

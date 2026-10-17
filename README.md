@@ -7,7 +7,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 - **Server-side.** Page views are counted in Kirby's `route:after` hook. Ad blockers don't affect it, and no tracking script is needed.
 - **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device. Data stays in one SQLite file outside the web root.
 - **Honours Do Not Track and Global Privacy Control.** With `DNT: 1` or `Sec-GPC: 1`, nothing is recorded.
-- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is overwritten every day (Europe/Berlin). Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
+- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is replaced every day (Europe/Berlin): on the first counted visit of a day, by the dashboard, the report and snapshot routes, and by the maintenance job. Set up the job when the site may go days without a visit. Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
 - **Counts what small businesses care about.** Phone calls, route requests and e-mail clicks go through counted redirects such as `/call` → `tel:…`. No JavaScript is involved, and the dashboard shows contact rates per source and landing page.
 - **Optional actions.** Downloads, video plays or newsletter openings can be counted with a small script from the site's own server (see [Actions](#actions)). Off unless configured.
 - **Bot and crawler filtering.** User-agent filtering plus a redirect-click filter based on Fetch Metadata and the visitor's same-day page views (see [Counting rules](#counting-rules)).
@@ -19,7 +19,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 
 - PHP 8.2–8.4 with the `sqlite3` extension
 - Kirby 5
-- A writable Kirby `storage` root, ideally outside the web root. Data lives in `<storage>/kizami/`.
+- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the error log gets the message, a Panel user sees it in the dashboard and the file login answers 503 and points to the error log.
 
 ## Installation
 
@@ -36,6 +36,23 @@ Until the package is on Packagist, add the repository first:
 ```
 
 Manual installation (download into `site/plugins/kizami/`) also works. The plugin loads its own classes and has no runtime dependencies.
+
+A stock Kirby has no `storage` root, so the `kizami.active` example below does nothing on it. Define the root in `index.php`, with the web server pointing at `public/` and `storage/` as its sibling:
+
+```php
+<?php
+$base = dirname(__DIR__);
+require $base . '/vendor/autoload.php';
+echo (new Kirby\Cms\App([
+    'roots' => [
+        'index'   => __DIR__,
+        'base'    => $base,
+        'content' => $base . '/content',
+        'site'    => $base . '/site',
+        'storage' => $base . '/storage',
+    ],
+]))->render();
+```
 
 ## Configuration
 
@@ -65,6 +82,8 @@ Dashboard access: create `site/config/kizami.php` (keep it out of git) with a bc
 ```php
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
+
+The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one. Whoever knows the user name can lock the file login for an hour with ten failed attempts from any address (the Panel login is not affected). The limit slows guessing from one address; it does not replace a strong password, as changing addresses and invented names are not counted together.
 
 ### Options
 
@@ -97,7 +116,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `reportRoles` | `['kizami-report']` | Roles allowed to read the report. Admins are deliberately not allowed by default. |
 | `journal` | `'wal'` | SQLite journal mode: `'wal'` or `'delete'`. Use `'delete'` on shared hosters where WAL is unreliable (old SQLite, network file systems, "disk I/O error" in `storage/kizami/errors.log`): one file, no `-wal`/`-shm`. Takes effect on the next request. |
 | `siteId` | site hostname | Site identifier (`site`) in the report. Set it explicitly so it survives a domain change. |
-| `reportWithoutHttps` | `false` | Allow the report and snapshot over plain HTTP. Local testing only. |
+| `reportWithoutHttps` | `false` | Allow the dashboard, report and snapshot over plain HTTP. Local testing only. |
 | `snapshot` | `false` | Enable `/k/snapshot` (also requires `active`). Registers the Panel role `kizami-snapshot` (no Panel access). |
 | `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. Separate from the report role on purpose: the snapshot contains raw events. |
 
@@ -237,9 +256,9 @@ Gaps don't change any number. They only mark: visits on a gap day are as recorde
 - **CLI:** `php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite` (also `vendor/bin/kizami-snapshot`).
 - **HTTP**, for hosts without a shell or cron: `GET /k/snapshot` with Basic Auth (enable with `kizami.snapshot`). It returns the snapshot as `application/vnd.sqlite3` and puts the SHA-256 in `X-Kizami-Sha256`.
 
-Both use SQLite's online backup API (available since 3.6.11) and run `PRAGMA integrity_check` on the copy. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
+Both use SQLite's online backup API (available since 3.6.11), rebuild the copy with `VACUUM` so it carries no free pages (and no bytes of deleted events), and run `PRAGMA integrity_check` on it. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
 
-Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day.
+Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day. Deleted events are no longer contained in the database file (`secure_delete`, then a rebuild) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file with `VACUUM` once to clear bytes left by earlier versions, after every roll-up that deleted events, and whenever free pages exist. A rebuild needs up to twice the file size in free disk space for a while and blocks writers while it runs (5 s busy timeout, after that page views are lost), so on a large file run the CLI job first and not as the first dashboard call. The job also replaces a stale daily key, so schedule it daily if the site may go days without a counted visit. Without any of these the previous key stays on disk.
 
 ## Counting rules
 

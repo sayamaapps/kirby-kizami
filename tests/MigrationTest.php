@@ -97,8 +97,9 @@ try {
         'index' => $tmp . '/public', 'base' => $tmp, 'content' => $tmp . '/content', 'site' => $tmp . '/site',
         'storage' => $tmp . '/storage', 'accounts' => $tmp . '/site/accounts',
     ];
+    // HTTPS: the dashboard refuses plain HTTP.
     $app = fn (array $options = [], array $request = []) => new Kirby\Cms\App([
-        'roots' => $roots, 'options' => ['url' => 'http://example.invalid'] + $options, 'request' => $request,
+        'roots' => $roots, 'options' => ['url' => 'https://example.invalid'] + $options, 'request' => $request,
     ]);
 
     // First app: report and snapshot on — the roles must exist then.
