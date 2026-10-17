@@ -68,8 +68,9 @@ All notable changes to this project are documented here. Versions follow
   seconds). Once reached, the login answers `429` with `Retry-After` and no
   challenge, without running `password_verify()`; a request without
   credentials never counts, a successful login does not reset the counters.
-  If the file cannot be read or written, access is denied and the error log
-  says so. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
+  If the file cannot be read, the login answers `503` pointing to the error
+  log (no challenge, no password check); a failure only while counting a
+  wrong password is logged and answered with the usual `401`. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
   share one address unless Kirby sees the real one. The Panel-cookie login
   is not affected. No schema change.
 - **A storage root inside the web root, or none at all, is now refused with

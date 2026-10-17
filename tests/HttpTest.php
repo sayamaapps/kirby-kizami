@@ -494,10 +494,10 @@ try {
     // A damaged file fails closed.
     file_put_contents($loginsFile, 'not json');
     [$status, , $headers] = requestHttp('/k/dashboard', $auth);
-    checkHttp($status === 401, 'Unusable lockout file: no access even with the right password');
+    checkHttp($status === 503 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'Unusable lockout file: 503 without challenge, no access even with the right password');
     unlink($loginsFile);
     checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Lockout file removed: access again');
-    unlink($loginsFile);
+    @unlink($loginsFile); // a successful login writes nothing
 
     // Campaign tag: utm_campaign wins; kizami.campaignParam names one more
     // parameter, used only while utm_campaign is empty after cleaning.

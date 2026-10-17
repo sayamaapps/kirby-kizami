@@ -886,18 +886,12 @@ function kizami_access_denied(): ?Response
         $directory = kizami_directory();
     } catch (SetupError $e) {
         // No usable storage, so no counters and no login: deny without
-        // checking the password. A 503 with a pointer instead of a 401 that
-        // would make the browser ask again for ever; no path, the visitor is
-        // not authenticated.
+        // checking the password.
         error_log($e->getMessage());
-        $denial = kizami_deny();
-        if ($denial->code() !== 401) {
-            return $denial;
-        }
-        return new Response('Kizami: setup error, see the error log.', 'text/plain', 503, ['Cache-Control' => 'no-store']);
+        return kizami_login_unavailable('Kizami: setup error, see the error log.');
     } catch (\Throwable $e) {
         error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-        return kizami_deny();
+        return kizami_login_unavailable('Kizami: login limit unavailable, see the error log.');
     }
     try {
         $lockout = new Lockout(
@@ -910,7 +904,7 @@ function kizami_access_denied(): ?Response
         $wait = $lockout->retryAfter($ip, $user);
     } catch (\Throwable $e) {
         error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-        return kizami_deny();
+        return kizami_login_unavailable('Kizami: login limit unavailable, see the error log.');
     }
     if ($wait > 0) {
         // Where the module hides behind Kirby's 404 (preview, no access file),
@@ -935,6 +929,23 @@ function kizami_access_denied(): ?Response
         error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
     }
     return kizami_deny();
+}
+
+/**
+ * No login possible right now (storage not set up, lockout file unusable):
+ * where the file login would challenge (401), a 503 with a pointer to the
+ * error log instead — a 401 would make the browser ask again for ever and
+ * never say why; no path in the text, the visitor is not authenticated.
+ * Where the module hides behind Kirby's 404 anyway (preview, no access
+ * file), that 404 stays.
+ */
+function kizami_login_unavailable(string $text): Response
+{
+    $denial = kizami_deny();
+    if ($denial->code() !== 401) {
+        return $denial;
+    }
+    return new Response($text, 'text/plain', 503, ['Cache-Control' => 'no-store']);
 }
 
 /**

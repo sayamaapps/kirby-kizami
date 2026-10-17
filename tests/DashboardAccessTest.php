@@ -96,7 +96,8 @@ try {
 
     // Unusable lockout file: deny, log, never let in.
     file_put_contents($tmp . '/storage/kizami/logins.json', 'garbage');
-    same(401, $get('k/dashboard', $url)[0], 'Garbage lockout file: no access with the right login');
+    [$code, $body, $headers] = $get('k/dashboard', $url);
+    same([503, 'Kizami: login limit unavailable, see the error log.', false], [$code, $body, isset($headers['WWW-Authenticate'])], 'Garbage lockout file: 503 with a pointer, no challenge, no access');
     same(true, str_contains((string) file_get_contents($GLOBALS['logFile']), 'Kizami: login lockout file not usable'), 'Garbage lockout file is logged');
     unlink($tmp . '/storage/kizami/logins.json');
     // A file where the storage directory should be: same.
