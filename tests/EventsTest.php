@@ -241,9 +241,9 @@ try {
     $week = Report::data($report, $names, 'week', new DateTimeImmutable('2026-10-05 09:00', $berlin), ['events' => $config])['events'];
     same([['download', 2, 1], ['video_play', 2, 2]], array_map(fn ($e) => [$e['key'], $e['count'], $e['visits']], array_slice($week, 0, 2)), 'Report: the week counts all its days, a visit per day');
 
-    // Retention: five years, like the single events; not rolled up.
-    $old = (new DateTimeImmutable('today', $berlin))->modify('-5 years -1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
-    $recent = (new DateTimeImmutable('today', $berlin))->modify('-5 years +1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    // Retention: 13 months, like the single events; not rolled up.
+    $old = (new DateTimeImmutable('today', $berlin))->modify('-13 months -1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $recent = (new DateTimeImmutable('today', $berlin))->modify('-13 months +1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     $retention = new Store("$tmp/retention.sqlite");
     $retention->write(['type' => 'page', 'action' => 'view', 'session' => 'o', 'created_at' => $old]);
     $retention->write(['type' => 'event', 'event' => 'download', 'detail' => 'old.pdf', 'session' => 'o', 'created_at' => $old]);
@@ -251,7 +251,7 @@ try {
     same(1, $retention->compact(), 'Retention: compact() still returns the rolled-up single events');
     $rdb = new SQLite3("$tmp/retention.sqlite");
     same(['recent.pdf'], array_column(iterator_to_array((function () use ($rdb) { $r = $rdb->query('SELECT detail FROM kizami_custom_events'); while ($row = $r->fetchArray(SQLITE3_ASSOC)) { yield $row; } })(), false), 'detail'),
-        'Retention: actions older than five years deleted, younger ones kept');
+        'Retention: actions older than 13 months deleted, younger ones kept');
     same(['views' => 1, 'clicks' => 0, 'devices' => 1], $rdb->query('SELECT views, clicks, devices FROM kizami_days')->fetchArray(SQLITE3_ASSOC), 'Retention: actions are not part of the daily totals');
     $rdb->close();
     // The daily compaction on write deletes them as well.

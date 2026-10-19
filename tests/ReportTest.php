@@ -92,12 +92,12 @@ try {
     throws(fn () => Report::referenceDay('day', '2026-02-30', $thu), 'YYYY-MM-DD', 'Invalid date');
     throws(fn () => Report::referenceDay('day', '30.09.2026', $thu), 'YYYY-MM-DD', 'German format rejected');
     throws(fn () => Report::referenceDay('day', '2026-9-30', $thu), 'YYYY-MM-DD', 'Without leading zero rejected');
-    // Retention: single events from today minus five years (01.10.2021).
+    // Retention: single events from today minus 13 months (01.09.2025).
     // The day report also needs the weekday one week before.
-    same('2021-10-09 00:00', $refDay('2021-10-08'), 'Comparison day lies exactly on the limit');
-    throws(fn () => Report::referenceDay('day', '2021-10-07', $thu), 'five years', 'Comparison day before the limit');
-    same('2021-10-18 00:00', $refDay('2021-10-11', 'week'), 'Comparison week starts after the limit');
-    throws(fn () => Report::referenceDay('week', '2021-10-04', $thu), 'five years', 'Comparison week before the limit');
+    same('2025-09-09 00:00', $refDay('2025-09-08'), 'Comparison day lies exactly on the limit');
+    throws(fn () => Report::referenceDay('day', '2025-09-07', $thu), '13 months', 'Comparison day before the limit');
+    same('2025-09-22 00:00', $refDay('2025-09-15', 'week'), 'Comparison week starts after the limit');
+    throws(fn () => Report::referenceDay('week', '2025-09-01', $thu), '13 months', 'Comparison week before the limit');
 
     $store = new Store("$tmp/k.sqlite");
     $put = function (string $time, string $session, array $extra = []) use ($store, $utc) {

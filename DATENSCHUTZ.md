@@ -77,7 +77,7 @@ gezählt werden. Tagesgrenzen verwenden Europe/Berlin.
 Sendet der Browser Do Not Track oder Global Privacy Control mit dem Wert 1,
 entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
-Einzelereignisse werden bei der Bereinigung nach fünf Jahren aus der aktiven
+Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `kizami.retentionMonths`) aus der aktiven
 Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
 nächsten Wartung (Dashboard, Report, Wartungsjob) nicht mehr in der
 Datenbankdatei enthalten, und neue Snapshots werden ohne solche Reste neu aufgebaut.
@@ -88,7 +88,7 @@ der für den jeweiligen Tag geschätzten Geräte. Diese Zählwerte bleiben für
 Gesamtzahlen und langfristige Monatsvergleiche erhalten. Gerätekennzeichen,
 Geräteklassen, Fehlseiten, Bildöffnungen, Aktionen und ihre Zusatzangaben, Linkpositionen, genaue Uhrzeiten, Seitenpfade, Weiterleitungsziele, Herkunft und Kampagnenangaben
 werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nach
-fünf Jahren ohne Zusammenfassung gelöscht.
+derselben Frist ohne Zusammenfassung gelöscht.
 
 Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages, beim Öffnen
 des Dashboards, beim Abruf des Reports und optional über einen separat eingerichteten Wartungsjob.
@@ -98,11 +98,12 @@ nicht archivieren.
 
 ## Betrieb (nicht als Seitentext veröffentlichen)
 
-- Die fünfjährige Aufbewahrung ist ein technischer Standard, keine rechtliche
+- Die Aufbewahrung von 13 Monaten (Standard von `kizami.retentionMonths`) ist ein technischer Standard, keine rechtliche
   Begründung; die notwendige Dauer muss der Betreiber festlegen.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
   kann zusätzlich täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
-  Wartungsfehler. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
+  Wartungsfehler. Ist `kizami.retentionMonths` gesetzt, muss derselbe Wert als
+  `--retention-months=N` angegeben werden, sonst gelten 13 Monate. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
   Der Job löscht außerdem einen veralteten Tagesschlüssel (er erzeugt keinen,
   damit keine Datei mit dem Cron-Benutzer als Eigentümer entsteht) und meldet
   `stale daily key removed` bzw. `daily key current`; er ist dann nötig, wenn

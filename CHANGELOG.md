@@ -13,6 +13,30 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [Unreleased]
+
+### Changed
+
+- **Single events and reported actions are kept 13 months instead of five
+  years** **[privacy text]**: the new option `kizami.retentionMonths` sets the
+  period (a whole number from 1 to 600, default 13; anything else is logged and
+  13 is used). Single events older than the period are rolled up into daily
+  totals as before, and the daily totals (views, clicks, devices) are kept
+  forever. Reported actions older than the period are deleted, not rolled up.
+  `DATENSCHUTZ.md` and `PRIVACY.md` state 13 months and the option.
+- **Irreversible on the first maintenance run after the update** (the first
+  counted request of the day, the dashboard, `/k/report` or `maintenance.php
+  compact`): single events older than 13 months are rolled up, and their details
+  (pages, sources, devices, link targets, dwell time) are gone for good. Actions
+  older than 13 months are deleted for good. A site that wants the old period
+  must set `kizami.retentionMonths` to 60 before updating, and its cron job for
+  `maintenance.php` must pass `--retention-months=60`.
+- `maintenance.php` accepts `--retention-months=N` (same validation as the
+  option), because the job has no Kirby options of its own.
+- The report's `date` parameter refuses a comparison day or week before the
+  limit of single events; the error names the retention in months (it said
+  "five years"). The report JSON is unchanged. No schema change.
+
 ## [1.7.1] — 2026-10-17
 
 ### Fixed
