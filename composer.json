@@ -4,7 +4,7 @@
     "type": "kirby-plugin",
     "license": "MIT",
     "keywords": ["kirby", "kirby-plugin", "kirby-5", "analytics", "statistics", "privacy", "cookieless", "sqlite"],
-    "homepage": "https://github.com/simsimmal/kirby-kizami",
+    "homepage": "https://github.com/sayamaapps/kirby-kizami",
     "authors": [
         {
             "name": "Simon Räder",
@@ -12,8 +12,8 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/simsimmal/kirby-kizami/issues",
-        "source": "https://github.com/simsimmal/kirby-kizami"
+        "issues": "https://github.com/sayamaapps/kirby-kizami/issues",
+        "source": "https://github.com/sayamaapps/kirby-kizami"
     },
     "require": {
         "php": "^8.2",

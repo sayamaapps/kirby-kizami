@@ -32,7 +32,7 @@ Composer installs the plugin into `site/plugins/kizami/` (via `getkirby/composer
 Until the package is on Packagist, add the repository first:
 
 ```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/simsimmal/kirby-kizami" }]
+"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-kizami" }]
 ```
 
 Manual installation (download into `site/plugins/kizami/`) also works. The plugin loads its own classes and has no runtime dependencies.
