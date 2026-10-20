@@ -23,6 +23,26 @@ final class Options
         return $kirby->option(self::PREFIX . $key) ?? $default;
     }
 
+    /**
+     * `kizami.retentionMonths`: how long single events and reported actions
+     * are kept. Not set means the default; an invalid value is logged and the
+     * default is used (see Store::validRetentionMonths()).
+     */
+    public static function retentionMonths(App $kirby): int
+    {
+        $value = self::get($kirby, 'retentionMonths');
+        if ($value === null) {
+            return Store::RETENTION_MONTHS;
+        }
+        $months = Store::validRetentionMonths($value);
+        if ($months === null) {
+            error_log('Kizami: kizami.retentionMonths must be a whole number from 1 to '
+                . Store::RETENTION_MONTHS_MAX . '; ' . Store::RETENTION_MONTHS . ' months are used.');
+            return Store::RETENTION_MONTHS;
+        }
+        return $months;
+    }
+
     /** Dashboard access file: `site/config/kizami.php` with `user` and `hash`. */
     public static function accessFile(App $kirby): string
     {

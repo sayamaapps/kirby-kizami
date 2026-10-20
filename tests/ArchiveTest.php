@@ -85,7 +85,7 @@ archiveCase('migration', function ($dir) {
 
 archiveCase('calendar_boundary', function ($dir) {
     $store = new Store($dir . '/' . Store::FILE); $db = archiveDb($dir);
-    $cutoff = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->modify('-5 years');
+    $cutoff = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->modify('-13 months');
     archiveEvent($db, archiveUtc($cutoff->modify('-1 second')));
     archiveEvent($db, archiveUtc($cutoff));
     archiveEvent($db, archiveUtc($cutoff->modify('+12 hours')));

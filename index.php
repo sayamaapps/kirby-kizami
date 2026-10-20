@@ -75,7 +75,7 @@ function kizami_option(string $key, mixed $default = null): mixed
 /** Opens the site's database with the configured journal mode (`kizami.journal`). */
 function kizami_store(): Store
 {
-    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')), kizami_own_hosts());
+    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')), kizami_own_hosts(), Options::retentionMonths(App::instance()));
 }
 
 /** The site's own hosts (index URL plus `kizami.ownHosts`): referrers from them are internal, not a source. */
@@ -181,7 +181,7 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
             return; // no secret, no capture
         }
 
-        $store = new Store($directory . '/' . Store::FILE, Store::journal(kizami_option('journal')));
+        $store = new Store($directory . '/' . Store::FILE, Store::journal(kizami_option('journal')), [], Options::retentionMonths(App::instance()));
         $session = Capture::sessionHash(
             $server['REMOTE_ADDR'] ?? '0.0.0.0',
             $ua,

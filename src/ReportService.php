@@ -60,7 +60,7 @@ final class ReportService
                 throw new ReportError('"date" must be a valid YYYY-MM-DD.');
             }
             try {
-                $reference = Report::referenceDay($kind, $date, $now);
+                $reference = Report::referenceDay($kind, $date, $now, Options::retentionMonths($kirby));
             } catch (\InvalidArgumentException $e) {
                 throw new ReportError($e->getMessage());
             }

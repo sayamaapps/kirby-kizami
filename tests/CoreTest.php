@@ -411,7 +411,7 @@ check('The sum is the number of views in the window, nothing twice',
     5, array_sum($sources));
 
 $deleted = $st->compact();
-check('Compaction removes the row older than 5 years', 1, $deleted);
+check('Compaction removes the row older than the retention (13 months)', 1, $deleted);
 
 $db4 = new SQLite3($dbPath);
 $rest = (int) $db4->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/ancient'");

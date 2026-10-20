@@ -21,6 +21,15 @@ final class Store
 {
     public const FILE = 'kizami.sqlite';
 
+    /**
+     * Months single events and reported actions are kept (`kizami.retentionMonths`).
+     * Events are then rolled up into daily totals, actions deleted.
+     */
+    public const RETENTION_MONTHS = 13;
+
+    /** Upper bound of `kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
+    public const RETENTION_MONTHS_MAX = 600;
+
     /** One definition for creation and migration. */
     public const EVENTS_TABLE = "CREATE TABLE IF NOT EXISTS kizami_events (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -93,6 +102,19 @@ final class Store
     }
 
     /**
+     * A valid `kizami.retentionMonths`: an int or a string of digits from 1
+     * to RETENTION_MONTHS_MAX, otherwise null. Floats, signs, spaces and
+     * other strings are refused.
+     */
+    public static function validRetentionMonths(mixed $value): ?int
+    {
+        if (is_string($value) && ctype_digit($value)) {
+            $value = (int) $value;
+        }
+        return is_int($value) && $value >= 1 && $value <= self::RETENTION_MONTHS_MAX ? $value : null;
+    }
+
+    /**
      * Journal mode recorded in an existing database file: header bytes 18/19
      * are 2 in WAL mode and 1 with a rollback journal. Missing or unreadable
      * file → WAL (the default for new databases).
@@ -120,6 +142,9 @@ final class Store
     /** @var list<string> own hosts without `www.`; their referrers are internal (see ownReferrerSql) */
     private array $ownHosts = [];
 
+    /** @var int months before which single events are rolled up and actions deleted */
+    private int $retentionMonths = self::RETENTION_MONTHS;
+
     /**
      * @param string $journal `wal` (default) or `delete`. WAL lets readers and
      *        the per-request writer work side by side, but needs working shared
@@ -131,10 +156,15 @@ final class Store
      *        the next connection switches the file back. Null (CLI tools
      *        without Kirby options) keeps the mode the file already has; a new
      *        file starts in WAL.
+     * @param ?int $retentionMonths see RETENTION_MONTHS; null or an invalid
+     *        value (see validRetentionMonths()) means the default. Only the
+     *        roll-up uses it: an opener without Kirby options (CLI) must pass
+     *        the site's value itself.
      */
-    public function __construct(string $dbPath, ?string $journal = null, array $ownHosts = [])
+    public function __construct(string $dbPath, ?string $journal = null, array $ownHosts = [], ?int $retentionMonths = null)
     {
         $this->ownHosts = self::normaliseHosts($ownHosts);
+        $this->retentionMonths = self::validRetentionMonths($retentionMonths) ?? self::RETENTION_MONTHS;
         $journal ??= self::journalOfFile($dbPath);
         $directory = dirname($dbPath);
         if (!is_dir($directory)) {
@@ -583,7 +613,8 @@ final class Store
     /**
      * Roll old complete days up into daily totals, then delete the single
      * events. One shared transaction prevents loss and double totals on abort
-     * or parallel maintenance. Single events are kept for five years.
+     * or parallel maintenance. Single events and actions are kept for
+     * `kizami.retentionMonths` (13 months by default).
      *
      * The rebuild that follows (purgeResidue) is best effort: the roll-up is
      * already committed, so a failing VACUUM (no room for the temporary copy,
@@ -639,7 +670,7 @@ final class Store
     private function rollUpOldDays(): int
     {
         $limit = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Berlin')))
-            ->modify('-5 years')->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+            ->modify('-' . $this->retentionMonths . ' months')->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         // An already archived day is not overwritten. Importing raw data into
         // such days later has to be sorted out separately: without the old
         // device identifiers no reliable deduplication is possible.
@@ -653,7 +684,7 @@ final class Store
         $stmt->execute()->finalize();
         $deleted = $this->db->changes();
 
-        // Reported actions follow the same five years, but are not rolled
+        // Reported actions follow the same retention, but are not rolled
         // up: like image openings they have no place in the daily totals.
         $stmt = $this->db->prepare('DELETE FROM kizami_custom_events WHERE created_at < :limit');
         $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
