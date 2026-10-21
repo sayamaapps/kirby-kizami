@@ -138,6 +138,74 @@ check('Referrer without a value gives an empty string',
 check('utm value loses special characters',
     'scriptalert1script', Capture::cleanId('<script>alert(1)</script>'));
 
+// Referrer host and path are stored as valid UTF-8 only: invalid
+// bytes in a stored value used to make json_encode() fail, so /k/report
+// answered 200 with an empty body. Valid hosts and paths stay byte for byte
+// what they were.
+$printable = fn (string $s) => json_encode($s, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
+foreach ([
+    ['https://google.com/search?q=doctor', 'google.com'],
+    ['https://WWW.Example.COM./x', 'www.example.com'],
+    ['https://xn--mnchen-3ya.example/', 'xn--mnchen-3ya.example'],
+    ['http://192.0.2.1:8080/x', '192.0.2.1'],
+    ['http://[::1]/x', '[::1]'],
+    ['https://user:pw@example.org/', 'example.org'],
+    ['android-app://com.example.app/', 'com.example.app'],
+    ["https://m\u{FC}nchen.example/", "m\u{FC}nchen.example"],
+    ["https://example.org/\xFF", 'example.org'],            // only the host counts, not what follows it
+    ['https://' . str_repeat('a', 120) . '.example/', str_repeat('a', 100)],
+    ['garbage', ''],
+    ['https://', ''],
+] as [$url, $host]) {
+    check('Referrer host stays as it was: ' . $printable($url), $host, Capture::cleanReferrer($url));
+}
+check('Own host stays "(internal)"', '(internal)', Capture::cleanReferrer('https://own.example/x', ['own.example']));
+
+// The cleaning must discard invalid input by itself: a deprecation here
+// (a null from a failed preg_replace() passed on) would be a log line per request.
+$notices = [];
+set_error_handler(function (int $severity, string $message) use (&$notices) { $notices[] = $message; return true; });
+$invalidReferrers = [
+    'invalid byte in the host'           => "https://foo\xFF.example/",
+    'truncated sequence at the host end' => "https://foo.example\xC3/",
+];
+foreach ($invalidReferrers as $what => $url) {
+    check('Referrer with ' . $what . ' is discarded', '', Capture::cleanReferrer($url));
+}
+// A zero-width space in the host depends on the PHP build: an older
+// parse_url() turns two of its three bytes into "_" (invalid UTF-8, the
+// host is discarded), a newer one passes it through (the format character
+// is removed). Both are fine; neither may raise a notice.
+$zeroWidth = Capture::cleanReferrer("https://a\u{200B}b.example/");
+check('Referrer with a zero-width space in the host: discarded or cleaned, never stored as is', true, in_array($zeroWidth, ['', 'ab.example'], true));
+restore_error_handler();
+check('Discarding an invalid referrer raises no PHP notice or deprecation', [], $notices);
+check('Referrer: control character is gone', 'foo_bar.example', Capture::cleanReferrer("https://foo\x01bar.example/"));
+check('Referrer: <, >, " and \' are removed from the host', 'abcd.example', Capture::cleanReferrer("https://a<b>\"c'd.example/"));
+check('Referrer: format character (BOM) is removed from the host', 'ab.example', Capture::cleanReferrer("https://a\u{FEFF}b.example/"));
+check('Referrer: nothing left after cleaning gives an empty string', '', Capture::cleanReferrer('https://<>"\'/'));
+$cutReferrer = Capture::cleanReferrer('https://a' . str_repeat("\u{E4}", 150) . '/');
+check('Referrer is cut at 100 characters, not in the middle of one', [100, 1], [preg_match_all('/./us', $cutReferrer), preg_match('//u', $cutReferrer)]);
+check('Referrer cut keeps whole characters', 'a' . str_repeat("\u{E4}", 99), $cutReferrer);
+
+foreach ([
+    ['/services?utm_source=google', '/services'],
+    ['/a%FFb', '/a%FFb'],                                   // Kirby keeps percent-encoding: pure ASCII
+    ["/caf\u{E9}", "/caf\u{E9}"],
+    ["/\u{20AC}", "/\u{20AC}"],
+    ["/ok?x=\xFF", '/ok'],                                  // the query is dropped before the check
+    ['/' . str_repeat('a', 255), '/' . str_repeat('a', 254)],
+] as [$path, $expected]) {
+    check('Path stays as it was: ' . $printable($path), $expected, Capture::cleanPath($path));
+}
+check('Path with an invalid byte is discarded', '', Capture::cleanPath("/a\xFFb"));
+check('Path with a truncated sequence is discarded', '', Capture::cleanPath("/a\xE2\x82"));
+check('Path of an invalid byte: nothing is "repaired" into U+FFFD', false, str_contains(Capture::cleanPath("/a\xFFb"), "\u{FFFD}"));
+$cutPath = Capture::cleanPath('/' . str_repeat("\u{20AC}", 100));
+check('Path is cut at 255 bytes on a character boundary', [1 + 3 * 84, 1], [strlen($cutPath), preg_match('//u', $cutPath)]);
+check('Path cut keeps whole characters', '/' . str_repeat("\u{20AC}", 84), $cutPath);
+check('Path of 400 ASCII characters still ends at 255 bytes', 255, strlen(Capture::cleanPath('/' . str_repeat('a', 400))));
+
 check('utm value is capped at 50 characters',
     50, strlen(Capture::cleanId(str_repeat('a', 80))));
 
@@ -174,6 +242,66 @@ check('Directory that cannot be created → empty string, no crash',
 // would ever learn why the numbers are missing.
 check('… and writes a log entry',
     true, str_contains((string) @file_get_contents($logFile), 'secret directory cannot be created'));
+
+// rotate(): retire a stale key without a counted visit.
+$rot = sys_get_temp_dir() . '/kizami-rotate-' . bin2hex(random_bytes(6));
+check('rotate() with no key file: nothing to do, true', true, Secret::rotate($rot, '2026-09-22'));
+check('… and it creates neither directory nor key', false, file_exists($rot));
+mkdir($rot, 0755, true);
+check('rotate() in an existing directory without a key: true, no file', [true, false],
+    [Secret::rotate($rot, '2026-09-22'), is_file($rot . '/' . Secret::FILE)]);
+file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('rotate() replaces a stale key', true, Secret::rotate($rot, '2026-09-22'));
+[$rotDate, $rotValue] = explode("\n", (string) file_get_contents($rot . '/' . Secret::FILE), 2);
+check('… the date line is the given day', '2026-09-22', $rotDate);
+check('… the value is new and full length', [false, 64], [$rotValue === 'STALE-SECRET-VALUE', strlen($rotValue)]);
+check('… and it is the key get() returns now', $rotValue, Secret::get($rot, '2026-09-22'));
+check('… file mode stays 0600', '0600', substr(sprintf('%o', fileperms($rot . '/' . Secret::FILE)), -4));
+$before = (string) file_get_contents($rot . '/' . Secret::FILE);
+check('rotate() with a current key: true', true, Secret::rotate($rot, '2026-09-22'));
+check('… the file is untouched byte for byte', $before, (string) file_get_contents($rot . '/' . Secret::FILE));
+check('rotate() leaves no temp files behind', [$rot . '/' . Secret::FILE], glob($rot . '/*'));
+file_put_contents($rot . '/' . Secret::FILE, "garbage without date line");
+check('rotate() replaces a file without a date line', [true, '2026-09-22'],
+    [Secret::rotate($rot, '2026-09-22'), explode("\n", (string) file_get_contents($rot . '/' . Secret::FILE))[0]]);
+// Counter-check for the failure path: as root, permissions do not bite.
+if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+    file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+    chmod($rot, 0555);
+    check('rotate() reports false when a stale key cannot be replaced', false, Secret::rotate($rot, '2026-09-23'));
+    check('… and the stale key stays (honest failure, not a silent success)', "2010-01-01\nSTALE-SECRET-VALUE", (string) file_get_contents($rot . '/' . Secret::FILE));
+    check('… with a log entry', true, str_contains((string) @file_get_contents($logFile), 'secret not writable'));
+    chmod($rot, 0755);
+}
+@unlink($rot . '/' . Secret::FILE);
+@rmdir($rot);
+
+// expire(): remove a stale key, never make one (filtered visitors, the CLI job).
+$exp = sys_get_temp_dir() . '/kizami-expire-' . bin2hex(random_bytes(6));
+check('expire() with no directory: true', true, Secret::expire($exp, '2026-09-22'));
+check('… and it creates neither directory nor key', false, file_exists($exp));
+mkdir($exp, 0755, true);
+check('expire() in an existing directory without a key: true, still no file', [true, false],
+    [Secret::expire($exp, '2026-09-22'), is_file($exp . '/' . Secret::FILE)]);
+file_put_contents($exp . '/' . Secret::FILE, "2026-09-22\nCURRENT-SECRET-VALUE");
+check('expire() with a current key: true', true, Secret::expire($exp, '2026-09-22'));
+check('… the file is untouched byte for byte', "2026-09-22\nCURRENT-SECRET-VALUE", (string) file_get_contents($exp . '/' . Secret::FILE));
+file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('expire() removes a stale key', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+check('… and leaves nothing else behind', [], glob($exp . '/*'));
+file_put_contents($exp . '/' . Secret::FILE, "garbage without date line");
+check('expire() removes a file without a date line', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+file_put_contents($exp . '/' . Secret::FILE, '');
+check('expire() removes an empty file', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+    file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+    chmod($exp, 0555);
+    check('expire() reports false when a stale key cannot be removed', false, Secret::expire($exp, '2026-09-23'));
+    check('… and the stale key stays', "2010-01-01\nSTALE-SECRET-VALUE", (string) file_get_contents($exp . '/' . Secret::FILE));
+    chmod($exp, 0755);
+}
+@unlink($exp . '/' . Secret::FILE);
+@rmdir($exp);
 
 // Clean up (never more than our own throwaway file):
 @unlink($tmp . '/' . Secret::FILE);
@@ -283,7 +411,7 @@ check('The sum is the number of views in the window, nothing twice',
     5, array_sum($sources));
 
 $deleted = $st->compact();
-check('Compaction removes the row older than 5 years', 1, $deleted);
+check('Compaction removes the row older than the retention (13 months)', 1, $deleted);
 
 $db4 = new SQLite3($dbPath);
 $rest = (int) $db4->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/ancient'");
@@ -399,6 +527,39 @@ check('No inline event handler in the output (CSP break)',
 check('The redirect count is in the output',
     true, str_contains($html, '>7<'));
 
+// Rows stored before 1.6.1 can hold invalid UTF-8 in referrer and path. The
+// dashboard shows them with U+FFFD: htmlspecialchars() without
+// ENT_SUBSTITUTE would return an empty string for the whole value.
+$stBad = new Store(':memory:');
+$stBad->write(['type' => 'page', 'action' => 'view', 'path' => "/a\xFFb", 'referrer' => "foo\xFF.example", 'session' => 'bad', 'device' => 'desktop']);
+$stBad->write(['type' => 'notfound', 'action' => 'view', 'path' => "/missing\xFFpage", 'session' => 'bad2']);
+$htmlBad = renderDashboard(Analysis::data($stBad, new Names([], [], []), 30, []));
+check('Dashboard shows an invalid source with U+FFFD, not empty',
+    true, str_contains($htmlBad, "foo\u{FFFD}.example"));
+check('Dashboard shows an invalid page path with U+FFFD, not empty',
+    true, str_contains($htmlBad, "/a\u{FFFD}b"));
+check('Dashboard shows an invalid missing-page path with U+FFFD',
+    true, str_contains($htmlBad, "<td>/missing\u{FFFD}page</td>"));
+check('Dashboard output stays valid UTF-8 with invalid stored bytes',
+    1, preg_match('//u', $htmlBad));
+
+// Setup message and stylesheet URL of the unavailable page.
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test']);
+check('No setup message by default',
+    1, substr_count($unavailable, 'class="warning"'));
+check('Stylesheet defaults to the domain root',
+    true, str_contains($unavailable, '<link rel="stylesheet" href="/k/dashboard.css">'));
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'setup' => 'Kizami: storage root /a&b/<x> is "bad"', 'cssUrl' => 'https://example.invalid/sub/k/dashboard.css']);
+check('Setup message is shown escaped under the warning',
+    true, str_contains($unavailable, '<p class="warning">Kizami: storage root /a&amp;b/&lt;x&gt; is &quot;bad&quot;</p>'));
+check('Setup message is never printed raw',
+    false, str_contains($unavailable, '<x>'));
+check('Stylesheet URL from the data package',
+    true, str_contains($unavailable, '<link rel="stylesheet" href="https://example.invalid/sub/k/dashboard.css">'));
+$unavailable = renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'cssUrl' => '"><script>x</script>']);
+check('Stylesheet URL is escaped',
+    false, str_contains($unavailable, '<script>x'));
+
 // Readable names for redirects (kizami.targetNames), "Home" instead of "/".
 $stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'call', 'path' => '/']);
 $stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'route', 'path' => '/contact']);
@@ -460,6 +621,15 @@ function maintenanceCli(array $args): int {
     return proc_close($process);
 }
 check('Maintenance CLI compacts successfully', 0, maintenanceCli(['compact', $dbDir]));
+// The job also retires a stale daily key; it removes it and never creates one.
+check('Maintenance CLI without a key file creates none', [0, false], [maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+file_put_contents($dbDir . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
+check('Maintenance CLI with a stale key succeeds and removes it', [0, false], [maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+$cliBefore = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\nCURRENT-SECRET-VALUE";
+file_put_contents($dbDir . '/' . Secret::FILE, $cliBefore);
+maintenanceCli(['compact', $dbDir]);
+check('Maintenance CLI leaves a current key alone', $cliBefore, (string) file_get_contents($dbDir . '/' . Secret::FILE));
+@unlink($dbDir . '/' . Secret::FILE);
 check('Maintenance CLI snapshots successfully', 0, maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']));
 // Restore rehearsal: a separate offline directory, never the production DB.
 $restoreDir = $dbDir . '/restore';

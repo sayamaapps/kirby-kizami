@@ -50,7 +50,7 @@ function rowCount(): int {
 }
 try {
     if (!is_file($repo . '/vendor/autoload.php')) { throw new RuntimeException('Composer dependencies missing; run composer install first'); }
-    foreach (['public', 'site/config', 'site/plugins', 'site/templates', 'content/home', 'content/error', 'storage'] as $dir) {
+    foreach (['public', 'site/config', 'site/plugins', 'site/templates', 'site/accounts', 'content/home', 'content/error', 'storage'] as $dir) {
         mkdir($tmp . '/' . $dir, 0700, true);
     }
     symlink($repo, $tmp . '/site/plugins/kizami');
@@ -68,6 +68,9 @@ try {
     $config = [
         'debug' => false, 'cache' => false,
         'kizami.active' => true,
+        // The test server speaks plain HTTP; the dashboard, report and
+        // snapshot refuse that unless this is set (checked explicitly below).
+        'kizami.reportWithoutHttps' => true,
         'kizami.dwellTime' => true,
         'kizami.images' => ['yard' => 'Yard', 'garden' => 'Garden'],
         'kizami.contactTargets' => ['call'],
@@ -374,6 +377,36 @@ try {
     // Kirby keeps percent-encoding in the path; it must not be interpreted
     // as HTML afterwards when rendering.
     requestHttp('/contact%3Cscript%3Ealert(1)%3C/script%3E');
+    // The dashboard retires a stale daily key; an anonymous request does not.
+    $keyFile = $tmp . '/storage/kizami/secret.txt';
+    file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
+    requestHttp('/k/dashboard');
+    checkHttp(file_get_contents($keyFile) === "2010-01-01\nSTALE-SECRET-VALUE", 'Dashboard without login leaves a stale key alone');
+    requestHttp('/k/dashboard', $auth);
+    checkHttp(str_starts_with((string) file_get_contents($keyFile), (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\n")
+        && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE'), 'Dashboard with login replaces a stale daily key');
+    // A filtered request (DNT, bot) removes a stale key without counting and
+    // without making a new one; a current key stays; a counted visit still
+    // replaces it.
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    $stale = "2010-01-01\nSTALE-SECRET-VALUE";
+    $rowsBeforeFiltered = rowCount();
+    foreach (['DNT' => 'DNT: 1', 'GPC' => 'Sec-GPC: 1', 'bot' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)'] as $what => $header) {
+        file_put_contents($keyFile, $stale);
+        requestHttp('/', [$header]);
+        checkHttp(!file_exists($keyFile), "A filtered visit ($what) removes a stale daily key");
+        checkHttp(rowCount() === $rowsBeforeFiltered, "A filtered visit ($what) counts nothing");
+    }
+    $currentKey = $today . "\nCURRENT-SECRET-VALUE";
+    file_put_contents($keyFile, $currentKey);
+    requestHttp('/', ['DNT: 1']);
+    requestHttp('/', ['User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)']);
+    checkHttp(file_get_contents($keyFile) === $currentKey, 'A filtered visit leaves a current daily key byte for byte');
+    file_put_contents($keyFile, $stale);
+    requestHttp('/');
+    checkHttp(str_starts_with((string) file_get_contents($keyFile), $today . "\n")
+        && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE') && rowCount() === $rowsBeforeFiltered + 1,
+        'A counted visit still replaces a stale daily key');
     [$status, $html] = requestHttp('/k/dashboard', $auth);
     checkHttp($status === 200 && str_contains($html, 'class="tiles"'), 'Dashboard with login');
     checkHttp(str_contains($html, 'name="viewport"'), 'Dashboard viewport');
@@ -423,6 +456,71 @@ try {
     checkHttp(requestHttp('/k/dashboard', $previewAuth)[0] === 401, 'previewAccess null: preview login no longer accepted');
     writeConfig($config);
 
+    // Dashboard over plain HTTP: refused before any challenge or check.
+    $loginsFile = $tmp . '/storage/kizami/logins.json';
+    @unlink($loginsFile);
+    $noHttps = ['kizami.reportWithoutHttps' => false] + $config;
+    writeConfig($noHttps);
+    foreach (['/k/dashboard', '/k/dashboard.css'] as $route) {
+        [$status, $body, $headers] = requestHttp($route, $auth);
+        checkHttp($status === 403 && $body === 'HTTPS only.', "$route with valid login over HTTP: 403 HTTPS only");
+        checkHttp(preg_grep('/^WWW-Authenticate:/i', $headers) === [], "$route over HTTP sends no challenge");
+        checkHttp(preg_grep('/^Cache-Control: no-store/i', $headers) !== [] && preg_grep('/^X-Robots-Tag: noindex/i', $headers) !== [], "$route refusal not cached or indexed");
+        [$status, $body, $headers] = requestHttp($route);
+        checkHttp($status === 403 && $body === 'HTTPS only.' && preg_grep('/^WWW-Authenticate:/i', $headers) === [], "$route without login over HTTP: 403, not 401");
+        checkHttp(requestHttp($route, ['Authorization: Basic ' . base64_encode('fixture:wrong')])[0] === 403, "$route with wrong login over HTTP: 403");
+    }
+    checkHttp(!is_file($loginsFile), 'Refusal over HTTP counts no failed login');
+    // The escape hatch is the same option as for report and snapshot.
+    writeConfig($config);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200 && requestHttp('/k/dashboard.css', $auth)[0] === 200, 'reportWithoutHttps lets the dashboard work over HTTP');
+    // Module off: Kirby's real 404, also over HTTP (no hint that the module exists).
+    writeConfig(['kizami.active' => false] + $noHttps);
+    foreach (['/k/dashboard', '/k/dashboard.css'] as $route) {
+        [$status, $body] = requestHttp($route, $auth);
+        checkHttp($status === 404 && $body === 'Fixture 404', "$route with the module off stays a real 404 over HTTP");
+    }
+    writeConfig($config);
+
+    // Failed-login limit (default 10 within an hour), per address and per user name.
+    $wrongAuth = ['Authorization: Basic ' . base64_encode('fixture:wrong')];
+    @unlink($loginsFile);
+    for ($i = 1; $i <= 15; $i++) {
+        checkHttp(requestHttp('/k/dashboard')[0] === 401, "Request $i without credentials asks for login");
+    }
+    checkHttp(!is_file($loginsFile), 'Requests without credentials count nothing');
+    for ($i = 1; $i <= 9; $i++) {
+        checkHttp(requestHttp('/k/dashboard', $wrongAuth)[0] === 401, "Wrong password $i: 401");
+    }
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Right password after 9 failures still works');
+    checkHttp(requestHttp('/k/dashboard', $wrongAuth)[0] === 401, 'Wrong password 10: 401');
+    [$status, $body, $headers] = requestHttp('/k/dashboard', $auth);
+    checkHttp($status === 429 && $body === 'Too many failed logins. Try again later.', 'Right password after 10 failures: 429');
+    $retry = array_values(preg_grep('/^Retry-After:/i', $headers));
+    checkHttp(count($retry) === 1 && (int) trim(substr($retry[0], 12)) > 3500 && (int) trim(substr($retry[0], 12)) <= 3600, 'Blocked login says how long to wait');
+    checkHttp(preg_grep('/^WWW-Authenticate:/i', $headers) === [] && preg_grep('/^Cache-Control: no-store/i', $headers) !== [], 'Block sends no challenge and is not cached');
+    [$status, , $headers] = requestHttp('/k/dashboard.css', $auth);
+    checkHttp($status === 429 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'The stylesheet is blocked the same way');
+    checkHttp(requestHttp('/k/dashboard')[0] === 401, 'Without credentials a blocked address still gets the usual challenge');
+    checkHttp(is_file($loginsFile), 'Lockout file is written to storage/kizami');
+    $logins = (string) file_get_contents($loginsFile);
+    checkHttp(is_array(json_decode($logins, true)) && !str_contains($logins, 'fixture') && !str_contains($logins, '127.0.0.1'), 'Lockout file holds neither user name nor address');
+    // Counter-check: the block lives in the file, not in the code.
+    unlink($loginsFile);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Without the lockout file the right password works again');
+    // Blocking by user name alone: another address (here: the counter reset to a
+    // file that only knows the name) is blocked as well.
+    $key = substr(hash('sha256', 'fixture'), 0, 50);
+    file_put_contents($loginsFile, json_encode(['ip' => [], 'user' => [$key => ['time' => time(), 'trials' => 10]]]));
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 429, 'A blocked user name is refused from any address');
+    // A damaged file fails closed.
+    file_put_contents($loginsFile, 'not json');
+    [$status, , $headers] = requestHttp('/k/dashboard', $auth);
+    checkHttp($status === 503 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'Unusable lockout file: 503 without challenge, no access even with the right password');
+    unlink($loginsFile);
+    checkHttp(requestHttp('/k/dashboard', $auth)[0] === 200, 'Lockout file removed: access again');
+    @unlink($loginsFile); // a successful login writes nothing
+
     // Campaign tag: utm_campaign wins; kizami.campaignParam names one more
     // parameter, used only while utm_campaign is empty after cleaning.
     $lastCampaign = function (): string {
@@ -444,6 +542,86 @@ try {
     checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: empty option is not set');
     writeConfig($config);
     checkHttp(requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'Without campaignParam, cam is ignored');
+
+    // Invalid UTF-8. An anonymous request can send any bytes in
+    // Referer and in the redirect's ?from=. They must not reach kizami_events
+    // as invalid UTF-8: json_encode() of the report failed on them, and
+    // /k/report answered 200 with an empty body.
+    $lastRow = function (string $column, string $where = "type='page'"): string {
+        global $tmp;
+        $d = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+        $value = (string) $d->querySingle("SELECT $column FROM kizami_events WHERE $where ORDER BY id DESC LIMIT 1");
+        $d->close();
+        return $value;
+    };
+    $beforeBad = rowCount();
+    checkHttp(requestHttp('/', ['Referer: https://foo' . "\xFF" . '.example/'])[0] === 200, 'Referer with an invalid byte: the page still answers 200');
+    checkHttp(rowCount() === $beforeBad + 1, 'Referer with an invalid byte: the visit is still counted');
+    checkHttp($lastRow('referrer') === '', 'Referer with an invalid byte: no host stored');
+    checkHttp(requestHttp('/', ['Referer: https://foo.example/' . "\xFF"])[0] === 200 && $lastRow('referrer') === 'foo.example', 'Invalid byte after the host: the host is kept');
+    checkHttp(requestHttp('/', ['Referer: https://Search.Example.org/?q=1'])[0] === 200 && $lastRow('referrer') === 'search.example.org', 'Valid referrer unchanged');
+    // Paths. The page path: Kirby keeps percent-encoding, so %FF arrives as
+    // ASCII text and is stored as sent. A raw invalid byte never gets that far
+    // (PHP's test server drops the connection; Kirby's router throws "No
+    // route found" before route:after). The way in with real bytes is the
+    // redirect's ?from=: PHP decodes %FF there, and cleanPath() stores it.
+    foreach (['/%FF', '/a%FFb', '/caf%C3%A9'] as $address) {
+        checkHttp(requestHttp($address)[0] === 404, 'Percent-encoded path answers 404: ' . $address);
+        checkHttp($lastRow('path', "type='notfound'") === $address, 'Percent-encoded path stored as sent (ASCII): ' . $address . ' → ' . $lastRow('path', "type='notfound'"));
+    }
+    $beforeFrom = rowCount();
+    foreach (['%FFx' => '', '%2Fa%FFb' => '', '%2Fa%E2%82' => '', '%2Fcaf%C3%A9' => "/caf\u{E9}", '%2Fok%3Fx%3D%FF' => '/ok'] as $from => $stored) {
+        [$status, , $headers] = requestHttp('/call?from=' . $from, ['Sec-Fetch-User: ?1']);
+        checkHttp($status === 302 && in_array('Location: tel:+498000000', $headers, true), 'Redirect with from=' . $from . ' still redirects');
+        checkHttp($lastRow('path', "type='redirect'") === $stored, 'Redirect from=' . $from . ' stores ' . json_encode($stored, JSON_UNESCAPED_UNICODE) . ', got ' . bin2hex($lastRow('path', "type='redirect'")));
+    }
+    checkHttp(rowCount() === $beforeFrom + 5, 'Redirect with an invalid from= is still counted, just without a path');
+    $db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+    // SQLite has no UTF-8 validity check, so look at the rows in PHP.
+    $invalid = 0;
+    $rows = $db->query('SELECT referrer, path FROM kizami_events');
+    while ($row = $rows->fetchArray(SQLITE3_NUM)) {
+        $invalid += preg_match('//u', (string) $row[0]) === 1 && preg_match('//u', (string) $row[1]) === 1 ? 0 : 1;
+    }
+    checkHttp($invalid === 0, 'No referrer or path with invalid UTF-8 in the database (' . $invalid . ' rows)');
+    $db->close();
+
+    // The report with a row from before the fix: the database may still hold
+    // a host with an invalid byte. Needs the report switched on and an account
+    // with the bundled role (the plugin registers it only with kizami.report).
+    $config['kizami.report'] = true;
+    writeConfig($config);
+    require_once $repo . '/vendor/autoload.php';
+    $setup = new Kirby\Cms\App([
+        'roots' => ['index' => $tmp . '/public', 'base' => $tmp, 'site' => $tmp . '/site', 'content' => $tmp . '/content', 'storage' => $tmp . '/storage', 'accounts' => $tmp . '/site/accounts'],
+        'options' => ['url' => 'http://127.0.0.1:' . $port] + $config,
+    ]);
+    $setup->impersonate('kirby');
+    $setup->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
+    Kirby\Cms\App::destroy();
+    $reportAuth = ['Authorization: Basic ' . base64_encode('report@example.invalid:report-password-very-long-123')];
+    $yesterday = (new DateTimeImmutable('yesterday 12:00', new DateTimeZone('Europe/Berlin')))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    $db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+    // CAST(… AS TEXT): a row written by Store is TEXT, a bare X'…' would be a BLOB.
+    $db->exec("INSERT INTO kizami_events (created_at, type, action, path, target, referrer, utm_source, utm_medium, utm_campaign, session, device, position, seconds)
+        VALUES ('$yesterday', 'page', 'view', '/', '', CAST(X'666F6FFF2E6578616D706C65' AS TEXT), '', '', '', 'legacy-1', 'desktop', '', 0)");
+    $db->exec("INSERT INTO kizami_events (created_at, type, action, path, target, referrer, utm_source, utm_medium, utm_campaign, session, device, position, seconds)
+        VALUES ('$yesterday', 'page', 'view', CAST(X'2F61FF62' AS TEXT), '', 'google.com', '', '', '', 'legacy-2', 'desktop', '', 0)");
+    checkHttp($db->querySingle("SELECT typeof(referrer) || ':' || hex(referrer) FROM kizami_events WHERE session='legacy-1'") === 'text:666F6FFF2E6578616D706C65', 'Fixture row: the invalid host really is stored as TEXT');
+    $db->close();
+    [$status, $body, $headers] = requestHttp('/k/report?kind=day', $reportAuth);
+    checkHttp($status === 200 && strlen($body) > 0, 'Report with a stored invalid host: a body, not an empty 200 (status ' . $status . ', ' . strlen($body) . ' bytes)');
+    checkHttp(preg_grep('#^Content-Type: application/json#i', $headers) !== [], 'Report with a stored invalid host: JSON content type');
+    $report = json_decode($body, true);
+    checkHttp(json_last_error() === JSON_ERROR_NONE && is_array($report) && $report['ok'] === true && $report['format'] === 2, 'Report with a stored invalid host: valid JSON, ok, format 2');
+    checkHttp(($report['sources']["foo\u{FFFD}.example"] ?? null) === 1, 'Report: the invalid host appears with U+FFFD: ' . json_encode(array_keys($report['sources'] ?? []), JSON_UNESCAPED_UNICODE));
+    checkHttp(($report['pages']["/a\u{FFFD}b"] ?? null) === 1, 'Report: the invalid path appears with U+FFFD: ' . json_encode(array_keys($report['pages'] ?? []), JSON_UNESCAPED_UNICODE));
+    checkHttp(str_contains($report['text'], "foo\u{FFFD}.example"), 'Report: the text shows the substituted host');
+    // The dashboard shows the same row, not an empty cell.
+    [$status, $html] = requestHttp('/k/dashboard?days=7', $auth);
+    checkHttp($status === 200 && str_contains($html, "foo\u{FFFD}.example"), 'Dashboard shows the stored invalid host with U+FFFD');
+    unset($config['kizami.report']); // reportWithoutHttps stays: the fixture speaks HTTP
+    writeConfig($config);
 
     // Server handles sequential requests, no open request/DB writer here.
     foreach (glob($tmp . '/storage/kizami/kizami.sqlite*') as $file) { unlink($file); }

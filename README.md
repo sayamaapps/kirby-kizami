@@ -7,7 +7,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 - **Server-side.** Page views are counted in Kirby's `route:after` hook. Ad blockers don't affect it, and no tracking script is needed.
 - **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device. Data stays in one SQLite file outside the web root.
 - **Honours Do Not Track and Global Privacy Control.** With `DNT: 1` or `Sec-GPC: 1`, nothing is recorded.
-- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is overwritten every day (Europe/Berlin). Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
+- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is replaced every day (Europe/Berlin): on the first counted visit of a day and by the dashboard, the report and snapshot routes. A key of an earlier day is also deleted on every page request, a filtered one (DNT/GPC, bot) included, and by the maintenance job. Set up the job when the site may go days without a visit. Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
 - **Counts what small businesses care about.** Phone calls, route requests and e-mail clicks go through counted redirects such as `/call` → `tel:…`. No JavaScript is involved, and the dashboard shows contact rates per source and landing page.
 - **Optional actions.** Downloads, video plays or newsletter openings can be counted with a small script from the site's own server (see [Actions](#actions)). Off unless configured.
 - **Bot and crawler filtering.** User-agent filtering plus a redirect-click filter based on Fetch Metadata and the visitor's same-day page views (see [Counting rules](#counting-rules)).
@@ -19,7 +19,7 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 
 - PHP 8.2–8.4 with the `sqlite3` extension
 - Kirby 5
-- A writable Kirby `storage` root, ideally outside the web root. Data lives in `<storage>/kizami/`.
+- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the error log gets the message, a Panel user sees it in the dashboard and the file login answers 503 and points to the error log.
 
 ## Installation
 
@@ -32,10 +32,27 @@ Composer installs the plugin into `site/plugins/kizami/` (via `getkirby/composer
 Until the package is on Packagist, add the repository first:
 
 ```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/simsimmal/kirby-kizami" }]
+"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-kizami" }]
 ```
 
 Manual installation (download into `site/plugins/kizami/`) also works. The plugin loads its own classes and has no runtime dependencies.
+
+A stock Kirby has no `storage` root, so the `kizami.active` example below does nothing on it. Define the root in `index.php`, with the web server pointing at `public/` and `storage/` as its sibling:
+
+```php
+<?php
+$base = dirname(__DIR__);
+require $base . '/vendor/autoload.php';
+echo (new Kirby\Cms\App([
+    'roots' => [
+        'index'   => __DIR__,
+        'base'    => $base,
+        'content' => $base . '/content',
+        'site'    => $base . '/site',
+        'storage' => $base . '/storage',
+    ],
+]))->render();
+```
 
 ## Configuration
 
@@ -66,6 +83,8 @@ Dashboard access: create `site/config/kizami.php` (keep it out of git) with a bc
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
 
+The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one. Whoever knows the user name can lock the file login for an hour with ten failed attempts from any address (the Panel login is not affected). The limit slows guessing from one address; it does not replace a strong password, as changing addresses and invented names are not counted together.
+
 ### Options
 
 All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set".
@@ -84,8 +103,9 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `images` | `[]` | Allowed image IDs for gallery-open counting (needs the site's gallery script, see [Beacons](#beacons)). |
 | `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
 | `events` | `[]` | Allowed actions for `/k/event`: `key => ['label' => ['de' => …, 'en' => …], 'detail' => true\|false]`. See [Actions](#actions). |
+| `retentionMonths` | `13` | Months that single events and reported actions are kept. Older single events are rolled up into daily totals, older actions are deleted. A whole number from 1 to 600; anything else is logged and 13 is used. Lowering the value takes effect at the next maintenance run; raising it does not bring back deleted data. See [Maintenance](#maintenance). |
 | `gaps` | `[]` | Measurement gaps: periods in which counting was interrupted, `['from' => 'Y-m-d H:i', 'to' => 'Y-m-d H:i', 'reason' => '…']` (`to` may be left out for an open gap). See [Measurement gaps](#measurement-gaps). |
-| `ownHosts` | `[]` | Additional own domains whose referrers count as internal. |
+| `ownHosts` | `[]` | Additional own domains whose referrers count as internal — at capture and in the dashboard, with or without `www.`, so rows recorded before a host was listed do not show the own site as a source. |
 | `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
 | `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
 | `brand` | site title | Name in the dashboard title and the report (string or closure). |
@@ -97,7 +117,7 @@ All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set"
 | `reportRoles` | `['kizami-report']` | Roles allowed to read the report. Admins are deliberately not allowed by default. |
 | `journal` | `'wal'` | SQLite journal mode: `'wal'` or `'delete'`. Use `'delete'` on shared hosters where WAL is unreliable (old SQLite, network file systems, "disk I/O error" in `storage/kizami/errors.log`): one file, no `-wal`/`-shm`. Takes effect on the next request. |
 | `siteId` | site hostname | Site identifier (`site`) in the report. Set it explicitly so it survives a domain change. |
-| `reportWithoutHttps` | `false` | Allow the report and snapshot over plain HTTP. Local testing only. |
+| `reportWithoutHttps` | `false` | Allow the dashboard, report and snapshot over plain HTTP. Local testing only. |
 | `snapshot` | `false` | Enable `/k/snapshot` (also requires `active`). Registers the Panel role `kizami-snapshot` (no Panel access). |
 | `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. Separate from the report role on purpose: the snapshot contains raw events. |
 
@@ -182,7 +202,7 @@ Don't put names, e-mail addresses or other personal data into details.
 
 The rules of `/k/event` apply, except `Origin` and `Sec-Fetch-Site`, which only make sense for a beacon: only keys listed in `kizami.events` count (a key that is not, or no longer, configured counts nothing, without an error), a detail is kept and cleaned only for `'detail' => true`, bots, an empty user agent, `DNT: 1` and `Sec-GPC: 1` are not counted, the day identifier is the one of the visit, and the path is the page's (`/` and its ID, as above; nothing for the error page). `HEAD` requests count nothing. The method never throws: errors go to PHP's error log and the page is returned either way. It writes once to the database like a page view does. Every call counts, so call it once per request. In a template or controller, mind Kirby's page cache: a cached page is served without running either, so count in a route or keep that page out of the cache.
 
-The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same five-year retention as single events. They are not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
+The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same retention as single events (`kizami.retentionMonths`, 13 months by default). They are deleted, not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
 
 ### Measurement gaps
 
@@ -237,9 +257,9 @@ Gaps don't change any number. They only mark: visits on a gap day are as recorde
 - **CLI:** `php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite` (also `vendor/bin/kizami-snapshot`).
 - **HTTP**, for hosts without a shell or cron: `GET /k/snapshot` with Basic Auth (enable with `kizami.snapshot`). It returns the snapshot as `application/vnd.sqlite3` and puts the SHA-256 in `X-Kizami-Sha256`.
 
-Both use SQLite's online backup API (available since 3.6.11) and run `PRAGMA integrity_check` on the copy. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
+Both use SQLite's online backup API (available since 3.6.11), rebuild the copy with `VACUUM` so it carries no free pages (and no bytes of deleted events), and run `PRAGMA integrity_check` on it. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
 
-Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges events older than five years into daily totals. The same thing happens automatically on the first request of each day.
+Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges single events older than `kizami.retentionMonths` (13 months by default) into daily totals and deletes reported actions of that age. The same thing happens automatically on the first request of each day. The job has no Kirby options: if the site sets `kizami.retentionMonths`, pass the same value, for example `php site/plugins/kizami/maintenance.php --retention-months=24 compact /abs/path/storage/kizami`, or the job uses 13 months. Rolled-up details and deleted actions cannot be restored. Deleted events are no longer contained in the database file (`secure_delete`, then a rebuild) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file with `VACUUM` once to clear bytes left by earlier versions, after every roll-up that deleted events, and whenever free pages exist. A rebuild needs up to twice the file size in free disk space for a while and blocks writers while it runs (5 s busy timeout, after that page views are lost), so on a large file run the CLI job first and not as the first dashboard call. The job also removes a stale daily key (it never creates one, so no file owned by the cron user appears) and reports `stale daily key removed` or `daily key current`, so schedule it daily if the site may go days without a page request. Without any of these the previous key stays on disk.
 
 ## Counting rules
 

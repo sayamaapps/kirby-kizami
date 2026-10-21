@@ -59,12 +59,12 @@ final class Report
      * - a day that is not over yet (today, future, current week) — the
      *   number would be incomplete and still look final;
      * - a period whose comparison week lies before the retention limit of
-     *   single events (five years, Store::compact()). After that only daily
-     *   totals exist, the report would silently show zeros.
+     *   single events (`$retentionMonths`, Store::compact()). After that only
+     *   daily totals exist, the report would silently show zeros.
      *
      * @throws \InvalidArgumentException with a message for the caller
      */
-    public static function referenceDay(string $kind, ?string $date, \DateTimeImmutable $today): \DateTimeImmutable
+    public static function referenceDay(string $kind, ?string $date, \DateTimeImmutable $today, int $retentionMonths = Store::RETENTION_MONTHS): \DateTimeImmutable
     {
         $berlin = new \DateTimeZone('Europe/Berlin');
         $today = $today->setTimezone($berlin)->setTime(0, 0, 0);
@@ -85,8 +85,8 @@ final class Report
         }
         // Earliest comparison day: seven days before the period starts.
         $comparisonStart = $reference->modify($kind === 'week' ? '-14 days' : '-8 days');
-        if ($comparisonStart < $today->modify('-5 years')) {
-            throw new \InvalidArgumentException('Single events are kept for five years only; there is no basis for ' . $date . '.');
+        if ($comparisonStart < $today->modify('-' . $retentionMonths . ' months')) {
+            throw new \InvalidArgumentException('Single events are kept for ' . $retentionMonths . ' months only; there is no basis for ' . $date . '.');
         }
         return $reference;
     }

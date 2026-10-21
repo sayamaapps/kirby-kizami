@@ -11,8 +11,10 @@ require_once __DIR__ . '/src/Gaps.php';
 require_once __DIR__ . '/src/Secret.php';
 require_once __DIR__ . '/src/Store.php';
 require_once __DIR__ . '/src/Migration.php';
+require_once __DIR__ . '/src/Setup.php';
 require_once __DIR__ . '/src/Redirect.php';
 require_once __DIR__ . '/src/Access.php';
+require_once __DIR__ . '/src/Lockout.php';
 require_once __DIR__ . '/src/Names.php';
 require_once __DIR__ . '/src/Comparison.php';
 require_once __DIR__ . '/src/Chart.php';
@@ -21,6 +23,7 @@ require_once __DIR__ . '/src/Analysis.php';
 require_once __DIR__ . '/src/Report.php';
 require_once __DIR__ . '/src/ReportError.php';
 require_once __DIR__ . '/src/ReportService.php';
+require_once __DIR__ . '/src/SnapshotResponse.php';
 require_once __DIR__ . '/src/SnapshotService.php';
 
 use Kizami\Access;
@@ -31,7 +34,10 @@ use Kizami\Events;
 use Kizami\Fonts;
 use Kizami\Gaps;
 use Kizami\I18n;
+use Kizami\Lockout;
 use Kizami\Migration;
+use Kizami\Setup;
+use Kizami\SetupError;
 use Kizami\Names;
 use Kizami\Options;
 use Kizami\Redirect;
@@ -69,16 +75,42 @@ function kizami_option(string $key, mixed $default = null): mixed
 /** Opens the site's database with the configured journal mode (`kizami.journal`). */
 function kizami_store(): Store
 {
-    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')));
+    return new Store(kizami_directory() . '/' . Store::FILE, Store::journal(kizami_option('journal')), kizami_own_hosts(), Options::retentionMonths(App::instance()));
+}
+
+/** The site's own hosts (index URL plus `kizami.ownHosts`): referrers from them are internal, not a source. */
+function kizami_own_hosts(): array
+{
+    return [parse_url(App::instance()->url('index'), PHP_URL_HOST), ...(array) kizami_option('ownHosts', [])];
 }
 
 /**
- * Directory of the SQLite file and the secret, outside the web root. Moves
- * the pre-1.0 directory storage/kennzahlen/ on first use (src/Migration.php).
+ * Directory of the SQLite file and the secret, outside the web root. Throws
+ * SetupError for a missing storage root or one inside the web root
+ * (src/Setup.php). Moves the pre-1.0 directory storage/kennzahlen/ on first
+ * use (src/Migration.php).
  */
 function kizami_directory(): string
 {
-    return Migration::storage(App::instance()->root('storage'));
+    $kirby = App::instance();
+    return Migration::storage(Setup::storageRoot($kirby->root('storage'), $kirby->root('index')));
+}
+
+/**
+ * Retire a stale daily key outside a counted visit (dashboard, report and
+ * snapshot after authentication). The Berlin day as in kizami_write(); never
+ * throws, a failure only reaches the error log.
+ */
+function kizami_rotate_secret(): void
+{
+    try {
+        $day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+        if (!Secret::rotate(kizami_directory(), $day)) {
+            error_log('Kizami: stale daily key could not be replaced');
+        }
+    } catch (\Throwable $e) {
+        error_log('Kizami: daily key rotation failed: ' . $e->getMessage());
+    }
 }
 
 /**
@@ -122,28 +154,34 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
             return;
         }
 
+        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin'));
+        $directory = kizami_directory();
+
+        // A filtered request is still a request: yesterday's key must not
+        // outlive the day because nobody was counted. Removed, not replaced:
+        // no key is needed here.
         $server = $_SERVER;
         if (Capture::optedOut($server)) {
+            Secret::expire($directory, $now->format('Y-m-d'));
             return;
         }
         $ua = $server['HTTP_USER_AGENT'] ?? '';
         if (Capture::isBot($ua)) {
+            Secret::expire($directory, $now->format('Y-m-d'));
             return;
         }
 
         $row = is_callable($row) ? $row() : $row;
-        $now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin'));
 
         // Pass the date: the secret rotates daily (see Secret.php). The same
         // zone as in the hash, otherwise secret and hash rotate at different
         // times.
-        $directory = kizami_directory();
         $secret = Secret::get($directory, $now->format('Y-m-d'));
         if ($secret === '') {
             return; // no secret, no capture
         }
 
-        $store = new Store($directory . '/' . Store::FILE, Store::journal(kizami_option('journal')));
+        $store = new Store($directory . '/' . Store::FILE, Store::journal(kizami_option('journal')), [], Options::retentionMonths(App::instance()));
         $session = Capture::sessionHash(
             $server['REMOTE_ADDR'] ?? '0.0.0.0',
             $ua,
@@ -170,7 +208,8 @@ function kizami_write(array|callable $row, ?callable $counts = null): void
     } catch (\Throwable $e) {
         // A missing statistics row has no consequences. A broken page and a
         // lost phone call do.
-        error_log('Kizami: ' . $e->getMessage());
+        // A setup error's message already says "Kizami: …".
+        error_log($e instanceof SetupError ? $e->getMessage() : 'Kizami: ' . $e->getMessage());
     }
 }
 
@@ -365,7 +404,11 @@ App::plugin('sayamaapps/kizami', [
             // Noticed on a real project on 20.09.2026.
             $origin = $this->isHomePage() ? '/' : '/' . $this->uri();
 
-            return '/' . $name . '?from=' . rawurlencode($origin)
+            // Under a subdirectory install the route lives below the index
+            // URL; `from` stays the page path, so the statistics do not change.
+            $base = rtrim((string) parse_url(App::instance()->url('index'), PHP_URL_PATH), '/');
+
+            return $base . '/' . $name . '?from=' . rawurlencode($origin)
                 . (array_key_exists($position, (array) kizami_option('positionNames', [])) ? '&position=' . rawurlencode($position) : '');
         },
         /**
@@ -437,10 +480,7 @@ App::plugin('sayamaapps/kizami', [
                     'type'         => 'page',
                     'action'       => 'view',
                     'path'         => Capture::cleanPath('/' . ltrim((string) $path, '/')),
-                    'referrer'     => Capture::cleanReferrer($_SERVER['HTTP_REFERER'] ?? null, [
-                        parse_url(App::instance()->url('index'), PHP_URL_HOST),
-                        ...(array) kizami_option('ownHosts', []),
-                    ]),
+                    'referrer'     => Capture::cleanReferrer($_SERVER['HTTP_REFERER'] ?? null, kizami_own_hosts()),
                     'utm_source'   => Capture::cleanId(get('utm_source')),
                     'utm_medium'   => Capture::cleanId(get('utm_medium')),
                     'utm_campaign' => kizami_campaign(),
@@ -568,8 +608,8 @@ App::plugin('sayamaapps/kizami', [
                         return kizami_not_found();
                     }
 
-                    if (!kizami_access_granted()) {
-                        return kizami_deny();
+                    if ($refused = kizami_dashboard_refused()) {
+                        return $refused;
                     }
 
                     $days = (int) (get('days') ?? 30);
@@ -582,6 +622,7 @@ App::plugin('sayamaapps/kizami', [
                     try {
                         $store = kizami_store();
                         $store->compact();
+                        kizami_rotate_secret();
                         $names = new Names(
                             (array) kizami_option('targetNames', []),
                             (array) kizami_option('sourceNames', []),
@@ -607,7 +648,17 @@ App::plugin('sayamaapps/kizami', [
                         error_log('Kizami: dashboard not available: ' . $e->getMessage());
                         kizami_log_error($e);
                         $data = ['days' => $days, 'error' => true, 'brand' => Options::brand($kirby)];
+                        if ($e instanceof SetupError) {
+                            $data['setup'] = $e->getMessage();
+                        }
                     }
+
+                    // Under a subdirectory install /k/ lives below the index
+                    // URL. A path, not the full URL, like redirectLink(): if the
+                    // `url` option differs from the host of the request or says
+                    // http://, an absolute link would load cross-origin or as
+                    // mixed content, and the browser would not send the login.
+                    $data['cssUrl'] = rtrim((string) parse_url($kirby->url('index'), PHP_URL_PATH), '/') . '/k/dashboard.css';
 
                     $html = (function () use ($data) {
                         ob_start();
@@ -660,8 +711,8 @@ App::plugin('sayamaapps/kizami', [
                     if (kizami_option('active', false) !== true) {
                         return kizami_not_found();
                     }
-                    if (!kizami_access_granted()) {
-                        return kizami_deny();
+                    if ($refused = kizami_dashboard_refused()) {
+                        return $refused;
                     }
 
                     $base = (string) kizami_option('color', '#2f4f2a');
@@ -760,6 +811,35 @@ App::plugin('sayamaapps/kizami', [
 unset($kizamiTranslations);
 
 /**
+ * The dashboard's gate for /k/dashboard and /k/dashboard.css, after the check
+ * that the module is on: null = let in, otherwise the response to send.
+ *
+ * HTTPS first and before any challenge: a Basic Auth password sent over plain
+ * HTTP travels in the clear, and a 401 with WWW-Authenticate would make the
+ * browser ask for exactly that. So over HTTP nobody is prompted and nobody is
+ * checked — the Panel cookie included; the dashboard is HTTPS only for
+ * everyone. Same rule and same escape hatch (`kizami.reportWithoutHttps`) as
+ * /k/report and /k/snapshot. Where the dashboard would answer Kirby's 404
+ * anyway (preview, no access file), that 404 stays: a 403 would give away
+ * that the module runs here.
+ */
+function kizami_dashboard_refused(): ?Response
+{
+    $kirby = App::instance();
+    if ($kirby->request()->ssl() === false && kizami_option('reportWithoutHttps', false) !== true) {
+        $denial = kizami_deny();
+        if ($denial->code() !== 401) {
+            return $denial;
+        }
+        return new Response('HTTPS only.', 'text/plain', 403, [
+            'Cache-Control' => 'no-store',
+            'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
+        ]);
+    }
+    return kizami_access_denied();
+}
+
+/**
  * Build phase vs. live:
  * - Build phase (`kizami.previewAccess` returns credentials, the site sits
  *   behind its own preview protection): check the same preview credentials
@@ -768,19 +848,24 @@ unset($kizamiTranslations);
  *   secrets).
  * - Live (`kizami.previewAccess` unset or null): own bcrypt auth from
  *   site/config/kizami.php OR Panel login.
+ *
+ * Returns null when access is granted, otherwise the response to send: the
+ * usual denial (kizami_deny), or 429 once the failed-login limit is reached
+ * (src/Lockout.php). Only submitted credentials that turn out wrong count;
+ * a request without credentials (the browser's first visit) does not.
  */
-function kizami_access_granted(): bool
+function kizami_access_denied(): ?Response
 {
     try {
         $preview = Options::previewCredentials(App::instance());
         if ($preview === null && App::instance()->user()) {
-            return true;
+            return null;
         }
         $file = Options::accessFile(App::instance());
         $credentials = $preview ?? (file_exists($file) ? require $file : null);
     } catch (\Throwable $e) {
         error_log('Kizami: access configuration unusable');
-        return false;
+        return kizami_deny();
     }
 
     $user = $_SERVER['PHP_AUTH_USER'] ?? null;
@@ -795,8 +880,78 @@ function kizami_access_granted(): bool
             }
         }
     }
+    if ($user === null || $password === null) {
+        return kizami_deny();
+    }
 
-    return Access::checkFile(is_array($credentials) ? $credentials : null, $user, $password);
+    // Kirby's own limit would only fit Kirby accounts (see src/Lockout.php),
+    // but its two options stay the one place to configure it.
+    $kirby = App::instance();
+    $ip = (string) $kirby->visitor()->ip();
+    try {
+        $directory = kizami_directory();
+    } catch (SetupError $e) {
+        // No usable storage, so no counters and no login: deny without
+        // checking the password.
+        error_log($e->getMessage());
+        return kizami_login_unavailable('Kizami: setup error, see the error log.');
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+        return kizami_login_unavailable('Kizami: login limit unavailable, see the error log.');
+    }
+    try {
+        $lockout = new Lockout(
+            $directory . '/' . Lockout::FILE,
+            max(1, (int) $kirby->option('auth.trials', 10)),
+            max(1, (int) $kirby->option('auth.timeout', 3600))
+        );
+        // Checked before password_verify(): a blocked request costs the same
+        // whatever it sends.
+        $wait = $lockout->retryAfter($ip, $user);
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+        return kizami_login_unavailable('Kizami: login limit unavailable, see the error log.');
+    }
+    if ($wait > 0) {
+        // Where the module hides behind Kirby's 404 (preview, no access file),
+        // a 429 would give it away.
+        $denial = kizami_deny();
+        if ($denial->code() !== 401) {
+            return $denial;
+        }
+        // Not another 401: the browser would ask again and never say why.
+        return new Response('Too many failed logins. Try again later.', 'text/plain', 429, [
+            'Retry-After'   => (string) max(1, $wait),
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
+    if (Access::checkFile(is_array($credentials) ? $credentials : null, $user, $password)) {
+        return null;
+    }
+    try {
+        $lockout->fail($ip, $user);
+    } catch (\Throwable $e) {
+        error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
+    }
+    return kizami_deny();
+}
+
+/**
+ * No login possible right now (storage not set up, lockout file unusable):
+ * where the file login would challenge (401), a 503 with a pointer to the
+ * error log instead — a 401 would make the browser ask again for ever and
+ * never say why; no path in the text, the visitor is not authenticated.
+ * Where the module hides behind Kirby's 404 anyway (preview, no access
+ * file), that 404 stays.
+ */
+function kizami_login_unavailable(string $text): Response
+{
+    $denial = kizami_deny();
+    if ($denial->code() !== 401) {
+        return $denial;
+    }
+    return new Response($text, 'text/plain', 503, ['Cache-Control' => 'no-store']);
 }
 
 /**

@@ -12,7 +12,7 @@
 use Kizami\Chart;
 use Kizami\I18n;
 
-$e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+$e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $t = fn (string $key, array $values = []) => $e(I18n::t($key, $values));
 $days = (int) ($data['days'] ?? 30);
 $failed = !empty($data['error']) || !empty($data['technical']['schema'] ?? []) || (($data['technical']['writeError'] ?? null) !== null);
@@ -32,7 +32,7 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title><?= $e($data['brand'] ?? '') ?> · <?= $t('dashboard.title') ?></title>
-<link rel="stylesheet" href="/k/dashboard.css">
+<link rel="stylesheet" href="<?= $e($data['cssUrl'] ?? '/k/dashboard.css') ?>">
 </head>
 <body>
 <main>
@@ -50,6 +50,9 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
 
 <?php if ($failed): ?>
 <p class="warning"><?= $t('dashboard.unavailable') ?></p>
+<?php if (!empty($data['setup'])): ?>
+<p class="warning"><?= $e($data['setup']) ?></p>
+<?php endif; ?>
 <?php endif; ?>
 
 <?php if (empty($data['error'])): ?>

@@ -14,7 +14,10 @@ use Throwable;
  * Off by default, twice: without `kizami.active` AND `kizami.report` the
  * route answers with Kirby's real 404, like the dashboard.
  *
- * Read-only, only for Kirby accounts with a role from `kizami.reportRoles`
+ * Read-only for the visitor data, but not free of side effects: after login
+ * the route runs maintenance like the dashboard (rolling up old days,
+ * rebuilding the file when free pages exist, replacing a stale daily key).
+ * Only for Kirby accounts with a role from `kizami.reportRoles`
  * (default: the bundled role `kizami-report` without Panel access and
  * without permissions). An admin account deliberately does NOT get through:
  * its password belongs in no cron job. Login via Basic Auth against Kirby's
@@ -47,6 +50,7 @@ final class ReportService
         I18n::setLanguage(Options::language($kirby));
         try {
             self::authenticate($kirby);
+            kizami_rotate_secret();
             $kind = $kirby->request()->get('kind', 'day');
             if (!in_array($kind, Report::KINDS, true)) {
                 throw new ReportError('"kind" must be "day" or "week".');
@@ -56,12 +60,21 @@ final class ReportService
                 throw new ReportError('"date" must be a valid YYYY-MM-DD.');
             }
             try {
-                $reference = Report::referenceDay($kind, $date, $now);
+                $reference = Report::referenceDay($kind, $date, $now, Options::retentionMonths($kirby));
             } catch (\InvalidArgumentException $e) {
                 throw new ReportError($e->getMessage());
             }
 
             $store = kizami_store();
+            // As in the dashboard: a site whose dashboard is rarely opened
+            // still gets its maintenance from the daily script call.
+            // Maintenance must not cost the report: before it existed here, the
+            // report also worked on a read-only database.
+            try {
+                $store->compact();
+            } catch (\Throwable $e) {
+                error_log('Kizami: maintenance in report skipped: ' . $e->getMessage());
+            }
             $names = new Names(
                 (array) Options::get($kirby, 'targetNames', []),
                 (array) Options::get($kirby, 'sourceNames', []),
@@ -144,14 +157,33 @@ final class ReportService
         }
     }
 
+    /** Body of the 500 when the data cannot be encoded: a literal, so it cannot fail itself. */
+    public const ENCODING_ERROR_BODY = '{"ok":false,"error":"Internal error."}';
+
+    /**
+     * The JSON response, encoded here and not by Kirby (since 1.6.1):
+     * Response::json() turns a failed json_encode() into an empty body and
+     * keeps the status — a 200 with no JSON, which a reading script cannot
+     * tell from a working route. Invalid UTF-8 (a stored value from before
+     * the input was checked) becomes U+FFFD; anything else that cannot be
+     * encoded is logged and answered with a 500 and a fixed JSON body. Never
+     * a 200 without JSON. Same flags as Kirby's pretty printing, so valid
+     * data gives the same bytes as before.
+     */
     public static function json(array $data, int $status): Response
     {
+        $body = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+        if ($body === false) {
+            error_log('Kizami: report not encodable: ' . json_last_error_msg());
+            $body = self::ENCODING_ERROR_BODY;
+            $status = 500;
+        }
         // Pass headers on creation: Kirby's Response::header() only reads,
         // a later header('Cache-Control', …) would set nothing.
         $headers = ['Cache-Control' => 'no-store', 'X-Robots-Tag' => 'noindex, nofollow, noarchive'];
         if ($status === 401) {
             $headers['WWW-Authenticate'] = 'Basic realm="Kizami", charset="UTF-8"';
         }
-        return Response::json($data, $status, true, $headers);
+        return Response::json($body, $status, null, $headers);
     }
 }

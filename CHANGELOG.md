@@ -13,6 +13,193 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.8.0] — 2026-10-20
+
+### Changed
+
+- **Single events and reported actions are kept 13 months instead of five
+  years** **[privacy text]**: the new option `kizami.retentionMonths` sets the
+  period (a whole number from 1 to 600, default 13; anything else is logged and
+  13 is used). Single events older than the period are rolled up into daily
+  totals as before, and the daily totals (views, clicks, devices) are kept
+  forever. Reported actions older than the period are deleted, not rolled up.
+  `DATENSCHUTZ.md` and `PRIVACY.md` state 13 months and the option.
+- **Irreversible on the first maintenance run after the update** (the first
+  counted request of the day, the dashboard, `/k/report` or `maintenance.php
+  compact`): single events older than 13 months are rolled up, and their details
+  (pages, sources, devices, link targets, dwell time) are gone for good. Actions
+  older than 13 months are deleted for good. A site that wants the old period
+  must set `kizami.retentionMonths` to 60 before updating, and its cron job for
+  `maintenance.php` must pass `--retention-months=60`.
+- `maintenance.php` accepts `--retention-months=N` (same validation as the
+  option), because the job has no Kirby options of its own.
+- The report's `date` parameter refuses a comparison day or week before the
+  limit of single events; the error names the retention in months (it said
+  "five years"). The report JSON is unchanged. No schema change.
+
+## [1.7.1] — 2026-10-17
+
+### Fixed
+
+- **A stale daily key is now also removed on a filtered visit, and the
+  maintenance job no longer creates one** **[privacy text]**: since 1.7.0 the
+  key rotated outside counted visits only through the authenticated
+  dashboard, `/k/report` and `/k/snapshot` and through `maintenance.php`, so a
+  site that only gets filtered visitors (Do Not Track, Global Privacy
+  Control, bots) and whose operator opens none of these kept yesterday's key.
+  `maintenance.php` runs as the cron user: the `secret.txt` it created
+  belonged to that user, the web server could not read it and made its own at
+  the next visit. New `Secret::expire()` removes a stale key and never
+  creates one (a missing or current file is untouched). `kizami_write()`
+  calls it before it returns for a filtered request, and `maintenance.php`
+  uses it instead of `rotate()`: it reports `stale daily key removed`,
+  `daily key current` or `no daily key` (instead of `stale daily key
+  replaced`) and exits 1 only when a stale key cannot be removed. Dashboard,
+  report and snapshot still replace the key after authentication. No schema
+  change.
+
+## [1.7.0] — 2026-10-17
+
+### Fixed
+
+- **Deleted events no longer stay behind in the database file and in new
+  snapshots** **[privacy text]**: `compact()` removed events older than five
+  years with a plain `DELETE`, and SQLite keeps the bytes of deleted rows in
+  the file (and the backup API copies them into every snapshot). Every
+  connection now runs with `PRAGMA secure_delete = ON`. `compact()`, and so
+  the dashboard and `maintenance.php compact`, also rebuilds the file with
+  `VACUUM` once per database file (marked in the header field `user_version`),
+  after every roll-up that deleted events (the mark is cleared, also by the
+  roll-up in a visitor's request) and whenever free pages exist, because
+  SQLite does not rewrite a page that becomes free and old builds (3.7.17)
+  leave parts of a deleted row in a page that stays in use. `/k/report` now runs `compact()` like the dashboard (after
+  authentication), so a site that only fetches the report still gets this
+  maintenance; if the rebuild fails, the failure is logged and the report and
+  dashboard are still delivered. The rebuild needs up to twice the file size
+  in free disk space for a while and blocks writers while it runs (5 s busy
+  timeout, after that page views are lost): on a large file run
+  `maintenance.php compact` first, so the first rebuild does not happen in a
+  dashboard call. The deleted contents are no longer contained in the database
+  file; journal and WAL files are deleted, not zeroed. The visitor's request never runs `VACUUM`: leftovers from the
+  daily roll-up in a visitor's request stay until the next of these runs. `Store::snapshot()`
+  rebuilds the copy with `VACUUM` before `integrity_check`, so a snapshot
+  carries no free pages whatever the state of the source; the checksum of
+  `/k/snapshot` is computed on that file. No schema change.
+- **The daily key now also rotates without a counted visit**
+  **[privacy text]**: `Secret::get()` replaced the key only on a counted
+  visit, so a quiet site, a switched-off module or only filtered visitors left
+  the last day's key on disk indefinitely. New `Secret::rotate()` replaces a
+  stale key (a missing file stays missing, a current key is untouched); the
+  dashboard, `/k/report` and `/k/snapshot` (after authentication, never for
+  anonymous requests) and `maintenance.php` call it. The job reports
+  `stale daily key replaced` or `daily key current`, and exits 1 when a stale
+  key cannot be replaced. No schema change.
+- **The dashboard's login no longer works over plain HTTP**: `/k/dashboard`
+  and `/k/dashboard.css` checked the Basic Auth login whatever the protocol,
+  so a reusable password could travel unencrypted, and the 401 made the
+  browser ask for it. Both routes now answer `403` `HTTPS only.` (no
+  `WWW-Authenticate`, `Cache-Control: no-store`) before any challenge or
+  check, the Panel cookie included, with the same rule and the same option as
+  `/k/report` and `/k/snapshot`: `kizami.reportWithoutHttps`, now documented
+  for the dashboard too. Behind a reverse proxy Kirby must see HTTPS
+  (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option). A site with
+  the module off still answers Kirby's real 404. No schema change.
+- **Failed dashboard logins are now limited**: the file login
+  (`site/config/kizami.php`, or `kizami.previewAccess`) ran `password_verify()`
+  for every request, with no limit on wrong passwords. New `Kizami\Lockout`
+  counts failed logins per client address and per user name in
+  `storage/kizami/logins.json` (hashes only, no address or name in plain text)
+  and uses Kirby's own limits, `auth.trials` (10) and `auth.timeout` (3600
+  seconds). Once reached, the login answers `429` with `Retry-After` and no
+  challenge, without running `password_verify()`; a request without
+  credentials never counts, a successful login does not reset the counters.
+  If the file cannot be read, the login answers `503` pointing to the error
+  log (no challenge, no password check); a failure only while counting a
+  wrong password is logged and answered with the usual `401`. The address is `REMOTE_ADDR`: behind a reverse proxy all visitors
+  share one address unless Kirby sees the real one. The Panel-cookie login
+  is not affected. No schema change.
+- **A storage root inside the web root, or none at all, is now refused with
+  a clear message**: Kizami wrote `kizami.sqlite` and `secret.txt` wherever
+  `roots.storage` pointed, so a root below the document root let a web server
+  without a deny rule serve both as plain files. And Kirby defines no
+  `storage` root by itself: without one the call died in a `TypeError`, the
+  page rendered, nothing was counted and the dashboard only said "not
+  available". New `Kizami\Setup::storageRoot()` compares the real paths of the
+  `storage` and `index` roots (symlinks resolved; a storage root that does not
+  exist yet is judged by its nearest existing parent) before anything is
+  read or written. If the storage root is missing, equal to or inside the
+  index root, pages still render and redirects still redirect, nothing is
+  written and the error log gets the reason. A Panel user sees it in the
+  dashboard under the warning; the file login (no storage, so no lockout
+  counters) is denied without checking the password and answers 503 pointing to
+  the error log, no challenge and no path. **Operators: a storage root inside the web root is no longer
+  supported; move it outside** (the README shows an `index.php` with
+  `storage` as a sibling of `public/`). On upgrade, data already below the web
+  root stays where it is and nothing is counted until the root lies outside.
+  No schema change.
+- **Contact links and the dashboard stylesheet work under a subdirectory
+  install**: with the index URL `https://example.invalid/subsite`,
+  `redirectLink()` and `redirectAnchor()` returned `/call?from=%2F`, the
+  domain root, and the dashboard linked `/k/dashboard.css`. Both now start
+  with the path of Kirby's index URL (`/subsite/call?from=%2F`,
+  `/subsite/k/dashboard.css`), as a path and not a full URL, so a `url`
+  option that differs from the request host or says `http://` cannot make the
+  stylesheet load cross-origin or as mixed content; a root
+  install produces the same bytes as before. The `from` value stays the page
+  path (`/`, `/contact`), so the statistics paths do not change. No schema
+  change.
+
+## [1.6.1] — 2026-10-17
+
+### Fixed
+
+- **`/k/report` never answers 200 without JSON**: one request with an
+  invalid UTF-8 byte in the `Referer` header was enough to store a host that
+  made `json_encode()` fail, and the route then answered 200 with an empty
+  body. The route now encodes the body itself: invalid bytes in rows stored
+  earlier appear as U+FFFD, and anything else that cannot be encoded is
+  logged and answered with a 500 and `{"ok":false,"error":"Internal error."}`.
+  The report JSON `format` stays 2; valid data gives the same bytes as before.
+- **Referrer and path only as valid UTF-8**: a referrer host with invalid
+  UTF-8 is no longer stored; control and format characters and `<>"'` are
+  removed from it, and the 100-character cap no longer cuts a multibyte
+  character in half. A path, such as the `from` parameter of a redirect, is
+  discarded if it is not valid UTF-8, and the 255-byte cap cuts between
+  characters. Valid hosts and paths are stored exactly as before; no schema
+  change.
+- **Dashboard with earlier rows**: source, page and missing-page names that
+  hold invalid UTF-8 from before this version show U+FFFD instead of an
+  empty cell.
+- **`/k/snapshot` streams the copy**: the route read the whole database copy
+  into a string, so a database larger than PHP's `memory_limit` ended the
+  request in a fatal error and left the full copy in `storage/kizami/`. The
+  copy is now sent in chunks, the memory use no longer depends on the size of
+  the database, and the file is unlinked as soon as it is open. Leftover
+  `.snapshot-*` files of aborted requests are removed after one hour. The
+  bytes, `X-Kizami-Sha256` and the other headers are unchanged, plus a
+  `Content-Length`; no schema change.
+
+## [1.6.0] — 2026-10-17
+
+### Changed
+
+- **Own site as a source**: a referrer that is one of the site's own hosts
+  (the index URL and `kizami.ownHosts`, with or without `www.`) now counts as
+  internal in the dashboard and the report as well, not only at capture.
+  Rows recorded before a host was listed, or through a preview host, no
+  longer form a source of their own: among all page views they are
+  "Internal navigation", as the entry of a visit "Entry not recorded".
+- **"Unknown" is now "Entry not recorded"** ("Unbekannt" → "Einstieg nicht
+  erfasst"): the row for visits whose first recorded page was opened from an
+  own page (a visit across midnight, after a 404 page, from the preview) was
+  hard to tell from "Direct / unknown". The hint of "Which sources lead to
+  contact" explains the row.
+- **Contact clicks once per visit and target**: the "Contact clicks" column
+  of "Which sources lead to contact" counts each target once per visit, so
+  one visit clicking the phone number 41 times no longer dominates the
+  column. Visits, "Visits with contact", the share, the tiles and the report
+  are unchanged; the report JSON `format` stays 2.
+
 ## [1.5.0] — 2026-10-14
 
 ### Added

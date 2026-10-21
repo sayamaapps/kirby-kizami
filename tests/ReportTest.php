@@ -92,12 +92,12 @@ try {
     throws(fn () => Report::referenceDay('day', '2026-02-30', $thu), 'YYYY-MM-DD', 'Invalid date');
     throws(fn () => Report::referenceDay('day', '30.09.2026', $thu), 'YYYY-MM-DD', 'German format rejected');
     throws(fn () => Report::referenceDay('day', '2026-9-30', $thu), 'YYYY-MM-DD', 'Without leading zero rejected');
-    // Retention: single events from today minus five years (01.10.2021).
+    // Retention: single events from today minus 13 months (01.09.2025).
     // The day report also needs the weekday one week before.
-    same('2021-10-09 00:00', $refDay('2021-10-08'), 'Comparison day lies exactly on the limit');
-    throws(fn () => Report::referenceDay('day', '2021-10-07', $thu), 'five years', 'Comparison day before the limit');
-    same('2021-10-18 00:00', $refDay('2021-10-11', 'week'), 'Comparison week starts after the limit');
-    throws(fn () => Report::referenceDay('week', '2021-10-04', $thu), 'five years', 'Comparison week before the limit');
+    same('2025-09-09 00:00', $refDay('2025-09-08'), 'Comparison day lies exactly on the limit');
+    throws(fn () => Report::referenceDay('day', '2025-09-07', $thu), '13 months', 'Comparison day before the limit');
+    same('2025-09-22 00:00', $refDay('2025-09-15', 'week'), 'Comparison week starts after the limit');
+    throws(fn () => Report::referenceDay('week', '2025-09-01', $thu), '13 months', 'Comparison week before the limit');
 
     $store = new Store("$tmp/k.sqlite");
     $put = function (string $time, string $session, array $extra = []) use ($store, $utc) {
@@ -372,6 +372,17 @@ try {
     [$code, $json, $headers] = $request($url);
     same([200, true, 2, 'example.invalid', 'day', '2026-09-30', '2026-09-30'], [$code, $json['ok'], $json['format'], $json['site'], $json['kind'], $json['from'], $json['to']], 'Previous day without date');
     same(['no-store', 'noindex, nofollow, noarchive'], [$headers['Cache-Control'] ?? null, $headers['X-Robots-Tag'] ?? null], 'Not cached, not indexed');
+    // Maintenance in the report is best effort: a database the process cannot
+    // write (as root, permissions do not bite) still gives the report.
+    if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
+        // The journal files too: with a writable -wal/-shm SQLite still writes.
+        $dbFiles = array_filter([$tmp . '/storage/kizami/' . Store::FILE, $tmp . '/storage/kizami/' . Store::FILE . '-wal', $tmp . '/storage/kizami/' . Store::FILE . '-shm'], 'is_file');
+        foreach ($dbFiles as $f) { chmod($f, 0444); }
+        [$code, $json] = $request($url);
+        foreach ($dbFiles as $f) { chmod($f, 0644); }
+        same([200, true], [$code, $json['ok'] ?? null], 'Report on a read-only database file: still 200');
+        same(true, str_contains((string) @file_get_contents($logFile), 'Kizami: maintenance in report skipped'), '... and the skipped maintenance is logged');
+    }
     // respond() sets the language itself — a site may call it from a route
     // of its own (alias), and a German site must still get German text.
     same(true, str_starts_with((string) $request($url, options: ['locale' => 'de_DE.utf8'])[1]['text'], 'Sample Inn · Mi 30.09.'), 'German locale: German report text via respond()');
@@ -420,6 +431,28 @@ try {
     same(7, count($json['perDay']), 'Week: seven days');
     same(true, array_key_exists('mobileShare', $json), 'Week: field mobileShare');
 
+    // ReportService::json() encodes the body itself. Kirby's
+    // Response::json() turns a failed json_encode() into an empty body and
+    // keeps the status — a 200 with no JSON, which a reading script cannot tell
+    // from a working route. Invalid UTF-8 now becomes U+FFFD; anything else that
+    // cannot be encoded is a logged 500 with a fixed JSON body.
+    // (json_validate() needs PHP 8.3; the suite also runs on 8.2.)
+    $validJson = function (string $body): bool { json_decode($body); return json_last_error() === JSON_ERROR_NONE; };
+    $badBytes = ReportService::json(['ok' => true, 'sources' => ["foo\xFF.example" => 1]], 200);
+    same([200, true], [$badBytes->code(), $validJson($badBytes->body())], 'Invalid UTF-8 in the data: 200 and valid JSON');
+    same(["foo\u{FFFD}.example" => 1], json_decode($badBytes->body(), true)['sources'], 'Invalid UTF-8 in the data: substituted by U+FFFD');
+    same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$badBytes->type(), $badBytes->headers()['Cache-Control'] ?? null, $badBytes->headers()['X-Robots-Tag'] ?? null], 'Invalid UTF-8: content type and headers kept');
+    $logBefore = (string) @file_get_contents($logFile);
+    $notEncodable = ReportService::json(['ok' => true, 'x' => NAN], 200);
+    same([500, '{"ok":false,"error":"Internal error."}', true], [$notEncodable->code(), $notEncodable->body(), $validJson($notEncodable->body())], 'Data that cannot be encoded: 500 and a fixed JSON body, never 200 without JSON');
+    same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$notEncodable->type(), $notEncodable->headers()['Cache-Control'] ?? null, $notEncodable->headers()['X-Robots-Tag'] ?? null], 'Fallback 500: content type and headers kept');
+    $logNew = substr((string) file_get_contents($logFile), strlen($logBefore));
+    same(true, str_contains($logNew, 'Kizami: ') && str_contains($logNew, 'Inf and NaN'), 'Data that cannot be encoded: logged with the json error');
+    $plainData = ['ok' => true, 'format' => 2, 'url' => 'a/b/c', 'list' => [], 'object' => new stdClass(), 'nested' => ['n' => 1.5, 'text' => "\u{E4}\u{20AC}"]];
+    same(json_encode($plainData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), ReportService::json($plainData, 200)->body(), 'Valid data: body byte for byte as before');
+    $unauthorized = ReportService::json(['ok' => false, 'error' => 'Authentication required.'], 401);
+    same([401, 'Basic realm="Kizami", charset="UTF-8"'], [$unauthorized->code(), $unauthorized->headers()['WWW-Authenticate'] ?? null], 'Status and login prompt of a 401 unchanged');
+
     // Measurement gaps (kizami.gaps, since 1.5.0) through the route: flags, list, text line.
     $plainDay = $request($url)[1];
     [$code, $withGap, , $gapBody] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage']]]);
@@ -450,6 +483,66 @@ try {
     same(['kizami-snapshot', false], [$kirby->user('snapshot@example.invalid')->role()->name(), $kirby->user('snapshot@example.invalid')->role()->permissions()->for('access', 'panel')], 'Snapshot role created, without Panel');
     same(403, $snapshot(options: $on + ['kizami.reportWithoutHttps' => false])[0], 'Snapshot over HTTPS only');
     same(403, $snapshot(options: $on + ['kizami.snapshotRoles' => ['admin']])[0], 'Snapshot: own role list');
+    // The report route runs maintenance like the dashboard: free pages with
+    // leftovers of deleted events are rebuilt away, once authenticated.
+    $dbFile = $tmp . '/storage/kizami/' . Store::FILE;
+    $leave = function () use ($dbFile) {
+        $raw = new SQLite3($dbFile);
+        $raw->exec('PRAGMA secure_delete = OFF');
+        for ($i = 0; $i < 200; $i++) {
+            $raw->exec("INSERT INTO kizami_custom_events (created_at, event, detail, path, session) VALUES ('2010-01-01 10:00:00', 'download', 'EXPIRED_PRIVATE_DETAIL_$i', '/', 'old')");
+        }
+        $raw->exec('DELETE FROM kizami_custom_events WHERE session = \'old\'');
+        $raw->close();
+    };
+    $probe = function () use ($dbFile) {
+        $raw = new SQLite3($dbFile);
+        // Other connections of this process stay open, so the WAL is not
+        // checkpointed and deleted as it is at the end of a request: force
+        // the checkpoint and look at the main file only. The -wal file keeps
+        // its old frames until it is deleted or truncated, and TRUNCATE is
+        // SQLite 3.8.8+ (older builds fall back to a passive checkpoint).
+        $raw->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        $state = [(int) $raw->querySingle('PRAGMA freelist_count'), (int) $raw->querySingle('PRAGMA user_version')];
+        $raw->close();
+        return [$state, str_contains((string) file_get_contents($dbFile), 'EXPIRED_PRIVATE_DETAIL_')];
+    };
+    $leave();
+    [$freeBefore, $markerBefore] = $probe();
+    same([true, true], [$freeBefore[0] > 0, $markerBefore], 'Report maintenance: counter-check, free pages and leftovers present');
+    $request($url, null);
+    $request($url, 'report@example.invalid', 'wrong-password-very-long-123');
+    same([$freeBefore, $markerBefore], $probe(), 'Anonymous /k/report leaves the database file alone');
+    $request($url);
+    $after = $probe();
+    same([0, 1], $after[0], 'Authenticated /k/report rebuilds the file once (no free pages, marked)');
+    same(false, $after[1], 'Authenticated /k/report: leftovers of deleted events gone from the file');
+
+    // The daily key also rotates through the authenticated operator routes,
+    // never through anonymous requests.
+    $keyFile = $tmp . '/storage/kizami/secret.txt';
+    $stale = "2010-01-01\nSTALE-SECRET-VALUE";
+    $today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+    $keyIsFresh = fn () => explode("\n", (string) file_get_contents($keyFile))[0] === $today && !str_contains((string) file_get_contents($keyFile), 'STALE-SECRET-VALUE');
+    file_put_contents($keyFile, $stale);
+    $snapshot(null, options: $on);
+    $request($url, null);
+    $snapshot('report@example.invalid', 'report-password-very-long-123', $on);
+    $request($url, 'report@example.invalid', 'wrong-password-very-long-123');
+    same($stale, file_get_contents($keyFile), 'Unauthenticated, forbidden and failed logins leave the key alone');
+    $request($url);
+    same(true, $keyIsFresh(), 'Authenticated /k/report replaces a stale key');
+    file_put_contents($keyFile, $stale);
+    $snapshot(options: $on);
+    same(true, $keyIsFresh(), 'Authenticated /k/snapshot replaces a stale key');
+    $currentKey = (string) file_get_contents($keyFile);
+    $snapshot(options: $on);
+    $request($url);
+    same($currentKey, file_get_contents($keyFile), 'A current key is not touched again');
+    unlink($keyFile);
+    $request($url);
+    $snapshot(options: $on);
+    same(false, is_file($keyFile), 'The routes create no key on an installation that never counted');
     file_put_contents($tmp . '/storage/kizami/secret.txt', "2026-10-01\nSECRET-MARKER");
     [$code, $body, $headers] = $snapshot(options: $on);
     same([200, 'application/vnd.sqlite3', hash('sha256', $body)], [$code, $headers['Content-Type'] ?? null, $headers['X-Kizami-Sha256'] ?? null], 'Snapshot delivered, with checksum');
@@ -463,6 +556,130 @@ try {
     same('download|menu.pdf', $copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events"), 'Snapshot includes the reported actions');
     $copy->close();
     same([], glob($tmp . '/storage/kizami/.snapshot-*'), 'Intermediate file deleted');
+
+    // The answer is streamed (SnapshotResponse), not held as a string.
+    $storageDir = $tmp . '/storage/kizami';
+    $respond = fn () => Kizami\SnapshotService::respond($app([
+        'method' => 'GET', 'url' => 'http://example.invalid/k/snapshot',
+        'auth' => 'Basic ' . base64_encode('snapshot@example.invalid:report-password-very-long-123'),
+    ], $on));
+    // Runs send() like production, but counts and hashes the output in a buffer callback instead of keeping it.
+    $stream = function (Kirby\Http\Response $response): array {
+        $bytes = 0;
+        $context = hash_init('sha256');
+        ob_start(function (string $chunk) use (&$bytes, $context): string {
+            hash_update($context, $chunk);
+            $bytes += strlen($chunk);
+            return '';
+        }, 65536);
+        $returned = $response->send();
+        ob_end_flush();
+        return [$returned, $bytes, hash_final($context)];
+    };
+    $streamed = $respond();
+    same(true, $streamed instanceof Kizami\SnapshotResponse, 'Snapshot: streamed response class');
+    same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: the copy is already unlinked while the answer is not yet sent');
+    $announced = $streamed->headers();
+    [$returned, $bytes, $streamedHash] = $stream($streamed);
+    same('', $returned, 'Snapshot: send() has already written the body, returns nothing');
+    same(true, $bytes > 0 && $bytes === (int) ($announced['Content-Length'] ?? -1), 'Snapshot: streamed bytes = Content-Length');
+    same($announced['X-Kizami-Sha256'] ?? null, $streamedHash, 'Snapshot: streamed bytes hash to X-Kizami-Sha256');
+    same(hash('sha256', $respond()->body()), $streamedHash, 'Snapshot: streaming and body() deliver the same copy');
+    same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: no file left after send()');
+    $reread = $respond();
+    $inMemory = $reread->body();
+    same(strlen($inMemory), (int) ($reread->headers()['Content-Length'] ?? -1), 'Snapshot: Content-Length = length of the copy');
+    same($inMemory, $reread->body(), 'Snapshot: body() can be read twice');
+    same([true, hash('sha256', $inMemory)], [$stream($reread)[1] === strlen($inMemory), $stream($respond())[2]], 'Snapshot: send() still works after body()');
+    unset($streamed, $reread);
+
+    // Leftovers of aborted downloads: removed after an hour, younger ones stay (a parallel download may run).
+    $leave = function (string $name, int $age) use ($storageDir) {
+        file_put_contents($storageDir . '/' . $name, 'x');
+        touch($storageDir . '/' . $name, time() - $age);
+    };
+    $leave('.snapshot-stale.sqlite', 7200);
+    $leave('.snapshot-stale.sqlite-wal', 7200);
+    $leave('.snapshot-fresh.sqlite', 0);
+    $snapshot(null, options: $on);
+    same([true, true, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: no clean-up without a login');
+    $snapshot(options: $on);
+    same([false, false, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: stale leftovers swept, fresh ones stay');
+    same([true, true], [is_file($storageDir . '/' . Store::FILE), is_file($storageDir . '/secret.txt')], 'Snapshot: sweep leaves the database and the secret alone');
+    unlink($storageDir . '/.snapshot-fresh.sqlite');
+
+    // cleanup() and sweep() directly.
+    $dir = $tmp . '/sweep';
+    mkdir($dir, 0700);
+    $make = function (string $name, int $age) use ($dir) {
+        file_put_contents($dir . '/' . $name, 'x');
+        touch($dir . '/' . $name, time() - $age);
+    };
+    // scandir() sorts with the locale (strcoll): under C.UTF-8 a leading dot
+    // is ignored, under C it sorts first. Sort by bytes, so the expected
+    // lists hold on every runner.
+    $listing = function () use ($dir): array {
+        $names = array_values(array_diff(scandir($dir), ['.', '..']));
+        sort($names, SORT_STRING);
+        return $names;
+    };
+    foreach (['', '-wal', '-shm', '-journal'] as $suffix) { $make('.snapshot-gone.sqlite' . $suffix, 0); }
+    $make('.snapshot-other.sqlite', 0);
+    same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
+    same(['.snapshot-other.sqlite'], $listing(), 'cleanup(): the copy and its side files go, other files stay');
+    same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
+    unlink($dir . '/.snapshot-other.sqlite');
+    foreach (['', '-wal', '-shm', '-journal'] as $suffix) { $make('.snapshot-old.sqlite' . $suffix, 7200); }
+    $make('.snapshot-over.sqlite', 3700);
+    $make('.snapshot-edge.sqlite', 3500);
+    $make('.snapshot-new.sqlite', 60);
+    $make(Store::FILE, 7200);
+    $make('secret.txt', 7200);
+    $make('snapshot-without-dot', 7200);
+    mkdir($dir . '/.snapshot-directory');
+    same(5, Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
+    same(['.snapshot-directory', '.snapshot-edge.sqlite', '.snapshot-new.sqlite', Store::FILE, 'secret.txt', 'snapshot-without-dot'], $listing(), 'sweep(): only .snapshot-* files older than an hour go');
+    same(0, Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
+    same(0, Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
+
+    // Memory: a copy larger than twice the memory_limit still comes through, in a child
+    // process with that limit. The helper boots Kirby plus respond() in ~6.5 MB; the limit
+    // leaves about 9 MB of room, a string holding the copy (the old way) needs 40 MB.
+    $limitMb = 16;
+    $bigStorage = $tmp . '/big-storage';
+    mkdir($bigStorage . '/kizami', 0700, true);
+    $bigDb = $bigStorage . '/kizami/' . Store::FILE;
+    new Store($bigDb);
+    $big = new SQLite3($bigDb);
+    $big->exec('PRAGMA synchronous = OFF');
+    $pageSize = (int) $big->querySingle('PRAGMA page_size');
+    $columns = Store::columns();
+    $insert = $big->prepare('INSERT INTO kizami_events (' . implode(',', $columns) . ') VALUES (' . implode(',', array_fill(0, count($columns), '?')) . ')');
+    $big->exec('BEGIN');
+    for ($i = 0; $big->querySingle('PRAGMA page_count') * $pageSize < $limitMb * 2.5 * 1048576; ) {
+        for ($k = 0; $k < 5000; $k++, $i++) {
+            // 255-byte path (it is indexed, so it counts twice), everything else small.
+            $row = [gmdate('Y-m-d H:i:s'), 'page', 'view', '/' . substr(str_repeat(sha1((string) $i), 7), 0, 254), null, null, null, null, null, md5((string) $i), 'desktop', '', 0];
+            foreach ($row as $c => $value) { $insert->bindValue($c + 1, $value, $value === null ? SQLITE3_NULL : (is_int($value) ? SQLITE3_INTEGER : SQLITE3_TEXT)); }
+            $insert->execute();
+        }
+    }
+    $big->exec('COMMIT');
+    $big->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    $big->close();
+    same(true, filesize($bigDb) >= 2 * $limitMb * 1048576, 'Memory test: the database is more than twice the memory limit');
+    $child = proc_open([PHP_BINARY, '-d', 'memory_limit=' . $limitMb . 'M', $base . '/tests/helpers/snapshot-stream.php', $tmp, $bigStorage], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+    $childOut = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $childErr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    $childExit = proc_close($child);
+    same(0, $childExit, 'Memory test: child process under memory_limit=' . $limitMb . 'M ends normally: ' . substr(trim($childOut . ' ' . $childErr), 0, 300));
+    $result = json_decode(trim($childOut), true);
+    same(true, is_array($result), 'Memory test: child reports JSON: ' . substr($childOut, 0, 300));
+    same([200, 'SQLite format 3', ''], [$result['code'], $result['head'], $result['returned']], 'Memory test: status, SQLite header, send() result');
+    same(true, $result['bytes'] >= 2 * $limitMb * 1048576 && $result['bytes'] === (int) $result['length'], 'Memory test: all bytes of the copy arrive, as many as Content-Length says');
+    same($result['sha256'], $result['hash'], 'Memory test: the bytes that arrive match X-Kizami-Sha256');
+    same(true, $result['peak'] < $result['bytes'] / 2, 'Memory test: peak memory (' . $result['peak'] . ') far below the size of the copy (' . $result['bytes'] . ')');
+    same([], glob($bigStorage . '/kizami/.snapshot-*'), 'Memory test: no file left in the storage');
     same(true, in_array('k/snapshot', array_column($app()->extensions('routes'), 'pattern'), true), 'Snapshot route registered');
 } catch (Throwable $e) {
     fwrite(STDERR, 'Report (Kirby): ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() . "\n");

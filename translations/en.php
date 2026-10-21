@@ -19,7 +19,7 @@ return [
 
     'source.direct' => 'Direct',
     'source.directUnknown' => 'Direct / unknown',
-    'source.unknown' => 'Unknown',
+    'source.unknown' => 'Entry not recorded',
     'source.internal' => 'Internal navigation',
     'source.campaign' => 'Campaign “{name}”',
     'page.home' => 'Home',
@@ -111,7 +111,7 @@ return [
     'direct.discarded' => 'Not counted: {n} link hits without a confirmed click and without a page view on the same day — most likely automated link followers. The redirect itself worked.',
 
     'contact.title' => 'Which sources lead to contact',
-    'contact.hint' => 'Contact: {targets}. Each day visit belongs to the source of its first recorded page. Later contact clicks on the same day are attributed to it.',
+    'contact.hint' => 'Contact: {targets}. Each day visit belongs to the source of its first recorded page. Later contact clicks on the same day are attributed to it; the same target counts once per visit. “Entry not recorded”: the first recorded page was opened from an own page, for example on a visit across midnight, after a 404 page or from the preview.',
     'contact.region' => 'Sources and contact',
     'contact.source' => 'Source',
     'contact.clicks' => 'Contact clicks',

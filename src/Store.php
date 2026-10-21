@@ -21,6 +21,15 @@ final class Store
 {
     public const FILE = 'kizami.sqlite';
 
+    /**
+     * Months single events and reported actions are kept (`kizami.retentionMonths`).
+     * Events are then rolled up into daily totals, actions deleted.
+     */
+    public const RETENTION_MONTHS = 13;
+
+    /** Upper bound of `kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
+    public const RETENTION_MONTHS_MAX = 600;
+
     /** One definition for creation and migration. */
     public const EVENTS_TABLE = "CREATE TABLE IF NOT EXISTS kizami_events (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,6 +54,9 @@ final class Store
         clicks INTEGER NOT NULL,
         devices INTEGER NOT NULL
     )';
+
+    /** `user_version` once the first rebuild has run, see purgeResidue(). */
+    private const RESIDUE_PURGED = 1;
 
     private const MAINTENANCE_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_maintenance (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL)';
 
@@ -90,6 +102,19 @@ final class Store
     }
 
     /**
+     * A valid `kizami.retentionMonths`: an int or a string of digits from 1
+     * to RETENTION_MONTHS_MAX, otherwise null. Floats, signs, spaces and
+     * other strings are refused.
+     */
+    public static function validRetentionMonths(mixed $value): ?int
+    {
+        if (is_string($value) && ctype_digit($value)) {
+            $value = (int) $value;
+        }
+        return is_int($value) && $value >= 1 && $value <= self::RETENTION_MONTHS_MAX ? $value : null;
+    }
+
+    /**
      * Journal mode recorded in an existing database file: header bytes 18/19
      * are 2 in WAL mode and 1 with a rollback journal. Missing or unreadable
      * file → WAL (the default for new databases).
@@ -114,6 +139,11 @@ final class Store
     public const JOURNAL_DELETE = 'delete';
 
     private SQLite3 $db;
+    /** @var list<string> own hosts without `www.`; their referrers are internal (see ownReferrerSql) */
+    private array $ownHosts = [];
+
+    /** @var int months before which single events are rolled up and actions deleted */
+    private int $retentionMonths = self::RETENTION_MONTHS;
 
     /**
      * @param string $journal `wal` (default) or `delete`. WAL lets readers and
@@ -126,9 +156,15 @@ final class Store
      *        the next connection switches the file back. Null (CLI tools
      *        without Kirby options) keeps the mode the file already has; a new
      *        file starts in WAL.
+     * @param ?int $retentionMonths see RETENTION_MONTHS; null or an invalid
+     *        value (see validRetentionMonths()) means the default. Only the
+     *        roll-up uses it: an opener without Kirby options (CLI) must pass
+     *        the site's value itself.
      */
-    public function __construct(string $dbPath, ?string $journal = null)
+    public function __construct(string $dbPath, ?string $journal = null, array $ownHosts = [], ?int $retentionMonths = null)
     {
+        $this->ownHosts = self::normaliseHosts($ownHosts);
+        $this->retentionMonths = self::validRetentionMonths($retentionMonths) ?? self::RETENTION_MONTHS;
         $journal ??= self::journalOfFile($dbPath);
         $directory = dirname($dbPath);
         if (!is_dir($directory)) {
@@ -155,6 +191,10 @@ final class Store
                 $this->db->exec('PRAGMA journal_mode = WAL');
                 $this->db->exec('PRAGMA synchronous = NORMAL');
             }
+            // Deleted rows are overwritten with zeros when they are deleted.
+            // Without it the bytes of a removed event stay in the free pages
+            // of the file (and of every snapshot copied from it).
+            $this->db->exec('PRAGMA secure_delete = ON');
         } catch (\Throwable) {
             // The write probe/schema report the relevant error.
         }
@@ -557,7 +597,7 @@ final class Store
             "SELECT source, COUNT(*) AS n FROM (
                 SELECT CASE
                     WHEN utm_source <> '' THEN 'utm:' || utm_source
-                    WHEN referrer = '(internal)' THEN '" . Names::INTERNAL . "'
+                    WHEN " . $this->ownReferrerSql('referrer') . " THEN '" . Names::INTERNAL . "'
                     WHEN referrer <> '' THEN referrer
                     ELSE '" . Names::DIRECT . "'
                 END AS source
@@ -573,7 +613,13 @@ final class Store
     /**
      * Roll old complete days up into daily totals, then delete the single
      * events. One shared transaction prevents loss and double totals on abort
-     * or parallel maintenance. Single events are kept for five years.
+     * or parallel maintenance. Single events and actions are kept for
+     * `kizami.retentionMonths` (13 months by default).
+     *
+     * The rebuild that follows (purgeResidue) is best effort: the roll-up is
+     * already committed, so a failing VACUUM (no room for the temporary copy,
+     * a locked or read-only file) is logged and the result still returned.
+     * The next run tries again.
      */
     public function compact(): int
     {
@@ -581,10 +627,42 @@ final class Store
         try {
             $deleted = $this->rollUpOldDays();
             $this->exec('COMMIT');
-            return $deleted;
         } catch (\Throwable $e) {
             $this->exec('ROLLBACK');
             throw $e;
+        }
+        try {
+            $this->purgeResidue();
+        } catch (\Throwable $e) {
+            error_log('Kizami: residue purge failed: ' . $e->getMessage());
+        }
+        return $deleted;
+    }
+
+    /**
+     * Rebuild the file when deleted content may still sit in it: once per
+     * database file (events deleted before secure_delete was switched on),
+     * after every roll-up that deleted something (rollUpOldDays clears the
+     * mark, also when it ran in a visitor's request), and whenever free pages
+     * exist. secure_delete zeroes deleted cells, but SQLite hands a page that
+     * became empty back to the free list as it was, and old builds (3.7.17)
+     * leave parts of a deleted row in a page that stays in use.
+     * Explicit maintenance only (dashboard, report, CLI), never the visitor's
+     * request: VACUUM rewrites the whole file. It cannot run inside a
+     * transaction, so it follows the COMMIT. The done-mark is the file's own
+     * `user_version` header field: no table, no migration, it survives
+     * VACUUM and older versions ignore it. Without the mark VACUUM runs
+     * again, which is harmless.
+     */
+    private function purgeResidue(): void
+    {
+        $marked = (int) $this->db->querySingle('PRAGMA user_version') >= self::RESIDUE_PURGED;
+        if ($marked && (int) $this->db->querySingle('PRAGMA freelist_count') === 0) {
+            return;
+        }
+        $this->db->exec('VACUUM');
+        if (!$marked) {
+            $this->db->exec('PRAGMA user_version = ' . self::RESIDUE_PURGED);
         }
     }
 
@@ -592,7 +670,7 @@ final class Store
     private function rollUpOldDays(): int
     {
         $limit = (new \DateTimeImmutable('today', new \DateTimeZone('Europe/Berlin')))
-            ->modify('-5 years')->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+            ->modify('-' . $this->retentionMonths . ' months')->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s');
         // An already archived day is not overwritten. Importing raw data into
         // such days later has to be sorted out separately: without the old
         // device identifiers no reliable deduplication is possible.
@@ -606,11 +684,18 @@ final class Store
         $stmt->execute()->finalize();
         $deleted = $this->db->changes();
 
-        // Reported actions follow the same five years, but are not rolled
+        // Reported actions follow the same retention, but are not rolled
         // up: like image openings they have no place in the daily totals.
         $stmt = $this->db->prepare('DELETE FROM kizami_custom_events WHERE created_at < :limit');
         $stmt->bindValue(':limit', $limit, SQLITE3_TEXT);
         $stmt->execute()->finalize();
+        // Something was deleted: clear the rebuild mark, so the next explicit
+        // maintenance runs VACUUM once more (purgeResidue). secure_delete
+        // alone is not enough on every SQLite build: 3.7.17 leaves parts of a
+        // deleted row in a page that stays in use.
+        if ($deleted > 0 || $this->db->changes() > 0) {
+            $this->db->exec('PRAGMA user_version = 0');
+        }
         return $deleted;
     }
 
@@ -686,8 +771,11 @@ final class Store
             $backup = new SQLite3($target);
             // The copy inherits WAL mode from the source header; DELETE makes
             // it ONE file without -wal/-shm (also for restoring).
+            // VACUUM on the copy: the backup API copies free pages too, and
+            // whatever the source still holds in them must not travel along.
             if (!$this->db->backup($backup)
                 || strtolower((string) $backup->querySingle('PRAGMA journal_mode=DELETE')) !== 'delete'
+                || $backup->exec('VACUUM') !== true
                 || $backup->querySingle('PRAGMA integrity_check') !== 'ok') {
                 throw new RuntimeException('SQLite snapshot failed');
             }
@@ -831,7 +919,7 @@ final class Store
             SELECT berlin_day(a.created_at) AS day, a.session AS session
             FROM kizami_events a WHERE a.type='redirect' AND a.session <> ''
                 AND a.created_at >= :since AND a.created_at < :until
-                AND EXISTS (SELECT 1 FROM (" . self::entriesSql() . ") e
+                AND EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ") e
                     WHERE " . self::afterEntrySql() . ")
             GROUP BY berlin_day(a.created_at), a.session)", $days, $offset);
     }
@@ -899,7 +987,7 @@ final class Store
     {
         $classes = ['mobile' => 0, 'tablet' => 0, 'desktop' => 0, 'unknown' => 0];
         foreach ($this->fetch("SELECT CASE WHEN device IN ('mobile','tablet','desktop') THEN device ELSE 'unknown' END AS class,
-            COUNT(*) AS n FROM (" . self::entriesSql() . ")
+            COUNT(*) AS n FROM (" . $this->entriesSql() . ")
             GROUP BY class", $days,
             fn ($r) => [(string) $r['class'], (int) $r['n']], $offset) as [$class, $n]) {
             $classes[$class] = $n;
@@ -907,13 +995,48 @@ final class Store
         return $classes;
     }
 
+    /**
+     * Own hosts the way referrers are stored: lower case, without trailing
+     * dot and `www.`, only characters a host name may carry — so they can be
+     * written into the shared SQL fragments as literals (bound parameters
+     * would have to be threaded through every query using entriesSql()).
+     * @return list<string>
+     */
+    private static function normaliseHosts(array $hosts): array
+    {
+        $out = [];
+        foreach ($hosts as $host) {
+            if (!is_string($host)) { continue; }
+            $host = preg_replace('/^www\./', '', strtolower(rtrim(trim($host), '.')));
+            $host = preg_replace('/[^a-z0-9.-]/', '', (string) $host);
+            if ($host !== '') { $out[$host] = true; }
+        }
+        return array_keys($out);
+    }
+
+    /**
+     * SQL condition: the referrer is an own page. Capture stores `(internal)`
+     * for the hosts it knows; rows from before a host was listed, from a
+     * preview host or with `www.` still carry the bare host — those count as
+     * internal here as well, so the own site never shows up as a source.
+     */
+    private function ownReferrerSql(string $column): string
+    {
+        $literals = [];
+        foreach ($this->ownHosts as $host) {
+            $literals[] = "'$host'";
+            $literals[] = "'www.$host'";
+        }
+        return "$column = '(internal)'" . ($literals === [] ? '' : " OR $column IN (" . implode(',', $literals) . ')');
+    }
+
     /** First recorded page per Berlin day and day identifier, stable within the same second. */
-    private static function entriesSql(): string
+    private function entriesSql(): string
     {
         // Derived table instead of a window function/CTE: old hosters have SQLite 3.7.17.
         return "SELECT e.*, berlin_day(e.created_at) AS day,
             CASE WHEN e.utm_source <> '' THEN 'utm:' || e.utm_source
-                WHEN e.referrer = '(internal)' THEN '" . Names::ENTRY_UNKNOWN . "'
+                WHEN " . $this->ownReferrerSql('e.referrer') . " THEN '" . Names::ENTRY_UNKNOWN . "'
                 WHEN e.referrer <> '' THEN e.referrer ELSE '" . Names::DIRECT . "' END AS source
             FROM kizami_events e WHERE e.type='page' AND e.action='view' AND e.session <> ''
                 AND e.created_at >= :since AND e.created_at < :until
@@ -926,7 +1049,7 @@ final class Store
     /** @return list<array{path:string,count:int}> */
     public function entryPages(int $days): array
     {
-        return $this->fetch("SELECT path, COUNT(*) AS n FROM (" . self::entriesSql() . ")
+        return $this->fetch("SELECT path, COUNT(*) AS n FROM (" . $this->entriesSql() . ")
             GROUP BY path ORDER BY n DESC, path", $days,
             fn ($r) => ['path' => (string) $r['path'], 'count' => (int) $r['n']]);
     }
@@ -946,7 +1069,7 @@ final class Store
     {
         return $this->fetch("SELECT a.target AS target, COUNT(*) AS n FROM kizami_events a
             WHERE a.type='redirect' AND a.created_at >= :since AND a.created_at < :until
-                AND NOT EXISTS (SELECT 1 FROM (" . self::entriesSql() . ") e
+                AND NOT EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ") e
                     WHERE " . self::afterEntrySql() . ")
             GROUP BY a.target ORDER BY n DESC, a.target", $days,
             fn ($r) => ['target' => (string) $r['target'], 'count' => (int) $r['n']], $offset);
@@ -954,7 +1077,8 @@ final class Store
 
     /**
      * Only configured contact targets, only AFTER the entry and on the same
-     * day.
+     * day. `clicks` counts each target once per visit: one visit hammering
+     * the phone link must not dominate the column.
      * @return array{sources:list<array{source:string,visits:int,clicks:int,withContact:int}>,withoutEntry:int}
      */
     public function contactSources(int $days, array $targets, int $offset = 0): array
@@ -963,7 +1087,7 @@ final class Store
         $extra = [];
         foreach (array_values($targets) as $i => $target) { $extra['target' . $i] = (string) $target; }
         $in = implode(',', array_map(fn ($k) => ':' . $k, array_keys($extra)));
-        $entries = '(' . self::entriesSql() . ')';
+        $entries = '(' . $this->entriesSql() . ')';
         $contacts = "(SELECT * FROM kizami_events WHERE type='redirect' AND target IN ($in)
                 AND created_at >= :since AND created_at < :until)";
         $after = self::afterEntrySql();
@@ -971,7 +1095,8 @@ final class Store
         // column "e.source", and the dashboard broke with "Undefined array
         // key" (28.09.2026).
         $sources = $this->fetch("SELECT e.source AS source, COUNT(DISTINCT e.id) AS visits,
-            COUNT(a.id) AS clicks, COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id END) AS with_contact
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id || ':' || a.target END) AS clicks,
+            COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id END) AS with_contact
             FROM $entries e LEFT JOIN $contacts a ON $after
             GROUP BY e.source ORDER BY visits DESC, e.source", $days,
             fn ($r) => ['source' => (string) $r['source'], 'visits' => (int) $r['visits'],
