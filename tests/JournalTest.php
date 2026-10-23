@@ -3,8 +3,8 @@
  * kizami.journal: WAL (default) or the classic rollback journal.
  *   php tests/JournalTest.php
  *
- * Why: on 11.10.2026 a client site's database (a shared host, SQLite 3.7.17) was found
- * malformed in WAL mode after earlier "disk I/O error"s. With `delete` the
+ * Why: on some shared hosts (SQLite 3.7.17) WAL mode left a database
+ * malformed after earlier "disk I/O error"s. With `delete` the
  * file stays one file without -wal/-shm. Every opener has to respect the
  * mode; CLI tools without Kirby options keep the mode the file already has.
  */

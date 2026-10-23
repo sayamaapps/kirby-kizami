@@ -356,7 +356,7 @@ check('missingTables detects the missing schema',
 
 // Counter-check for the error split: an unwritable storage/ MUST throw, so
 // the caller can catch it. Carrying on silently would be data loss without a
-// hint. (Found 20.09.2026: schema creation was only wrapped in try/catch, but
+// hint. (Found while testing: schema creation was only wrapped in try/catch, but
 // SQLite3 reports rejected statements in the default error mode with
 // `false` instead of an exception — the catch never fired. This check pins
 // that down.)
@@ -683,7 +683,7 @@ array_map('unlink', glob($dirG . '/*')); rmdir($dirG);
 /* === Missing pages (404) ================================================ */
 $dirF = sys_get_temp_dir() . '/kizami-notfound-' . bin2hex(random_bytes(4));
 mkdir($dirF, 0700);
-// Legacy pre-1.0 schema (before 27.09.2026): German names, no device column,
+// Legacy pre-1.0 schema: German names, no device column,
 // CHECK without notfound. The fixture has to stay German — it is what old
 // installations have on disk.
 $old = new SQLite3($dirF . '/' . Store::FILE);
