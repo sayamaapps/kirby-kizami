@@ -1,6 +1,6 @@
 {
     "name": "sayamaapps/kirby-kizami",
-    "description": "Cookieless, server-side page and link-click statistics for Kirby CMS. No JavaScript required, honours DNT/GPC, daily rotating salt, SQLite.",
+    "description": "Cookieless, server-side page and link-click statistics for Kirby CMS, no JavaScript required.",
     "type": "kirby-plugin",
     "license": "MIT",
     "keywords": ["kirby", "kirby-plugin", "kirby-5", "analytics", "statistics", "privacy", "cookieless", "sqlite"],

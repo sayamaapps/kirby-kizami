@@ -1,25 +1,22 @@
 # Kizami
 
-Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com) 5.
+Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com).
 
-*Kizami* (刻み) is Japanese for a notch, and also for an increment or step, as in 10分刻み ("in ten-minute increments"); *kizamu* means to notch, carve, or tick off time. That is the sense here: the plugin ticks off visits. It does not track anyone from one day to the next.
+Kizami counts page views, contact clicks and optional actions on a Kirby site and shows them in a dashboard linked from the Panel. It stores nothing on visitors' devices and needs no tracking script. It is built for small businesses where phone calls, e-mails and route requests matter.
 
-- **Server-side.** Page views are counted in Kirby's `route:after` hook. Ad blockers don't affect it, and no tracking script is needed.
-- **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device. Data stays in one SQLite file outside the web root.
-- **Honours Do Not Track and Global Privacy Control.** With `DNT: 1` or `Sec-GPC: 1`, nothing is recorded.
-- **Daily rotating salt.** A day identifier is computed from IP address, user agent, date and a secret that is replaced every day (Europe/Berlin): on the first counted visit of a day and by the dashboard, the report and snapshot routes. A key of an earlier day is also deleted on every page request, a filtered one (DNT/GPC, bot) included, and by the maintenance job. Set up the job when the site may go days without a visit. Raw IPs and user agents are never stored. Identifiers from different days can't be linked through the database.
-- **Counts what small businesses care about.** Phone calls, route requests and e-mail clicks go through counted redirects such as `/call` → `tel:…`. No JavaScript is involved, and the dashboard shows contact rates per source and landing page.
-- **Optional actions.** Downloads, video plays or newsletter openings can be counted with a small script from the site's own server (see [Actions](#actions)). Off unless configured.
-- **Bot and crawler filtering.** User-agent filtering plus a redirect-click filter based on Fetch Metadata and the visitor's same-day page views (see [Counting rules](#counting-rules)).
-- **Dashboard** at `/k/dashboard`, linked from the Panel menu, and a **JSON report** at `/k/report` for scripts (daily or weekly summaries).
-- **English and German.** The dashboard and the report text follow the site's language (see `language` below).
-- **Runs on old shared hosting.** Every SQL statement works on SQLite 3.7.17, and CI runs the test suite against a real 3.7.17 build.
+## Features
+
+- Server-side page counting: no tracking script, no cookies, no browser storage.
+- Counted redirects for phone, e-mail and map links, with contact rates per source.
+- Optional counting of downloads, video plays and other actions.
+- Bot filtering; Do Not Track and Global Privacy Control are honoured.
+- Dashboard linked from the Panel menu, and a JSON report for scripts.
+- English and German; runs on SQLite 3.7.17, so it fits old shared hosting.
 
 ## Requirements
 
-- PHP 8.2–8.4 with the `sqlite3` extension
-- Kirby 5
-- A writable Kirby `storage` root **outside the web root**. Data lives in `<storage>/kizami/`. Kizami refuses to run without a `storage` root or with one inside the web root: nothing is counted, the error log gets the message, a Panel user sees it in the dashboard and the file login answers 503 and points to the error log.
+- PHP 8.2–8.4 with the `sqlite3` extension, and Kirby 5.
+- A Kirby `storage` root outside the web root. Without it, nothing is counted.
 
 ## Installation
 
@@ -27,270 +24,126 @@ Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com)
 composer require sayamaapps/kirby-kizami
 ```
 
-Composer installs the plugin into `site/plugins/kizami/` (via `getkirby/composer-installer`, which ships with `getkirby/cms`). Add `/site/plugins/kizami/` to `.gitignore` and make sure your deploy ships it, just as it ships `kirby/` and `vendor/`.
-
-Until the package is on Packagist, add the repository first:
+Until the package is on Packagist, add the repository to `composer.json` first:
 
 ```json
 "repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-kizami" }]
 ```
 
-Manual installation (download into `site/plugins/kizami/`) also works. The plugin loads its own classes and has no runtime dependencies.
+Composer installs to `site/plugins/kizami/`. Add that path to `.gitignore` and deploy it like `vendor/`.
 
-A stock Kirby has no `storage` root, so the `kizami.active` example below does nothing on it. Define the root in `index.php`, with the web server pointing at `public/` and `storage/` as its sibling:
+A stock Kirby has no `storage` root. Define it in `public/index.php`; `storage/` sits beside `public/`, outside the web root:
 
 ```php
 <?php
 $base = dirname(__DIR__);
 require $base . '/vendor/autoload.php';
-echo (new Kirby\Cms\App([
-    'roots' => [
-        'index'   => __DIR__,
-        'base'    => $base,
-        'content' => $base . '/content',
-        'site'    => $base . '/site',
-        'storage' => $base . '/storage',
-    ],
-]))->render();
+echo (new Kirby\Cms\App(['roots' => [
+    'index' => __DIR__, 'base' => $base, 'storage' => $base . '/storage',
+    'content' => $base . '/content', 'site' => $base . '/site',
+]]))->render();
 ```
 
-## Configuration
-
-Everything is off by default. Minimal setup in `site/config/config.php`:
+Off by default. Minimal `site/config/config.php` (redirects work even while `active` is `false`):
 
 ```php
 return [
     'kizami.active' => true,
-    'kizami.redirects' => [
-        'call'  => 'tel:+491234567890',
-        'route' => 'https://www.google.com/maps/dir/?api=1&destination=…',
-    ],
+    'kizami.redirects' => ['call' => 'tel:+491234567890'],
 ];
 ```
 
-In templates:
+## Usage
+
+**Link clicks.** Route links through a counted redirect. The fallback keeps the link working while the redirect is not configured:
 
 ```php
-<a href="<?= $page->redirectLink('call', 'tel:+491234567890', 'header') ?>" rel="nofollow">Call us</a>
-<?= $page->redirectAnchor('call', 'Call us', 'tel:+491234567890', 'header', ['class' => 'button']) ?>
+<?= $page->redirectAnchor('call', 'Call us', 'tel:+491234567890', 'header') ?>
 ```
 
-The second argument is a fallback: if the redirect isn't configured, the link still works. Redirects keep working when counting is switched off. The third argument is a link position; it is recorded only if it is a key of `positionNames`.
+The optional fourth argument is a position, recorded only if it is listed in `positionNames`. Safari sends no `Sec-Fetch-User`, so its clicks count only if the same IP address and user agent viewed a page that day.
 
-Dashboard access: create `site/config/kizami.php` (keep it out of git) with a bcrypt hash, or log in to the Panel:
+**Actions.** Declare them in `kizami.events` (see [Options](#options)), then count them from PHP:
+
+```php
+// site/config/config.php
+'kizami.events' => ['download' => ['label' => ['en' => 'Download'], 'detail' => true]],
+
+// route or template, once per request
+$page->kizamiEvent('download', 'prices.pdf');
+```
+
+A cached page never runs the call, so count in a route or exclude that page from the cache. In the browser, use `data-kizami-event="download"` on links or media, with `<?php snippet('kizami/events') ?>` in the `<head>`.
+
+**Dashboard.** The Panel menu entry **Statistics** opens `/k/dashboard`. It is HTTPS only, and failed file logins are limited by Kirby's `auth.trials` and `auth.timeout`. Access: any logged-in Panel user, or the login in `site/config/kizami.php` (keep it out of git):
 
 ```php
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
 
-The dashboard is HTTPS only: over plain HTTP it answers 403 and asks for no password. Behind a reverse proxy Kirby must see HTTPS (`X-Forwarded-Proto`, `X-Forwarded-SSL` or the `url` option); `reportWithoutHttps` lifts the rule for local tests only. After `auth.trials` failed logins from one address or for one user name within `auth.timeout` seconds (Kirby's own options, 10 and 3600 by default) the login answers 429 for the rest of the window. The counters live in `<storage>/kizami/logins.json` as hashes. Behind a reverse proxy all visitors share one address unless Kirby sees the real one. Whoever knows the user name can lock the file login for an hour with ten failed attempts from any address (the Panel login is not affected). The limit slows guessing from one address; it does not replace a strong password, as changing addresses and invented names are not counted together.
+**JSON report.** Set `'kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
 
-### Options
+```sh
+curl -u 'reader:password' 'https://example.com/k/report?kind=week'
+```
 
-All keys are read as `kizami.<name>`, flat or nested. `null` counts as "not set".
+`kind=day` (default: yesterday) or `kind=week` (Monday to Sunday), optional `date=YYYY-MM-DD`. HTTPS only.
 
-| Option | Default | Meaning |
+## Options
+
+Keys are `kizami.<name>`, flat or nested. `null` means "not set".
+
+| Option | Default | Description |
 |---|---|---|
-| `active` | `false` | Master switch for counting, dashboard, report and snapshot route. Redirects work regardless. |
-| `redirects` | `[]` | Counted redirects: `name => target` (`tel:`, `mailto:`, `https:`, or a path), or a closure returning the target. Each name becomes a route `/<name>`. |
-| `targetNames` | `[]` | Display names for redirect targets: `name => label`. |
-| `sourceNames` | `[]` | Display names for referrer hosts / `utm_source` values. |
-| `pageNames` | `[]` | Display names for paths (otherwise the Kirby page title). |
-| `contactTargets` | `[]` | Redirects that count as "contact" for the contact rate. |
-| `tiles` | first two redirects | Redirects shown as dashboard tiles and as `actions` in the report. |
-| `tileNames` | `[]` | Tile headings: `name => label`. |
-| `positionNames` | `[]` | Allowed link positions (`header`, `footer`, …) with labels. Unknown positions are dropped. |
-| `images` | `[]` | Allowed image IDs for gallery-open counting (needs the site's gallery script, see [Beacons](#beacons)). |
-| `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's beacon script). |
-| `events` | `[]` | Allowed actions for `/k/event`: `key => ['label' => ['de' => …, 'en' => …], 'detail' => true\|false]`. See [Actions](#actions). |
-| `retentionMonths` | `13` | Months that single events and reported actions are kept. Older single events are rolled up into daily totals, older actions are deleted. A whole number from 1 to 600; anything else is logged and 13 is used. Lowering the value takes effect at the next maintenance run; raising it does not bring back deleted data. See [Maintenance](#maintenance). |
-| `gaps` | `[]` | Measurement gaps: periods in which counting was interrupted, `['from' => 'Y-m-d H:i', 'to' => 'Y-m-d H:i', 'reason' => '…']` (`to` may be left out for an open gap). See [Measurement gaps](#measurement-gaps). |
-| `ownHosts` | `[]` | Additional own domains whose referrers count as internal — at capture and in the dashboard, with or without `www.`, so rows recorded before a host was listed do not show the own site as a source. |
-| `campaignParam` | `null` | A second campaign parameter, for example `cam` (`?cam=social-tg-webinar`). Its value is stored as `utm_campaign` when the link has no `utm_campaign`, or only an empty one (after cleaning). `utm_campaign` wins if both are present. Values are cleaned like `utm_*` values: only `A–Z`, `a–z`, `0–9`, `_` and `-` are kept, at most 50 characters. A value that is not a non-empty string means not set. |
-| `language` | site language | `en` or `de` for the dashboard and the report text. Otherwise the default language of a multi-language site, then the first two letters of Kirby's `locale` option, then English. |
-| `brand` | site title | Name in the dashboard title and the report (string or closure). |
+| `active` | `false` | Master switch for counting, dashboard, report and snapshot. |
+| `redirects` | `[]` | Counted redirects `name => target` (`tel:`, `mailto:`, `https://` or a path; closures allowed). Route: `/<name>`. |
+| `targetNames` | `[]` | Display names for redirect targets, `name => label`. |
+| `sourceNames` | `[]` | Display names for referrer hosts and `utm_source` values. |
+| `pageNames` | `[]` | Display names for paths (default: page title). |
+| `contactTargets` | `[]` | Redirects that count as contacts for the contact rate. |
+| `tiles` | first two redirects | Redirects shown as dashboard tiles. |
+| `tileNames` | `[]` | Tile headings, `name => label`. |
+| `positionNames` | `[]` | Allowed link positions (for example `header`) with labels; others are dropped. |
+| `images` | `[]` | Image IDs for gallery-open counting (needs the site's own script). |
+| `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's own script). |
+| `events` | `[]` | Allowed actions `key => ['label' => …, 'detail' => true]`; `detail` allows a short detail. |
+| `retentionMonths` | `13` | Months single events and actions are kept (1 to 600). |
+| `gaps` | `[]` | Measurement gaps `['from' => 'Y-m-d H:i', 'to' => …, 'reason' => …]`, marked in dashboard and report. |
+| `ownHosts` | `[]` | Further own domains whose referrers count as internal. |
+| `campaignParam` | `null` | Second campaign parameter (for example `cam`), used as `utm_campaign` when that is missing. |
+| `language` | site language | `en` or `de` for the dashboard and report text. |
+| `brand` | site title | Name in the dashboard title and report (string or closure). |
 | `color` | `#2f4f2a` | Dashboard accent colour (`#rrggbb`). |
-| `fonts` | `null` | Dashboard fonts: `['serif' => ['name' => '…', 'file' => '/assets/fonts/….woff2'], 'sans' => […]]`. `file` is optional. |
-| `extraCss` | `null` | Extra dashboard CSS, as a `.css` path relative to the project root. Loaded last. |
-| `previewAccess` | `null` | For sites behind their own password while being built: a closure returning `['user' => …, 'hash' => …]` while that protection is on, `null` once live. During preview the dashboard checks exactly these credentials. |
-| `report` | `false` | Enable `/k/report` (also requires `active`). Registers the Panel role `kizami-report`. |
-| `reportRoles` | `['kizami-report']` | Roles allowed to read the report. Admins are deliberately not allowed by default. |
-| `journal` | `'wal'` | SQLite journal mode: `'wal'` or `'delete'`. Use `'delete'` on shared hosters where WAL is unreliable (old SQLite, network file systems, "disk I/O error" in `storage/kizami/errors.log`): one file, no `-wal`/`-shm`. Takes effect on the next request. |
-| `siteId` | site hostname | Site identifier (`site`) in the report. Set it explicitly so it survives a domain change. |
-| `reportWithoutHttps` | `false` | Allow the dashboard, report and snapshot over plain HTTP. Local testing only. |
-| `snapshot` | `false` | Enable `/k/snapshot` (also requires `active`). Registers the Panel role `kizami-snapshot` (no Panel access). |
-| `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. Separate from the report role on purpose: the snapshot contains raw events. |
-
-The dashboard and report strings are also registered as Kirby translations (`t('kizami.tile.visits')`).
-
-Panel menu: while `active` is true, the Panel shows an entry "Statistics" ("Kennzahlen" in German) that opens the dashboard in a new tab. If your config sets `panel.menu`, add `'kizami'` to that list; Kirby only shows listed areas then.
-
-### Beacons
-
-Two optional routes accept `POST` requests from the site's own scripts. Both check `Origin` and `Sec-Fetch-Site`, accept only paths of existing pages, and always answer `204`:
-
-- `/k/image` with `image` (a key of `images`) and `path` — a deliberate full-size view in a gallery.
-- `/k/duration` with `path` and `seconds` — active seconds on a page, capped at 30 minutes.
-- `/k/event` with `event`, `path` and optionally `detail` — a configured action, see [Actions](#actions).
-
-### Actions
-
-Actions are clicks or plays that never reach the server on their own: a PDF download, a started video, a click on a social profile, a newsletter window that opened. Kizami counts them when the page reports them. There is no counting without a configured list, and only keys on that list count:
-
-```php
-'kizami.events' => [
-    'download'     => ['label' => ['de' => 'Download', 'en' => 'Download'], 'detail' => true],
-    'video_play'   => ['label' => ['de' => 'Video gestartet', 'en' => 'Video played']],
-    'social_click' => ['label' => ['de' => 'Social Media', 'en' => 'Social media'], 'detail' => true],
-],
-```
-
-Keys are 1–32 characters from `a–z`, `0–9`, `_` and `-`; other keys are ignored. `label` is shown in the dashboard and the report, in the dashboard language (English if missing, then the key). `detail => true` allows a short detail such as a file name, a platform or an album title. Without it a detail is dropped.
-
-Embed the script once per page, for example in the `<head>`:
-
-```php
-<?php snippet('kizami/events') ?>
-```
-
-It prints `<script src="/k/event.js?v=…" data-kizami-path="/books/kizami" defer></script>`, and nothing while Kizami is off or no action is configured. The script comes from the site's own server and there is no inline script, so it works with a strict `script-src 'self'`.
-
-`data-kizami-path` names the page being rendered: `/` for the home page, otherwise `/` and the page ID. The script reports that path instead of the address in the browser, because `/k/event` only accepts existing pages and the address is not always one: a page served by a route of your own (a short code such as `/EEAQ77`), under a language prefix (`/en/…`) or with a translated slug. Without `$page` (the snippet outside a page) and on the error page the attribute is missing and the script sends `location.pathname`.
-
-Then mark elements:
-
-```html
-<a href="/media/prices.pdf" data-kizami-event="download" data-kizami-detail="prices.pdf">Prices (PDF)</a>
-<a href="https://instagram.com/…" data-kizami-event="social_click" data-kizami-detail="Instagram">Instagram</a>
-<video src="/media/trailer.mp4" controls data-kizami-event="video_play"></video>
-```
-
-A click on such an element (or inside it), including a middle click, counts. On `<audio>` and `<video>` the start of playback counts instead. From your own scripts:
-
-```js
-window.kizami.event('newsletter_open', 'scroll'); // key, optional detail
-```
-
-Each action and detail is sent at most once per page view, with `navigator.sendBeacon` (falling back to `fetch` with `keepalive`). The script reads and writes no cookies and no browser storage.
-
-The server applies the rules of the other beacons: `Origin` and `Sec-Fetch-Site` must be the site itself, the path must be an existing page, and bots, an empty user agent, `DNT: 1` and `Sec-GPC: 1` are not counted. A request with more than 2 KB of data is discarded. The answer is always `204`. A detail is cleaned before it is stored:
-
-- at most 100 characters;
-- control characters and line breaks become spaces, and `<` and `>` are removed;
-- URLs keep host and path only (`https://cdn.example/a.pdf?token=…` → `cdn.example/a.pdf`), and a site path loses its query;
-- `mailto:`, `tel:` and `sms:` keep only the scheme.
-
-Don't put names, e-mail addresses or other personal data into details.
-
-**Counting from PHP.** A route or a template can count a configured action itself, without JavaScript, with the page method `$page->kizamiEvent($key, $detail = null)`. It returns the page, so a short-code route counts and answers in one line:
-
-```php
-// site/config/config.php
-'kizami.events' => [
-    'shortcode_access' => ['label' => ['de' => 'Kurzlink', 'en' => 'Short link'], 'detail' => true],
-],
-'routes' => [
-    [
-        'pattern' => '(:alphanum)',
-        'action'  => function (string $code) {
-            $book = page('books')?->children()->findBy('shortcode', $code);
-            return $book?->kizamiEvent('shortcode_access', $code) ?? $this->next();
-        },
-    ],
-],
-```
-
-The rules of `/k/event` apply, except `Origin` and `Sec-Fetch-Site`, which only make sense for a beacon: only keys listed in `kizami.events` count (a key that is not, or no longer, configured counts nothing, without an error), a detail is kept and cleaned only for `'detail' => true`, bots, an empty user agent, `DNT: 1` and `Sec-GPC: 1` are not counted, the day identifier is the one of the visit, and the path is the page's (`/` and its ID, as above; nothing for the error page). `HEAD` requests count nothing. The method never throws: errors go to PHP's error log and the page is returned either way. It writes once to the database like a page view does. Every call counts, so call it once per request. In a template or controller, mind Kirby's page cache: a cached page is served without running either, so count in a route or keep that page out of the cache.
-
-The dashboard section "Actions" lists every configured action with its total and the visits with it (day identifiers per day, like visits), plus the ten most frequent details for actions with `detail`. The report has the same in `events` (see below). Actions are stored in their own table `kizami_custom_events` and follow the same retention as single events (`kizami.retentionMonths`, 13 months by default). They are deleted, not rolled up into daily totals. Snapshots include them. Actions don't change visits, page views, clicks or the action rate.
-
-### Measurement gaps
-
-If counting was interrupted for a while (an outage, a migration), record the period. The days it touches are then marked in the dashboard, and the report flags them, so a dip is explained and an automated comparison can skip it:
-
-```php
-'kizami.gaps' => [
-    ['from' => '2026-10-13 00:21', 'to' => '2026-10-13 15:40', 'reason' => 'Server outage'],
-    ['from' => '2026-10-20 08:00', 'reason' => 'Migration, still running'], // no 'to': open until now
-],
-```
-
-Times are site time (Europe/Berlin, like the day identifiers), `from` is included, `to` is not. `reason` is plain text, at most 200 characters, escaped in the dashboard. An entry with a date that does not exist, a `to` that is not after `from`, a reason that is not text, or a `gaps` value that is not a list is logged to PHP's error log and ignored; the rest still counts.
-
-- **Dashboard:** every shown day that a gap touches gets a band in both trend charts, and a note under the charts lists the gaps of the shown range.
-- **Report:** `gap` (the reported period touches a gap), `gapPrevious` (the comparison does), `gaps` (every gap touching either, with `current` and `previous`), and `gap` on each `perDay` entry of a week. The text gets a `Measurement gap …` line, and one more when the comparison was affected.
-
-Gaps don't change any number. They only mark: visits on a gap day are as recorded.
-
-## Report route
-
-`GET /k/report?kind=day|week&date=YYYY-MM-DD`, with HTTP Basic Auth against a Kirby account that has an allowed role. HTTPS only. Kirby's login throttling applies.
-
-- `kind=day`: the given day, or yesterday if `date` is omitted. Compared with the same weekday one week earlier.
-- `kind=week`: the Monday–Sunday week containing `date`, or the last full week. Compared with the week before.
-
-`campaigns` lists the campaign tags of the period sorted by visits, at most 20 (`campaignsOmitted` says how many more there were — anyone can create a tag with one request, so the list is capped): `{"name": "…", "visits": n, "pageViews": n}`. `name` is the raw value of `utm_campaign` (or of `kizami.campaignParam`), not a display name. `visits` counts the visits with at least one page view carrying the tag. `pageViews` counts all page views with it, not only entry pages, so a visit with two campaigns counts in both. The tag is recorded only when the request reaches Kirby: a page that a cache serves without its query string is not counted. The `text` lists the top 5 after the sources, as `Campaigns: name visits · … · +n more` (`Kampagnen:` / `+n weitere` in German), and only if there are any.
-
-```json
-{
-  "ok": true, "format": 2, "site": "example", "generatedAt": "2026-10-07T08:00:00+02:00",
-  "kind": "day", "from": "2026-10-06", "to": "2026-10-06", "brand": "…",
-  "visits": 3, "visitsPrevious": 2, "pageViews": 9, "pageViewsPrevious": 7,
-  "clicks": 1, "clicksPrevious": 0, "directLinkHits": 0,
-  "discardedLinkHits": 0, "discardedLinkHitsPrevious": 0,
-  "actions": [{"name": "Calls", "value": 1}], "sources": {}, "pages": {}, "campaigns": [], "campaignsOmitted": 0,
-  "dwellTime": null, "events": [],
-  "text": "…"
-}
-```
-
-`events` (since 1.4.0) lists every configured action, most reported first: `{"key": "download", "name": "Download", "count": n, "visits": n, "detail": true, "details": [{"name": "prices.pdf", "count": n, "visits": n}], "detailsOmitted": 0}`. `details` holds the ten most frequent details for actions with `detail`, and `detailsOmitted` counts the rest. Without `kizami.events` the list is empty. When anything was reported, the `text` gets a line `Actions: Download 3 · Video played 1` (`Aktionen:` in German) after the page views and link clicks.
-
-`gaps` (since 1.5.0) lists the measurement gaps that touch the period or its comparison: `{"from": "…", "to": "…" or null while open, "reason": "…", "current": true|false, "previous": true|false}`. `gap` and `gapPrevious` are `true` when the period or the comparison is touched. See [Measurement gaps](#measurement-gaps).
-
-`kind=week` adds `perDay` (`[{"day": "…", "visits": 3}, …]`) and `mobileShare` (percent or `null`). `from` is the first day that was actually delivered, so a reader can check it against the day it asked for. Errors are `{"ok": false, "error": "…"}` with a 4xx/5xx status. `format` changes only when a field is removed, renamed or changes meaning. New fields don't change it.
-
-## Backups
-
-`<storage>/kizami/kizami.sqlite` runs in WAL mode (unless `journal` is `'delete'`). A plain file copy can miss committed transactions, so use one of these:
-
-- **CLI:** `php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite` (also `vendor/bin/kizami-snapshot`).
-- **HTTP**, for hosts without a shell or cron: `GET /k/snapshot` with Basic Auth (enable with `kizami.snapshot`). It returns the snapshot as `application/vnd.sqlite3` and puts the SHA-256 in `X-Kizami-Sha256`.
-
-Both use SQLite's online backup API (available since 3.6.11), rebuild the copy with `VACUUM` so it carries no free pages (and no bytes of deleted events), and run `PRAGMA integrity_check` on it. The copy is one self-contained file. The daily secret (`secret.txt`) is never included. Don't archive it in other backups either.
-
-Maintenance: `php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami` merges single events older than `kizami.retentionMonths` (13 months by default) into daily totals and deletes reported actions of that age. The same thing happens automatically on the first request of each day. The job has no Kirby options: if the site sets `kizami.retentionMonths`, pass the same value, for example `php site/plugins/kizami/maintenance.php --retention-months=24 compact /abs/path/storage/kizami`, or the job uses 13 months. Rolled-up details and deleted actions cannot be restored. Deleted events are no longer contained in the database file (`secure_delete`, then a rebuild) at the latest at the next maintenance run: `compact`, the dashboard and the authenticated `/k/report` route (which rolls up old days like the dashboard). They also rebuild the file with `VACUUM` once to clear bytes left by earlier versions, after every roll-up that deleted events, and whenever free pages exist. A rebuild needs up to twice the file size in free disk space for a while and blocks writers while it runs (5 s busy timeout, after that page views are lost), so on a large file run the CLI job first and not as the first dashboard call. The job also removes a stale daily key (it never creates one, so no file owned by the cron user appears) and reports `stale daily key removed` or `daily key current`, so schedule it daily if the site may go days without a page request. Without any of these the previous key stays on disk.
-
-## Counting rules
-
-- A **visit** is a day identifier with at least one page view.
-- **Redirect clicks** count only when the browser confirms a user action (`Sec-Fetch-User: ?1`) or when the same day identifier has already viewed a page today. Discarded hits are still redirected and appear as a daily total (`discardedLinkHits`), with no other data.
-  - Known undercount: Safari/WebKit never sends `Sec-Fetch-User`. A visitor whose IP or user agent changes between the page view and the click (for example, switching from Wi-Fi to mobile data) is not counted. There is no workaround.
-  - Hits from before 1.0.0 are not filtered retroactively.
-- **Actions** (since 1.4.0) count every accepted report of a configured key. The script sends each action and detail at most once per page view, but the server does not deduplicate; `$page->kizamiEvent()` counts every call. "Visits with this action" are distinct day identifiers per day; unlike redirect clicks they are not filtered by a page view.
-- Bots (user-agent list, empty user agent) and requests with DNT/GPC are not counted. Logged-in Panel users are currently counted like everyone else.
-- The user-agent list contains `headless`, so a headless browser (`HeadlessChrome` in the user agent, as Playwright's Chromium sends by default) counts as a bot. Browser tests that should be counted must set a normal user agent.
-
-## Upgrading from the `kennzahlen` copy
-
-Before 1.0.0 the plugin lived as a copy named `kennzahlen` in each site. On the first request after switching to the package, Kizami moves `<storage>/kennzahlen/` to `<storage>/kizami/` and migrates the tables to the English schema; no data is lost. Configuration keys, the access file, routes, page methods and Panel roles were renamed; the [CHANGELOG](CHANGELOG.md#1.0.0) has the full old → new table. While `site/plugins/kennzahlen/` still exists, the package stays inactive.
+| `fonts` | `null` | Dashboard fonts: `['serif' => ['name' => …, 'file' => …], 'sans' => …]`. |
+| `extraCss` | `null` | Extra dashboard CSS file, relative to the project root. |
+| `previewAccess` | `null` | Closure returning `['user' => …, 'hash' => …]` while a build password protects the site; `null` once live. |
+| `report` | `false` | Enable `/k/report` (needs `active`) and register the role `kizami-report`. |
+| `reportRoles` | `['kizami-report']` | Roles allowed to read the report. |
+| `journal` | `'wal'` | SQLite journal mode, `'wal'` or `'delete'` (use `'delete'` where WAL fails). |
+| `siteId` | site hostname | Site identifier in the report; set it to survive a domain change. |
+| `reportWithoutHttps` | `false` | Allow dashboard, report and snapshot over plain HTTP. Local testing only. |
+| `snapshot` | `false` | Enable the backup download `/k/snapshot` (needs `active`); registers the role `kizami-snapshot`. |
+| `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. |
 
 ## Privacy
 
-See [PRIVACY.md](PRIVACY.md) for what is stored and why, and [DATENSCHUTZ.md](DATENSCHUTZ.md) for the German technical text block for privacy policies. They describe the implementation and are not legal advice. Each operator must check the legal basis and retention period for their own site.
+- **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device.
+- **Daily rotating salt.** Visits are keyed by a hash of IP address, user agent, date and a secret replaced every day (Europe/Berlin). Raw IP addresses and user agents are never stored; identifiers of different days cannot be linked.
+- **Do Not Track and GPC.** Requests with `DNT: 1` or `Sec-GPC: 1` are not recorded.
+- **Retention.** Single events are kept 13 months (`retentionMonths`), then reduced to daily totals. Reported actions are deleted after the same period.
 
-## Development
-
-```sh
-composer install --ignore-platform-req=ext-gd   # Kirby is a dev dependency used as a test fixture
-composer test                                   # or: sh tests/run.sh
-```
-
-The tests are plain PHP scripts (exit code 0 = pass). The read-only database check must run as a non-root user. `tests/EventJsTest.php` runs `views/event.js` in Node and is skipped where `node` is missing. For a test in a real headless browser, set a normal user agent (for example `browser.newPage({ userAgent: 'Mozilla/5.0 … Chrome/130.0.0.0 Safari/537.36' })` in Playwright): the default contains `HeadlessChrome` and is filtered as a bot, so nothing would be counted.
+See [PRIVACY.md](PRIVACY.md) (English) and [DATENSCHUTZ.md](DATENSCHUTZ.md) (German text for privacy policies). They are not legal advice.
 
 ## Maintenance
 
-This module is open source under the MIT license and is maintained for the author's own projects. Issues and pull requests are welcome, but there is no support promise and no release schedule. Report security problems privately through GitHub's private vulnerability reporting (the "Report a vulnerability" button on the Security tab).
+```sh
+php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami
+php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite
+```
+
+Run `compact` daily if the site may go days without visits; it also removes the previous day's salt key. Add `--retention-months=N` after `maintenance.php` if `kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
+
+Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
