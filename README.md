@@ -24,12 +24,6 @@ Kizami counts page views, contact clicks and optional actions on a Kirby site an
 composer require sayamaapps/kirby-kizami
 ```
 
-Until the package is on Packagist, add the repository to `composer.json` first:
-
-```json
-"repositories": [{ "type": "vcs", "url": "https://github.com/sayamaapps/kirby-kizami" }]
-```
-
 Composer installs to `site/plugins/kizami/`. Add that path to `.gitignore` and deploy it like `vendor/`.
 
 A stock Kirby has no `storage` root. Define it in `public/index.php`; `storage/` sits beside `public/`, outside the web root:
