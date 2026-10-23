@@ -116,8 +116,8 @@ function kizami_rotate_secret(): void
 /**
  * Also record dashboard and report errors in storage/kizami/errors.log.
  *
- * On some hosts error_log() ends up in no log anyone can read (28.09.2026:
- * dashboard "not available", cause invisible). The file sits outside
+ * On some hosts error_log() ends up in no log anyone can read, which hides
+ * the cause of a dashboard failure. The file sits outside
  * public/, contains only the exception text and location, no visitor data,
  * and starts over at 64 KB.
  */
@@ -131,7 +131,7 @@ function kizami_log_error(\Throwable $e): void
         if ($e->getPrevious() !== null) {
             $line .= ' <- ' . get_class($e->getPrevious()) . ': ' . $e->getPrevious()->getMessage();
         }
-        // Record the versions too: the outage of 28.09.2026 was SQLite 3.7.17.
+        // Record the versions too, so an old SQLite (3.7.17) can be told apart.
         $line .= ' [SQLite ' . (\SQLite3::version()['versionString'] ?? '?') . ', PHP ' . PHP_VERSION . ']';
         @file_put_contents($file, $line . "\n", $mode | LOCK_EX);
     } catch (\Throwable) {
@@ -401,7 +401,6 @@ App::plugin('sayamaapps/kizami', [
             // The home page MUST be '/', not '/home'. The route:after hook
             // writes '/' for it (the path is empty there); if this said
             // '/home', the dashboard would show two names for one page.
-            // Noticed on a real project on 20.09.2026.
             $origin = $this->isHomePage() ? '/' : '/' . $this->uri();
 
             // Under a subdirectory install the route lives below the index
@@ -492,7 +491,7 @@ App::plugin('sayamaapps/kizami', [
     ],
 
     // Routes as a closure, not an array: the redirect routes are only known
-    // once the config is read. Verified on 20.09.2026: optionsFromConfig()
+    // once the config is read. Verified: optionsFromConfig()
     // runs BEFORE extensionsFromPlugins(), so option() works here. setSite()
     // runs AFTERWARDS, though — that is why the target is resolved in the
     // route, not at registration.
@@ -742,10 +741,9 @@ App::plugin('sayamaapps/kizami', [
         /**
          * Redirects — DELIBERATELY NOT tied to `kizami.active`.
          *
-         * Noticed while building (20.09.2026): the draft wanted these routes
-         * behind the same switch as the counting. Then switching off the
-         * statistics breaks EVERY phone link on the site — invisibly for
-         * whoever flipped the switch.
+         * Tying them to the same switch as the counting would mean: switching
+         * off the statistics breaks EVERY phone link on the site — invisibly
+         * for whoever flipped the switch.
          *
          * So the split is: the redirect is a function of the SITE and depends
          * only on a configured target. Counting is optional and depends on
@@ -788,7 +786,7 @@ App::plugin('sayamaapps/kizami', [
 
                     // NOT Response::redirect() — it sends the target through
                     // Url::unIdn(), and Uri::setScheme() only allows
-                    // http/https. Measured on real Kirby on 20.09.2026:
+                    // http/https. Verified against Kirby:
                     // Response::redirect('tel:+49…') throws
                     // "InvalidArgumentException: Invalid URL scheme: tel".
                     // Of all things the most important click on the site.

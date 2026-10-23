@@ -215,8 +215,8 @@ final class Capture
     /**
      * Does this redirect hit count as a human click? (since Kizami 1.0.0)
      *
-     * Reason: on one site, 117 of 169 contact-redirect hits had no page view
-     * with the same day identifier — a link follower with a browser-like user
+     * Reason: many contact-redirect hits had no page view with the same day
+     * identifier. They came from a link follower with a browser-like user
      * agent and rotating IP addresses that isBot() does not recognise.
      *
      * Rules:

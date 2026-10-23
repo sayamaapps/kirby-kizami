@@ -254,9 +254,9 @@ All notable changes to this project are documented here. Versions follow
     fallback without the attribute). `/k/event` only accepts existing pages,
     and the address in the browser is not always one: a page served by a
     route of the site's own (a short code like `/EEAQ77`), under a language
-    prefix or with a translated slug. Found on a site with short-code
-    routes, where every action was answered with `204` but not stored. The
-    server check is unchanged: still only existing pages.
+    prefix or with a translated slug. Without the attribute, every action on
+    such a page is answered with `204` but not stored. The server check is
+    unchanged: still only existing pages.
   - **`$page->kizamiEvent($key, $detail = null)`**: counts a configured
     action from PHP, for a route or a template — for example a short-code
     route counting `shortcode_access` without JavaScript. Returns the page.
@@ -328,9 +328,9 @@ All notable changes to this project are documented here. Versions follow
 ### Added
 - Option `journal`: `wal` (default) or `delete`. `delete` runs the database
   with SQLite's classic rollback journal — one file, no `-wal`/`-shm`, no shared
-  memory. For shared hosters where WAL is unreliable: on 2026-10-11 a site on
-  a shared host (SQLite 3.7.17, earlier "disk I/O error"s) had its database malformed
-  in WAL mode. Switching an existing database is automatic on the next request.
+  memory. For shared hosters where WAL is unreliable (SQLite 3.7.17 builds,
+  earlier "disk I/O error"s), WAL can leave the database malformed. Switching
+  an existing database is automatic on the next request.
 - Openers without Kirby options (`maintenance.php`, `bin/kizami-snapshot`) keep
   the mode the file already has, instead of switching it back to WAL.
 
@@ -350,8 +350,8 @@ All notable changes to this project are documented here. Versions follow
 ## [1.0.0] — 2026-10-08
 
 First release as a Composer package. Before 1.0.0 the code lived as a copy
-named `kennzahlen` in each site (`site/plugins/kennzahlen/`), with German
-names throughout. The changes below are measured against that copy.
+named `kennzahlen` (`site/plugins/kennzahlen/`), with German
+names throughout. The changes below are relative to that copy.
 
 ### Changed — counting definition (2026-10-08)
 
@@ -359,8 +359,8 @@ names throughout. The changes below are measured against that copy.
   only if the browser sends `Sec-Fetch-User: ?1`, or if the same day identifier
   already has a page view on the same (Europe/Berlin) day. Everything else is
   still redirected (302), but is not stored as an event. It only increases a
-  daily counter (`kizami_discarded`: date + count). Reason: on one site,
-  117 of 169 contact-redirect hits had no page view at all. They came from a
+  daily counter (`kizami_discarded`: date + count). Reason: many
+  contact-redirect hits had no page view at all. They came from a
   link-following crawler with a browser-like user agent and rotating IPs.
   Expect lower click numbers and contact rates from the switch-over day on.
   Known undercount: browsers without `Sec-Fetch-User` (Safari/WebKit, older

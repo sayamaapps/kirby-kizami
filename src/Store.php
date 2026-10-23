@@ -149,9 +149,9 @@ final class Store
      * @param string $journal `wal` (default) or `delete`. WAL lets readers and
      *        the per-request writer work side by side, but needs working shared
      *        memory and file locks for the `-shm`/`-wal` files. On some shared
-     *        hosters (a shared host, SQLite 3.7.17) that is not given: on 11.10.2026 WAL
-     *        left a client site's database malformed after earlier "disk I/O
-     *        error"s. `delete` uses the classic rollback journal — one file,
+     *        hosters (SQLite 3.7.17) that is not given: there WAL can leave
+     *        the database malformed after earlier "disk I/O error"s, so use
+     *        `delete`, which uses the classic rollback journal — one file,
      *        no shared memory. Every opener must pass the same mode, otherwise
      *        the next connection switches the file back. Null (CLI tools
      *        without Kirby options) keeps the mode the file already has; a new
@@ -278,7 +278,7 @@ final class Store
      * indexes that missingTables() considers healthy.
      *
      * Every exec() is checked for its return value via exec(), not just
-     * wrapped in try/catch. Reason, measured on 20.09.2026: SQLite3 reports a
+     * wrapped in try/catch. Reason: SQLite3 reports a
      * rejected statement in the default error mode with `false`, NOT with an
      * exception (only enableExceptions(true) throws). A try/catch alone would
      * miss it — a read-only database would have left an open transaction and
@@ -313,8 +313,8 @@ final class Store
     {
         // With enableExceptions(true), exec() throws an SQLite3Exception
         // instead of returning false. Both become RuntimeException here, the
-        // one exception type callers rely on. Measured on SQLite 3.7.17
-        // (08.10.2026): there, BEGIN IMMEDIATE already fails on a read-only
+        // one exception type callers rely on. Measured on SQLite 3.7.17:
+        // there, BEGIN IMMEDIATE already fails on a read-only
         // file — outside the try in createSchema(); without this conversion
         // an SQLite3Exception escaped.
         try {
@@ -1093,7 +1093,7 @@ final class Store
         $after = self::afterEntrySql();
         // Explicit alias: SQLite 3.7.17 (old hoster) otherwise names the
         // column "e.source", and the dashboard broke with "Undefined array
-        // key" (28.09.2026).
+        // key".
         $sources = $this->fetch("SELECT e.source AS source, COUNT(DISTINCT e.id) AS visits,
             COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id || ':' || a.target END) AS clicks,
             COUNT(DISTINCT CASE WHEN a.id IS NOT NULL THEN e.id END) AS with_contact
