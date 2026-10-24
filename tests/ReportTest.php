@@ -319,9 +319,10 @@ try {
     ]);
     $kirby = $app();
     $kirby->impersonate('kirby');
+    // The admin first: Kirby 6 refuses any other role for the first account.
+    $kirby->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
     $kirby->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
     $kirby->users()->create(['email' => 'snapshot@example.invalid', 'role' => 'kizami-snapshot', 'password' => 'report-password-very-long-123']);
-    $kirby->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
     same(['kizami-report', false], [$kirby->user('report@example.invalid')->role()->name(), $kirby->user('report@example.invalid')->role()->permissions()->for('access', 'panel')], 'Role created, without Panel');
 
     $store = new Store($tmp . '/storage/kizami/' . Store::FILE);

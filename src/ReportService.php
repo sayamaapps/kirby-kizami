@@ -184,6 +184,6 @@ final class ReportService
         if ($status === 401) {
             $headers['WWW-Authenticate'] = 'Basic realm="Kizami", charset="UTF-8"';
         }
-        return Response::json($body, $status, null, $headers);
+        return Response::json($body, $status, false, $headers);
     }
 }
