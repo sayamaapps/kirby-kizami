@@ -13,6 +13,15 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [1.8.1] — 2026-10-24
+
+### Fixed
+
+- **Kirby 6: the report endpoint no longer fails.** `/k/report` passed `null` as
+  the third argument of `Response::json()`; Kirby 6 types it as `bool` and threw a
+  `TypeError`. Now `false`, identical behaviour on Kirby 5 (the body is already a
+  string). The test suite runs on Kirby 5 and on the Kirby 6 pre-release.
+
 ## [1.8.0] — 2026-10-20
 
 ### Changed
