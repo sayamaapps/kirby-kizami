@@ -597,6 +597,8 @@ try {
         'options' => ['url' => 'http://127.0.0.1:' . $port] + $config,
     ]);
     $setup->impersonate('kirby');
+    // The admin first: Kirby 6 refuses any other role for the first account.
+    $setup->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
     $setup->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
     Kirby\Cms\App::destroy();
     $reportAuth = ['Authorization: Basic ' . base64_encode('report@example.invalid:report-password-very-long-123')];
