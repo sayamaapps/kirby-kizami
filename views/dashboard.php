@@ -19,12 +19,12 @@ $failed = !empty($data['error']) || !empty($data['technical']['schema'] ?? []) |
 $shortDate = fn (string $iso) => $e(I18n::shortDate(new \DateTimeImmutable($iso)));
 $table = function (array $rows, string|null $columnA = null, string|null $columnB = null, string|null $summary = null) use ($e) {
 	if ($rows === []) {
-	return '';
+		return '';
 	}
 	$h = '<details class="as-table"><summary>' . $e($summary ?? I18n::t('table.summary')) . '</summary><table><thead><tr><th scope="col">'
 		. $e($columnA ?? I18n::t('table.name')) . '</th><th scope="col" class="num">' . $e($columnB ?? I18n::t('table.count')) . '</th></tr></thead><tbody>';
 	foreach ($rows as $r) {
-	$h .= '<tr><td>' . $e($r['name']) . '</td><td class="num">' . Chart::number($r['value']) . '</td></tr>';
+		$h .= '<tr><td>' . $e($r['name']) . '</td><td class="num">' . Chart::number($r['value']) . '</td></tr>';
 	}
 	return $h . '</tbody></table></details>';
 };

@@ -854,7 +854,11 @@ final class Store
                     CASE WHEN referrer = '(intern)' THEN '(internal)' ELSE referrer END,
                     utm_source, utm_medium, utm_campaign, sitzung, "
 					. $column('geraet', "CASE COALESCE(geraet, '') WHEN 'mobil' THEN 'mobile' ELSE COALESCE(geraet, '') END", "''") . ', '
-					. $column('position', "CASE COALESCE(position, '') WHEN 'kopf' THEN 'header' WHEN 'fuss' THEN 'footer' WHEN 'inhalt' THEN 'content' ELSE COALESCE(position, '') END", "''") . ', '
+					. $column(
+						'position',
+						"CASE COALESCE(position, '') WHEN 'kopf' THEN 'header' WHEN 'fuss' THEN 'footer' WHEN 'inhalt' THEN 'content' ELSE COALESCE(position, '') END",
+						"''"
+					) . ', '
 					. $column('sekunden', 'COALESCE(sekunden, 0)', '0') . '
                 FROM ereignisse');
 			$this->exec('DROP TABLE ereignisse');

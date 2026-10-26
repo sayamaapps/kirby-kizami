@@ -44,7 +44,8 @@ final class Chart
 			}
 			$x = $n > 1 ? max(0, $i * $step - $step / 2) : 0;
 			$right = $n > 1 ? min(600, $i * $step + $step / 2) : 600;
-			$svg .= '<rect class="gap-band" x="' . round($x, 1) . '" y="0" width="' . round($right - $x, 1) . '" height="160"><title>' . self::e((string)$title) . '</title></rect>';
+			$svg .= '<rect class="gap-band" x="' . round($x, 1) . '" y="0" width="' . round($right - $x, 1)
+				. '" height="160"><title>' . self::e((string)$title) . '</title></rect>';
 		}
 		// Split the hit areas between the points (midpoint to the neighbour
 		// as the boundary) instead of giving each area the full step width —

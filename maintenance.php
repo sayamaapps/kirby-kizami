@@ -29,7 +29,10 @@ try {
 	$directory = $args[1] ?? '';
 	$db = rtrim($directory, '/') . '/' . Sayamaapps\Kizami\Store::FILE;
 	if (!in_array($action, ['compact', 'snapshot'], true) || !is_file($db)) {
-		throw new RuntimeException('Usage: php maintenance.php [--retention-months=N] compact STORAGE/KIZAMI or snapshot STORAGE/KIZAMI NEW-FILE.sqlite; an existing database is required');
+		throw new RuntimeException(
+			'Usage: php maintenance.php [--retention-months=N] compact STORAGE/KIZAMI or snapshot STORAGE/KIZAMI NEW-FILE.sqlite; '
+			. 'an existing database is required'
+		);
 	}
 	$store = new Sayamaapps\Kizami\Store($db, null, [], $retention);
 	$deleted = $store->compact();
