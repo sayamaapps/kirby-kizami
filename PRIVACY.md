@@ -49,7 +49,7 @@ total with no other data**.
 
 ## Retention
 
-Single events are removed from the active database after 13 months (`kizami.retentionMonths`, the operator may choose 1 to 600 months); the deleted contents are no longer contained in the database file at the latest at the next maintenance run (dashboard, report route or the job), and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
+Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months); the deleted contents are no longer contained in the database file at the latest at the next maintenance run (dashboard, report route or the job), and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
 that, full days are condensed into daily totals (page views, redirect clicks,
 estimated devices). Actions and their details are deleted after the same period as
 well and are not part of the daily totals. Backups need their own limited retention and must not

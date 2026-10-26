@@ -84,7 +84,7 @@ return [
 		return $this->kizamiRedirectAnchor($name, $text, $fallback, $position, $attributes);
 	},
 	/**
-	 * Counts a configured action (kizami.events) on this page from PHP
+	 * Counts a configured action (sayamaapps.kizami.events) on this page from PHP
 	 * (since 1.4.0), see Runtime::event(). Returns the page, so a route
 	 * can count and answer in one line:
 	 *

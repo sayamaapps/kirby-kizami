@@ -23,12 +23,12 @@ class Runtime
 {
 	/**
 	 * Build phase vs. live:
-	 * - Build phase (`kizami.previewAccess` returns credentials, the site sits
+	 * - Build phase (`sayamaapps.kizami.previewAccess` returns credentials, the site sits
 	 *   behind its own preview protection): check the same preview credentials
 	 *   again, independently. Being in preview alone is no proof of access. This
 	 *   resolves the Basic Auth realm collision (one Authorization header, two
 	 *   secrets).
-	 * - Live (`kizami.previewAccess` unset or null): own bcrypt auth from
+	 * - Live (`sayamaapps.kizami.previewAccess` unset or null): own bcrypt auth from
 	 *   site/config/kizami.php OR Panel login.
 	 *
 	 * Returns null when access is granted, otherwise the response to send: the
@@ -136,7 +136,7 @@ class Runtime
 
 	/**
 	 * Campaign tag of the request. utm_campaign wins; only if it is empty after
-	 * cleaning, the parameter named in kizami.campaignParam (for example `cam`)
+	 * cleaning, the parameter named in sayamaapps.kizami.campaignParam (for example `cam`)
 	 * is used. Not set, or not a non-empty string: no fallback.
 	 */
 	public static function campaign(): string
@@ -160,7 +160,7 @@ class Runtime
 	 * HTTP travels in the clear, and a 401 with WWW-Authenticate would make the
 	 * browser ask for exactly that. So over HTTP nobody is prompted and nobody is
 	 * checked — the Panel cookie included; the dashboard is HTTPS only for
-	 * everyone. Same rule and same escape hatch (`kizami.reportWithoutHttps`) as
+	 * everyone. Same rule and same escape hatch (`sayamaapps.kizami.reportWithoutHttps`) as
 	 * /k/report and /k/snapshot. Where the dashboard would answer Kirby's 404
 	 * anyway (preview, no access file), that 404 stays: a 403 would give away
 	 * that the module runs here.
@@ -237,7 +237,7 @@ class Runtime
 	 * JavaScript. Use $page->kizamiEvent($key, $detail) (page method below).
 	 *
 	 * The rules of /k/event, except the two that only make sense for a beacon
-	 * (Origin, Sec-Fetch-Site): only keys listed in kizami.events, a detail only
+	 * (Origin, Sec-Fetch-Site): only keys listed in sayamaapps.kizami.events, a detail only
 	 * for `'detail' => true` and cleaned like there, nothing for bots, an empty
 	 * user agent, DNT or GPC (self::write()), the same day identifier as page
 	 * views. HEAD requests count nothing: link checkers and previews send them.
@@ -249,7 +249,7 @@ class Runtime
 	public static function event(mixed $key, mixed $page, mixed $detail = null): void
 	{
 		try {
-			// kizami.active, DNT/GPC and bots: self::write().
+			// sayamaapps.kizami.active, DNT/GPC and bots: self::write().
 			if (App::instance()->request()->method() === 'HEAD') {
 				return;
 			}
@@ -331,13 +331,13 @@ class Runtime
 		return new Response($page?->render() ?? '', 'text/html', 404);
 	}
 
-	/** Reads `kizami.<key>`. Also meant for site snippets (for example the dwell-time snippet). */
+	/** Reads `sayamaapps.kizami.<key>`, falling back to `kizami.<key>`. Also meant for site snippets (for example the dwell-time snippet). */
 	public static function option(string $key, mixed $default = null): mixed
 	{
 		return Options::get(App::instance(), $key, $default);
 	}
 
-	/** The site's own hosts (index URL plus `kizami.ownHosts`): referrers from them are internal, not a source. */
+	/** The site's own hosts (index URL plus `sayamaapps.kizami.ownHosts`): referrers from them are internal, not a source. */
 	public static function ownHosts(): array
 	{
 		return [parse_url(App::instance()->url('index'), PHP_URL_HOST), ...(array)self::option('ownHosts', [])];
@@ -398,7 +398,7 @@ class Runtime
 		];
 	}
 
-	/** Opens the site's database with the configured journal mode (`kizami.journal`). */
+	/** Opens the site's database with the configured journal mode (`sayamaapps.kizami.journal`). */
 	public static function store(): Store
 	{
 		return new Store(self::directory() . '/' . Store::FILE, Store::journal(self::option('journal')), self::ownHosts(), Options::retentionMonths(App::instance()));

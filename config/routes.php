@@ -77,7 +77,7 @@ return function () {
 			'pattern' => 'k/event',
 			'method' => 'POST',
 			'action' => function () {
-				// Reported actions (kizami.events, since 1.4.0): the same
+				// Reported actions (sayamaapps.kizami.events, since 1.4.0): the same
 				// origin, path and opt-out rules as k/image, only listed
 				// keys, always 204. The detail is the only free text any
 				// Kizami route accepts, hence the size cap: a request with
@@ -258,7 +258,7 @@ return function () {
 				}
 				$css .= $fonts['css'] === '' ? '' : "\n" . $fonts['css'];
 				// Project extras (fine-tuning): a file relative to the project root, loaded last — so it wins,
-				// for example 'site/config/kizami-extra.css'. Fonts are better set via kizami.fonts.
+				// for example 'site/config/kizami-extra.css'. Fonts are better set via sayamaapps.kizami.fonts.
 				$extra = Runtime::option('extraCss');
 				if (is_string($extra) && $extra !== '' && !str_contains($extra, '..') && str_ends_with($extra, '.css')) {
 					$file = App::instance()->root('base') . '/' . ltrim($extra, '/');
@@ -272,7 +272,7 @@ return function () {
 	];
 
 	/**
-	 * Redirects — DELIBERATELY NOT tied to `kizami.active`.
+	 * Redirects — DELIBERATELY NOT tied to `sayamaapps.kizami.active`.
 	 *
 	 * Tying them to the same switch as the counting would mean: switching
 	 * off the statistics breaks EVERY phone link on the site — invisibly

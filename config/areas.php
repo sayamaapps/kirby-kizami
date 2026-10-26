@@ -12,10 +12,10 @@ use Sayamaapps\Kizami\Runtime;
  * entry opens the dashboard in a new tab like any external menu link.
  * Every Panel role sees it: a logged-in Panel user already passes the
  * dashboard's access check (kizami_access_granted()). During the build
- * phase (`kizami.previewAccess`) the dashboard still asks for the
+ * phase (`sayamaapps.kizami.previewAccess`) the dashboard still asks for the
  * preview login.
  *
- * `menu` is a closure, so switching `kizami.active` off removes the entry
+ * `menu` is a closure, so switching `sayamaapps.kizami.active` off removes the entry
  * without a cache clear. Sites with their own `panel.menu` list must add
  * 'kizami' to it — Kirby then shows only the listed areas.
  */
