@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * Dashboard fonts from the configuration (`kizami.fonts`), so no site has to

@@ -3,14 +3,13 @@
 /** Independently tests archiveal contract; only disposable SQLite fixtures.
  * ddev exec php tests/ArchiveTest.php
  */
-require_once __DIR__ . '/../src/Store.php';
-use Kizami\Store;
+use PHPUnit\Framework\Assert;
 // Never touch application storage or retain test identifiers.
 
-use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

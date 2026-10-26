@@ -14,14 +14,11 @@ final class VisitsTest extends TestCase
 	public function testSuite(): void
 	{
 		global $checks;
-		foreach (['I18n', 'Store', 'Gaps', 'Analysis', 'Names', 'Comparison', 'Chart'] as $class) {
-			require_once __DIR__ . '/../src/' . $class . '.php';
-		}
 		$dir = sys_get_temp_dir() . '/kizami-visits-' . bin2hex(random_bytes(6));
 		mkdir($dir, 0700);
 		$checks = 0;
 		try {
-			$store = new Kizami\Store($dir . '/k.sqlite');
+			$store = new Sayamaapps\Kizami\Store($dir . '/k.sqlite');
 			$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 			$store->setNow($today->setTime(12, 0));
 			$put = function (string $type, string $hash, int $minute, string $target = '', int $day = 0) use ($store, $today) {
@@ -62,9 +59,9 @@ final class VisitsTest extends TestCase
 			$store->write(['type' => 'page', 'action' => 'view', 'session' => 'visitor',
 				'device' => '', 'created_at' => $today->setTime(10, 4)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')]);
 			self::visitsCheck(5, array_sum($store->devices(7)), 'Different metadata of the same day visit create no duplicate devices');
-			$data = Kizami\Analysis::data(
+			$data = Sayamaapps\Kizami\Analysis::data(
 				$store,
-				new Kizami\Names([], [], []),
+				new Sayamaapps\Kizami\Names([], [], []),
 				7,
 				['targets' => ['call', 'instagram'], 'contactTargets' => ['call']]
 			);

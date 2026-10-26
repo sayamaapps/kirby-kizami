@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 use Kirby\Cms\App;
 use Kirby\Http\Response;

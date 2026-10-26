@@ -6,30 +6,21 @@
  * retention, the numbers, the dashboard section and the report field.
  *   php tests/EventsTest.php
  */
-require_once __DIR__ . '/../src/I18n.php';
-require_once __DIR__ . '/../src/Capture.php';
-require_once __DIR__ . '/../src/Events.php';
-require_once __DIR__ . '/../src/Store.php';
-require_once __DIR__ . '/../src/Names.php';
-require_once __DIR__ . '/../src/Comparison.php';
-require_once __DIR__ . '/../src/Chart.php';
-require_once __DIR__ . '/../src/Gaps.php';
-require_once __DIR__ . '/../src/Analysis.php';
-require_once __DIR__ . '/../src/Report.php';
-use Kizami\Analysis;
-use Kizami\Capture;
-use Kizami\Events;
-use Kizami\I18n;
-use Kizami\Names;
-use Kizami\Report;
-use Kizami\Store;
-// Every warning, notice or deprecation is a failure: the cleaning must not
-// "work" only because a function returned null on bad input.
 
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Analysis;
+use Sayamaapps\Kizami\Capture;
+use Sayamaapps\Kizami\Events;
+// Every warning, notice or deprecation is a failure: the cleaning must not
+// "work" only because a function returned null on bad input.
+
+use Sayamaapps\Kizami\I18n;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Report;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

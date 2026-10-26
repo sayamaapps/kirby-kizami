@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * Short report for scripts (daily digest across sites, chat bot): one Berlin

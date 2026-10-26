@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 use DateTimeImmutable;
 

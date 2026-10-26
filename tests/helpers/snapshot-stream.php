@@ -38,7 +38,7 @@ $app = new Kirby\Cms\App([
 	],
 ]);
 
-$response = Kizami\SnapshotService::respond($app);
+$response = Sayamaapps\Kizami\SnapshotService::respond($app);
 
 $bytes = 0;
 $head = '';

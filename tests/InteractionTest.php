@@ -1,19 +1,12 @@
 <?php
 
 /** Sources, entries, image deduplication and migration without Kirby. */
-require_once __DIR__ . '/../src/I18n.php';
-require_once __DIR__ . '/../src/Store.php';
-require_once __DIR__ . '/../src/Gaps.php';
-require_once __DIR__ . '/../src/Analysis.php';
-require_once __DIR__ . '/../src/Names.php';
-require_once __DIR__ . '/../src/Comparison.php';
-require_once __DIR__ . '/../src/Chart.php';
-use Kizami\Names;
-use Kizami\Store;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]
@@ -127,13 +120,13 @@ final class InteractionTest extends TestCase
 			self::same(false, isset($q['www.example.de']) || isset($q['preview.example']), 'Own hosts are no source of their own');
 			self::same(4, array_column($own->sources(7), 'count', 'source')[Names::INTERNAL] ?? 0, 'Own hosts are internal navigation among all page views');
 			self::same(1, array_column($store->contactSources(7, ['call'])['sources'], 'visits', 'source')['www.example.de'] ?? 0, 'Without own hosts the bare host stays a source');
-			$labels = array_column(Kizami\Analysis::data($own, new Names([], [], []), 7, ['contactTargets' => ['call']])['contact']['sources'], 'visits', 'name');
-			self::same(2, $labels[Kizami\I18n::t('source.unknown')] ?? 0, 'Unrecorded entries get their own label');
-			self::same(true, Kizami\I18n::t('source.unknown') !== Kizami\I18n::t('source.directUnknown'), 'Label differs from direct / unknown');
+			$labels = array_column(Sayamaapps\Kizami\Analysis::data($own, new Names([], [], []), 7, ['contactTargets' => ['call']])['contact']['sources'], 'visits', 'name');
+			self::same(2, $labels[Sayamaapps\Kizami\I18n::t('source.unknown')] ?? 0, 'Unrecorded entries get their own label');
+			self::same(true, Sayamaapps\Kizami\I18n::t('source.unknown') !== Sayamaapps\Kizami\I18n::t('source.directUnknown'), 'Label differs from direct / unknown');
 			for ($i = 0; $i < 19; $i++) {
 				$put('page', 'g' . $i, 0, ['referrer' => 'www.google.com']);
 			}
-			$a = Kizami\Analysis::data(
+			$a = Sayamaapps\Kizami\Analysis::data(
 				$store,
 				new Names([], ['google.com' => 'Google'], []),
 				7,

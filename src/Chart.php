@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * Charts as SVG/HTML strings, without JavaScript and without inline styles

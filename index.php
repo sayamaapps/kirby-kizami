@@ -1,50 +1,31 @@
 <?php
 
 use Kirby\Cms\App;
+use Kirby\Filesystem\F;
 use Kirby\Http\Response;
 
-require_once __DIR__ . '/src/I18n.php';
-require_once __DIR__ . '/src/Options.php';
-require_once __DIR__ . '/src/Capture.php';
-require_once __DIR__ . '/src/Events.php';
-require_once __DIR__ . '/src/Gaps.php';
-require_once __DIR__ . '/src/Secret.php';
-require_once __DIR__ . '/src/Store.php';
-require_once __DIR__ . '/src/Migration.php';
-require_once __DIR__ . '/src/Setup.php';
-require_once __DIR__ . '/src/Redirect.php';
-require_once __DIR__ . '/src/Access.php';
-require_once __DIR__ . '/src/Lockout.php';
-require_once __DIR__ . '/src/Names.php';
-require_once __DIR__ . '/src/Comparison.php';
-require_once __DIR__ . '/src/Chart.php';
-require_once __DIR__ . '/src/Fonts.php';
-require_once __DIR__ . '/src/Analysis.php';
-require_once __DIR__ . '/src/Report.php';
-require_once __DIR__ . '/src/ReportError.php';
-require_once __DIR__ . '/src/ReportService.php';
-require_once __DIR__ . '/src/SnapshotResponse.php';
-require_once __DIR__ . '/src/SnapshotService.php';
+F::loadClasses(require __DIR__ . '/autoload.php', __DIR__);
+require_once __DIR__ . '/legacy.php';
 
-use Kizami\Access;
-use Kizami\Analysis;
-use Kizami\Capture;
-use Kizami\Chart;
-use Kizami\Events;
-use Kizami\Fonts;
-use Kizami\Gaps;
-use Kizami\I18n;
-use Kizami\Lockout;
-use Kizami\Migration;
-use Kizami\Names;
-use Kizami\Options;
-use Kizami\Redirect;
-use Kizami\ReportService;
-use Kizami\Secret;
-use Kizami\Setup;
-use Kizami\SetupError;
-use Kizami\SnapshotService;
-use Kizami\Store;
+use Sayamaapps\Kizami\Access;
+use Sayamaapps\Kizami\Analysis;
+use Sayamaapps\Kizami\Capture;
+use Sayamaapps\Kizami\Chart;
+use Sayamaapps\Kizami\Events;
+use Sayamaapps\Kizami\Fonts;
+use Sayamaapps\Kizami\Gaps;
+use Sayamaapps\Kizami\I18n;
+use Sayamaapps\Kizami\Lockout;
+use Sayamaapps\Kizami\Migration;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Options;
+use Sayamaapps\Kizami\Redirect;
+use Sayamaapps\Kizami\ReportService;
+use Sayamaapps\Kizami\Secret;
+use Sayamaapps\Kizami\Setup;
+use Sayamaapps\Kizami\SetupError;
+use Sayamaapps\Kizami\SnapshotService;
+use Sayamaapps\Kizami\Store;
 
 /**
  * Kizami — server-side page counting, off by default.

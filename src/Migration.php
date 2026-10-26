@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * One-time move of the pre-1.0 storage directory, Kirby-free.

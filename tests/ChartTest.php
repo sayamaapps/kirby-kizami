@@ -3,10 +3,8 @@
 /** Charts without Kirby: valid XML, escaping, edge cases.
  *   php tests/ChartTest.php
  */
-require_once __DIR__ . '/../src/I18n.php';
-require_once __DIR__ . '/../src/Chart.php';
-use Kizami\Chart;
-use Kizami\I18n;
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\Attributes\CoversNothing;
 // K5: hit areas must not overlap — the boundary to the neighbour lies on the
 // midpoint, so the first and last area are half as wide.
 // C-b: forced decimal for uniform comparison values.
@@ -15,10 +13,10 @@ use Kizami\I18n;
 // Names from stored rows may hold invalid UTF-8 (before 1.6.1): shown with
 // U+FFFD, not dropped — htmlspecialchars() without ENT_SUBSTITUTE returns ''.
 
-use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Chart;
+use Sayamaapps\Kizami\I18n;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

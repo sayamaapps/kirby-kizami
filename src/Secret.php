@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * The hash secret lives on the server, not in git and not as a CI secret. It

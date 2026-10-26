@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /** An error the report and snapshot routes answer with as JSON, with its HTTP status. */
 final class ReportError extends \RuntimeException

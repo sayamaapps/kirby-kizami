@@ -4,12 +4,11 @@
  * Failed-login limit of the dashboard's file login (src/Lockout.php), without Kirby.
  *   php tests/LockoutTest.php
  */
-require_once __DIR__ . '/../src/Lockout.php';
-use Kizami\Lockout;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Lockout;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

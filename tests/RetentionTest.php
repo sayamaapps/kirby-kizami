@@ -6,15 +6,15 @@
  * validation with real Kirby, and the report's comparison limit.
  *   php tests/RetentionTest.php
  */
-use Kizami\Options;
-use Kizami\Report;
-use Kizami\Store;
-// Time in UTC, the given number of months before today (Berlin).
-
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+// Time in UTC, the given number of months before today (Berlin).
+
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Options;
+use Sayamaapps\Kizami\Report;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

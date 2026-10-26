@@ -9,11 +9,10 @@
  * file stays one file without -wal/-shm. Every opener has to respect the
  * mode; CLI tools without Kirby options keep the mode the file already has.
  */
-require_once __DIR__ . '/../src/Store.php';
-use Kizami\Store;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

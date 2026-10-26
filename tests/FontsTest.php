@@ -1,14 +1,13 @@
 <?php
 
 /** Dashboard fonts from kizami.fonts: valid CSS, nothing foreign. */
-require_once __DIR__ . '/../src/Fonts.php';
-use Kizami\Fonts;
+use PHPUnit\Framework\Assert;
 // Sans-serif throughout: serif points to the sans, only one file.
 
-use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Fonts;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

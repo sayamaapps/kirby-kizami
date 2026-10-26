@@ -5,7 +5,6 @@
  * secret, without compacting, never over an existing target.
  *   php tests/SnapshotTest.php
  */
-require_once __DIR__ . '/../src/Store.php';
 
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
@@ -47,7 +46,7 @@ final class SnapshotTest extends TestCase
 		try {
 			$db = $tmp . '/kizami/kizami.sqlite';
 			file_put_contents($tmp . '/kizami/secret.txt', "2026-10-08\nSECRETVALUE");
-			$store = new Kizami\Store($db);
+			$store = new Sayamaapps\Kizami\Store($db);
 			$old = (new DateTimeImmutable('-6 years', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
 			$store->write(['type' => 'page', 'action' => 'view', 'path' => '/old', 'session' => 'a', 'created_at' => $old]);
 			$store->write(['type' => 'event', 'event' => 'download', 'detail' => 'menu.pdf', 'path' => '/', 'session' => 'a', 'created_at' => gmdate('Y-m-d H:i:s')]);

@@ -8,26 +8,15 @@
  * bcrypt check. The hook in index.php only passes values in; that is exactly
  * why the core can be checked without a running Kirby.
  */
-require_once __DIR__ . '/../src/I18n.php';
-require_once __DIR__ . '/../src/Chart.php';
-require_once __DIR__ . '/../src/Comparison.php';
-require_once __DIR__ . '/../src/Names.php';
-require_once __DIR__ . '/../src/Gaps.php';
-require_once __DIR__ . '/../src/Analysis.php';
-require_once __DIR__ . '/../src/Capture.php';
-require_once __DIR__ . '/../src/Secret.php';
-require_once __DIR__ . '/../src/Store.php';
-require_once __DIR__ . '/../src/Access.php';
-require_once __DIR__ . '/../src/Redirect.php';
-use Kizami\Access;
-use Kizami\Analysis;
-use Kizami\Capture;
-use Kizami\Comparison;
-use Kizami\I18n;
-use Kizami\Names;
-use Kizami\Redirect;
-use Kizami\Secret;
-use Kizami\Store;
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Access;
+use Sayamaapps\Kizami\Analysis;
+use Sayamaapps\Kizami\Capture;
+use Sayamaapps\Kizami\Comparison;
+use Sayamaapps\Kizami\I18n;
 /**
  * Redirect error_log into a throwaway file.
  *
@@ -165,10 +154,10 @@ use Kizami\Store;
 // The upper boundary is exclusive: count neither following periods nor missing pages.
 // === Summary ============================================================
 
-use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Redirect;
+use Sayamaapps\Kizami\Secret;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

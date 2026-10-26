@@ -9,23 +9,23 @@ require_once __DIR__ . '/src/Store.php';
 try {
 	// `--retention-months=N` must carry the value of kizami.retentionMonths
 	// when the site sets it: this job has no Kirby options of its own.
-	$retention = Kizami\Store::RETENTION_MONTHS;
+	$retention = Sayamaapps\Kizami\Store::RETENTION_MONTHS;
 	$args = [];
 	foreach (array_slice($argv, 1) as $arg) {
 		if (str_starts_with($arg, '--retention-months=')) {
-			$retention = Kizami\Store::validRetentionMonths(substr($arg, strlen('--retention-months=')))
-				?? throw new RuntimeException('--retention-months must be a whole number from 1 to ' . Kizami\Store::RETENTION_MONTHS_MAX);
+			$retention = Sayamaapps\Kizami\Store::validRetentionMonths(substr($arg, strlen('--retention-months=')))
+				?? throw new RuntimeException('--retention-months must be a whole number from 1 to ' . Sayamaapps\Kizami\Store::RETENTION_MONTHS_MAX);
 		} else {
 			$args[] = $arg;
 		}
 	}
 	$action = $args[0] ?? '';
 	$directory = $args[1] ?? '';
-	$db = rtrim($directory, '/') . '/' . Kizami\Store::FILE;
+	$db = rtrim($directory, '/') . '/' . Sayamaapps\Kizami\Store::FILE;
 	if (!in_array($action, ['compact', 'snapshot'], true) || !is_file($db)) {
 		throw new RuntimeException('Usage: php maintenance.php [--retention-months=N] compact STORAGE/KIZAMI or snapshot STORAGE/KIZAMI NEW-FILE.sqlite; an existing database is required');
 	}
-	$store = new Kizami\Store($db, null, [], $retention);
+	$store = new Sayamaapps\Kizami\Store($db, null, [], $retention);
 	$deleted = $store->compact();
 	if ($action === 'snapshot') {
 		if (empty($args[2])) {
@@ -38,11 +38,11 @@ try {
 	// another user than the web server, so a key it created would belong to
 	// the wrong owner and the server could not read it.
 	$day = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
-	$keyFile = rtrim($directory, '/') . '/' . Kizami\Secret::FILE;
+	$keyFile = rtrim($directory, '/') . '/' . Sayamaapps\Kizami\Secret::FILE;
 	$keyNote = 'no daily key';
 	if (is_file($keyFile)) {
 		$current = strtok((string)@file_get_contents($keyFile), "\n") === $day;
-		if (!Kizami\Secret::expire($directory, $day)) {
+		if (!Sayamaapps\Kizami\Secret::expire($directory, $day)) {
 			throw new RuntimeException('Stale daily key could not be removed');
 		}
 		$keyNote = $current ? 'daily key current' : 'stale daily key removed';

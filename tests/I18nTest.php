@@ -5,12 +5,11 @@
  * English, and numbers and dates follow the language.
  *   php tests/I18nTest.php
  */
-require_once __DIR__ . '/../src/I18n.php';
-use Kizami\I18n;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\I18n;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

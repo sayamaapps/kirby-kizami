@@ -10,12 +10,12 @@
  */
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
-use Kizami\Capture;
-use Kizami\Secret;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Capture;
+use Sayamaapps\Kizami\Secret;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

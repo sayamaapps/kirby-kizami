@@ -15,18 +15,18 @@
  * - an old copy next to the package keeps the package inactive instead of
  *   counting twice
  */
-use Kizami\Migration;
-use Kizami\Options;
-use Kizami\Store;
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * A database as the pre-1.0 copy left it. $columns limits the events table
  * to an older state (before device, position and seconds existed).
  */
 
-use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Migration;
+use Sayamaapps\Kizami\Options;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]
@@ -182,7 +182,7 @@ final class MigrationTest extends TestCase
 			// Removed transition names stay removed.
 			self::expect(false, class_exists('Kennzahlen\\Speicher', false), 'no Kennzahlen\\* aliases');
 			self::expect(false, function_exists('kennzahlen_verzeichnis'), 'no kennzahlen_*() helpers');
-			self::expect(false, method_exists(Kizami\Options::class, 'zugangsdatei'), 'no German method names');
+			self::expect(false, method_exists(Sayamaapps\Kizami\Options::class, 'zugangsdatei'), 'no German method names');
 
 			// Storage move, Kirby-free: files are renamed, the hot WAL moves along.
 			$storage = $tmp . '/storage-a';

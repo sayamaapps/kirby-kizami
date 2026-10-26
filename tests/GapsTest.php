@@ -5,30 +5,20 @@
  * validation, the overlap with days and ranges, the period text.
  *   php tests/GapsTest.php
  */
-require_once __DIR__ . '/../src/I18n.php';
-require_once __DIR__ . '/../src/Capture.php';
-require_once __DIR__ . '/../src/Store.php';
-require_once __DIR__ . '/../src/Names.php';
-require_once __DIR__ . '/../src/Comparison.php';
-require_once __DIR__ . '/../src/Chart.php';
-require_once __DIR__ . '/../src/Gaps.php';
-require_once __DIR__ . '/../src/Analysis.php';
-require_once __DIR__ . '/../src/Events.php';
-require_once __DIR__ . '/../src/Report.php';
-use Kizami\Analysis;
-use Kizami\Gaps;
-use Kizami\I18n;
-use Kizami\Names;
-use Kizami\Report;
-use Kizami\Store;
-// Every warning or notice is a failure: a bad entry is ignored by design,
-// not by accident of a function returning null.
-/** Log lines written since the last call; resets the log. */
-
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Analysis;
+use Sayamaapps\Kizami\Gaps;
+// Every warning or notice is a failure: a bad entry is ignored by design,
+// not by accident of a function returning null.
+/** Log lines written since the last call; resets the log. */
+
+use Sayamaapps\Kizami\I18n;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Report;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

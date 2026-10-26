@@ -1,6 +1,6 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 /**
  * The allow list of `kizami.events` (since 1.4.0): actions the site's own

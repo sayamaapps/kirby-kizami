@@ -37,14 +37,14 @@ if ($directory === '' || $target === '' || in_array($directory, ['-h', '--help']
 }
 
 try {
-    $db = rtrim($directory, '/') . '/' . Kizami\Store::FILE;
+    $db = rtrim($directory, '/') . '/' . Sayamaapps\Kizami\Store::FILE;
     if (!is_file($db)) {
         throw new RuntimeException("no database at $db");
     }
     if (file_exists($target)) {
         throw new RuntimeException("target already exists: $target");
     }
-    (new Kizami\Store($db))->snapshot($target);
+    (new Sayamaapps\Kizami\Store($db))->snapshot($target);
     clearstatcache();
     echo "Kizami: consistent copy written, integrity_check ok: $target (" . filesize($target) . " bytes)\n";
 } catch (Throwable $e) {

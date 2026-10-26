@@ -1,12 +1,7 @@
 <?php
 declare(strict_types = 1);
 
-namespace Kizami;
-
-/** The site's setup is unusable for Kizami; the message tells the operator what to change. */
-final class SetupError extends \RuntimeException
-{
-}
+namespace Sayamaapps\Kizami;
 
 /**
  * Checks the one setup rule Kizami cannot work around: the storage root must

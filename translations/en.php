@@ -3,7 +3,7 @@
 /**
  * English strings of the dashboard and the report text — the default and the
  * fallback for missing keys. `{name}` placeholders are filled in by
- * Kizami\I18n::t(). tests/I18nTest.php checks that every language file has
+ * Sayamaapps\Kizami\I18n::t(). tests/I18nTest.php checks that every language file has
  * the same keys and placeholders as this one.
  */
 return [

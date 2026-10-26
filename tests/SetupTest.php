@@ -6,12 +6,12 @@
  * with real Kirby.
  *   php tests/SetupTest.php
  */
-use Kizami\Setup;
-use Kizami\SetupError;
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversNothing;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Setup;
+use Sayamaapps\Kizami\SetupError;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]

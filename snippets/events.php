@@ -17,7 +17,7 @@
  * on the error page and for an ID the beacon would reject — event.js then
  * sends location.pathname as before.
  */
-if (kizami_option('active', false) !== true || Kizami\Events::config(kizami_option('events', [])) === []) {
+if (kizami_option('active', false) !== true || Sayamaapps\Kizami\Events::config(kizami_option('events', [])) === []) {
 	return;
 }
 $kizamiSrc = Kirby\Cms\App::instance()->url('index') . '/k/event.js?v=' . substr((string)md5_file(dirname(__DIR__) . '/views/event.js'), 0, 8);

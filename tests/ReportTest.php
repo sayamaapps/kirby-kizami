@@ -7,11 +7,11 @@
  * double switch, login only with an allowed role, site identifier.
  *   ddev exec php tests/ReportTest.php
  */
-use Kizami\I18n;
-use Kizami\Names;
-use Kizami\Report;
-use Kizami\ReportService;
-use Kizami\Store;
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\I18n;
 // Kirby logs failed logins via error_log (auth.debug). The intended failed
 // attempts below would otherwise end up as a stack trace in the test output;
 // instead this checks THAT they are logged.
@@ -19,10 +19,10 @@ use Kizami\Store;
 // The first app has the report switched on: Kirby loads index.php only once
 // per process, and only then does the role exist (see index.php, 'blueprints').
 
-use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
-use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
-use PHPUnit\Framework\TestCase;
+use Sayamaapps\Kizami\Names;
+use Sayamaapps\Kizami\Report;
+use Sayamaapps\Kizami\ReportService;
+use Sayamaapps\Kizami\Store;
 
 #[CoversNothing]
 #[RunTestsInSeparateProcesses]
@@ -506,7 +506,7 @@ final class ReportTest extends TestCase
 				if ($who !== null) {
 					$request['auth'] = 'Basic ' . base64_encode("$who:$pw");
 				}
-				$response = Kizami\SnapshotService::respond($app($request, $options));
+				$response = Sayamaapps\Kizami\SnapshotService::respond($app($request, $options));
 				return [$response->code(), $response->body(), $response->headers() + ['Content-Type' => $response->type()]];
 			};
 			self::same([404, 'Fixture 404'], array_slice($snapshot(options: ['kizami.snapshot' => false]), 0, 2), 'Snapshot off by default: real 404');
@@ -594,7 +594,7 @@ final class ReportTest extends TestCase
 
 			// The answer is streamed (SnapshotResponse), not held as a string.
 			$storageDir = $tmp . '/storage/kizami';
-			$respond = fn () => Kizami\SnapshotService::respond($app([
+			$respond = fn () => Sayamaapps\Kizami\SnapshotService::respond($app([
 				'method' => 'GET', 'url' => 'http://example.invalid/k/snapshot',
 				'auth' => 'Basic ' . base64_encode('snapshot@example.invalid:report-password-very-long-123'),
 			], $on));
@@ -612,7 +612,7 @@ final class ReportTest extends TestCase
 				return [$returned, $bytes, hash_final($context)];
 			};
 			$streamed = $respond();
-			self::same(true, $streamed instanceof Kizami\SnapshotResponse, 'Snapshot: streamed response class');
+			self::same(true, $streamed instanceof Sayamaapps\Kizami\SnapshotResponse, 'Snapshot: streamed response class');
 			self::same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: the copy is already unlinked while the answer is not yet sent');
 			$announced = $streamed->headers();
 			[$returned, $bytes, $streamedHash] = $stream($streamed);
@@ -662,9 +662,9 @@ final class ReportTest extends TestCase
 				$make('.snapshot-gone.sqlite' . $suffix, 0);
 			}
 			$make('.snapshot-other.sqlite', 0);
-			self::same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
+			self::same(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
 			self::same(['.snapshot-other.sqlite'], $listing(), 'cleanup(): the copy and its side files go, other files stay');
-			self::same(null, Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
+			self::same(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
 			unlink($dir . '/.snapshot-other.sqlite');
 			foreach (['', '-wal', '-shm', '-journal'] as $suffix) {
 				$make('.snapshot-old.sqlite' . $suffix, 7200);
@@ -676,10 +676,10 @@ final class ReportTest extends TestCase
 			$make('secret.txt', 7200);
 			$make('snapshot-without-dot', 7200);
 			mkdir($dir . '/.snapshot-directory');
-			self::same(5, Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
+			self::same(5, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
 			self::same(['.snapshot-directory', '.snapshot-edge.sqlite', '.snapshot-new.sqlite', Store::FILE, 'secret.txt', 'snapshot-without-dot'], $listing(), 'sweep(): only .snapshot-* files older than an hour go');
-			self::same(0, Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
-			self::same(0, Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
+			self::same(0, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
+			self::same(0, Sayamaapps\Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
 
 			// Memory: a copy larger than twice the memory_limit still comes through, in a child
 			// process with that limit. The helper boots Kirby plus respond() in ~6.5 MB; the limit
