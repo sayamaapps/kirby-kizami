@@ -6,8 +6,10 @@ namespace Sayamaapps\Kizami;
  * Charts as SVG/HTML strings, without JavaScript and without inline styles
  * (strict CSP). Widths are in viewBox units, colours in CSS classes. Texts
  * are escaped here; the template may output the return value raw.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Chart
+class Chart
 {
 	/**
 	 * $marks: point index => tooltip text. A marked point gets a band over its

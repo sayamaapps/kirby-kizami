@@ -19,8 +19,10 @@ namespace Sayamaapps\Kizami;
  * digits, spaces and hyphens; file only an own path to .woff2/.woff without
  * "..". Invalid entries are dropped entirely (falling back to the system
  * fonts from dashboard.css) instead of being half written.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Fonts
+class Fonts
 {
 	private const FALLBACK = ['serif' => 'Georgia, "Times New Roman", serif', 'sans' => '-apple-system, system-ui, "Segoe UI", sans-serif'];
 

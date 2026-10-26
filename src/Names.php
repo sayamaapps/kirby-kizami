@@ -12,8 +12,10 @@ use Closure;
  *
  * Source keys are what Store returns: a referrer domain, `utm:<value>`, or
  * one of the tokens below.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Names
+class Names
 {
 	public const DIRECT = '(direct / unknown)';
 	public const ENTRY_UNKNOWN = '(entry unknown)';

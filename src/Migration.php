@@ -20,8 +20,10 @@ namespace Sayamaapps\Kizami;
  *
  * If both directories exist, nothing is moved — someone has to decide which
  * one holds the data. That is logged, the new directory is used.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Migration
+class Migration
 {
 	public const DIRECTORY = 'kizami';
 	private const FILES = [

@@ -6,8 +6,10 @@ namespace Sayamaapps\Kizami;
  * Builds the finished data package for views/dashboard.php from Store
  * queries. Kirby-free; names and settings come in. The template computes
  * nothing, it only prints.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Analysis
+class Analysis
 {
 	private const HOURS_FROM = 6;
 	private const HOURS_TO = 22;

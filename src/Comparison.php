@@ -6,8 +6,10 @@ namespace Sayamaapps\Kizami;
  * Change against the previous period as text. Below 20 events in the
  * previous period there is no percentage: "+300 %" for 3 → 12 actions sounds
  * like success and is noise.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Comparison
+class Comparison
 {
 	public const MIN_BASE = 20;
 

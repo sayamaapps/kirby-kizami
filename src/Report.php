@@ -15,8 +15,10 @@ namespace Sayamaapps\Kizami;
  * against the closing day Monday says nothing), the week with the week
  * before. Absolute numbers instead of percentages — at 30 visits a day a
  * percentage is mostly noise (see Comparison::MIN_BASE).
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Report
+class Report
 {
 	/**
 	 * Caps for the campaign list. Anyone can create a new tag with one
@@ -30,7 +32,16 @@ final class Report
 
 	/**
 	 * @param 'day'|'week' $kind
-	 * @param array{tiles?:list<string>,tileNames?:array<string,string>,contactTargets?:list<string>,brand?:string,dwellTime?:bool,events?:array,gaps?:array,now?:\DateTimeImmutable} $settings
+	 * @param array{
+	 *     tiles?: list<string>,
+	 *     tileNames?: array<string,string>,
+	 *     contactTargets?: list<string>,
+	 *     brand?: string,
+	 *     dwellTime?: bool,
+	 *     events?: array,
+	 *     gaps?: array,
+	 *     now?: \DateTimeImmutable
+	 * } $settings
 	 */
 	public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
 	{

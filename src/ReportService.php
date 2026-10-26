@@ -27,8 +27,10 @@ use Throwable;
  * for all accounts.
  *
  * A site with its own bot account allows that role via `kizami.reportRoles`.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class ReportService
+class ReportService
 {
 	/** Body of the 500 when the data cannot be encoded: a literal, so it cannot fail itself. */
 	public const ENCODING_ERROR_BODY = '{"ok":false,"error":"Internal error."}';

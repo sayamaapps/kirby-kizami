@@ -20,8 +20,10 @@ namespace Sayamaapps\Kizami;
  *
  * Fail closed: an unreadable or malformed file throws, and the caller
  * denies. A guess limit that silently stops counting would be no limit.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Lockout
+class Lockout
 {
 	public const FILE = 'logins.json';
 

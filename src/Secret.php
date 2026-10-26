@@ -27,8 +27,10 @@ namespace Sayamaapps\Kizami;
  * secrets; one wins the rename(), the other's rows carry a hash whose secret
  * is lost and count as one extra "distinct visitor". A rounding error in the
  * second after midnight — no reason for a lock file on the write path.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Secret
+class Secret
 {
 	public const FILE = 'secret.txt';
 

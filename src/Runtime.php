@@ -16,8 +16,10 @@ use Throwable;
  * @link      https://github.com/sayamaapps/kirby-kizami
  * @copyright Simon Räder
  * @license   https://opensource.org/licenses/MIT
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Runtime
+class Runtime
 {
 	/**
 	 * Build phase vs. live:
@@ -373,6 +375,27 @@ final class Runtime
 		} catch (Throwable $e) {
 			error_log('Kizami: daily key rotation failed: ' . $e->getMessage());
 		}
+	}
+
+	/**
+	 * The request values the capture rules read, taken from Kirby's request
+	 * and environment objects instead of the superglobals.
+	 *
+	 * @return array<string,string|null>
+	 */
+	public static function requestValues(): array
+	{
+		$kirby = App::instance();
+		$request = $kirby->request();
+
+		return [
+			'HTTP_DNT' => $request->header('DNT'),
+			'HTTP_SEC_GPC' => $request->header('Sec-GPC'),
+			'HTTP_USER_AGENT' => $request->header('User-Agent'),
+			'REMOTE_ADDR' => $kirby->environment()->get('REMOTE_ADDR'),
+			'CONTENT_LENGTH' => $request->header('Content-Length'),
+			'QUERY_STRING' => $kirby->environment()->get('QUERY_STRING'),
+		];
 	}
 
 	/** Opens the site's database with the configured journal mode (`kizami.journal`). */

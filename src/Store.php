@@ -16,8 +16,10 @@ use SQLite3;
  * still ship: no UPSERT, no window functions, no CTEs, no RETURNING, no
  * RENAME COLUMN. tests/SqliteCompatibilityTest.php checks this statically, CI
  * against a real 3.7.17 build.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Store
+class Store
 {
 	/**
 	 * Actions reported by the site's script (`kizami.events`, /k/event,

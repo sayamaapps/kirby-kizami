@@ -14,8 +14,10 @@ namespace Sayamaapps\Kizami;
  * Only listed keys are counted. A detail (file name, platform, album) is
  * kept only for entries with `'detail' => true`; everything else drops it.
  * Kirby-free, like Capture.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Events
+class Events
 {
 	/** Most details listed per action in the dashboard and the report. */
 	public const DETAILS_MAX = 10;

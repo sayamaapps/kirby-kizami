@@ -19,8 +19,10 @@ use DateTimeZone;
  * Times are site time (Europe/Berlin, like the day identifiers), `from` is
  * inclusive, `to` exclusive. Invalid entries are logged and ignored, never
  * fatal. Kirby-free, like Events.
+ *
+ * @package Sayamaapps\Kizami
  */
-final class Gaps
+class Gaps
 {
 	public const FORMAT = 'Y-m-d H:i';
 	public const REASON_MAX = 200;
