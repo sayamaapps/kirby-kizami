@@ -70,6 +70,13 @@ jobs:
       - name: Unused dependencies
         run: composer analyze:unused
 
+      # phpcpd 6.0.3 needs an older cli-parser than PHPUnit 11, so it is installed
+      # globally and not in require-dev.
+      - name: Copy and paste detection
+        run: |
+          composer global require --no-interaction sebastian/phpcpd:6.0.3
+          "$(composer global config home)/vendor/bin/phpcpd" src config index.php legacy.php autoload.php
+
       - name: Psalm
         run: composer analyze:psalm
 
