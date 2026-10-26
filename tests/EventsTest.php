@@ -8,7 +8,7 @@
  */
 
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Analysis;
@@ -22,7 +22,13 @@ use Sayamaapps\Kizami\Names;
 use Sayamaapps\Kizami\Report;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Analysis::class)]
+#[CoversClass(\Sayamaapps\Kizami\Capture::class)]
+#[CoversClass(\Sayamaapps\Kizami\Events::class)]
+#[CoversClass(\Sayamaapps\Kizami\I18n::class)]
+#[CoversClass(\Sayamaapps\Kizami\Names::class)]
+#[CoversClass(\Sayamaapps\Kizami\Report::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class EventsTest extends TestCase
 {

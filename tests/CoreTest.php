@@ -9,7 +9,7 @@
  * why the core can be checked without a running Kirby.
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Access;
@@ -159,7 +159,15 @@ use Sayamaapps\Kizami\Redirect;
 use Sayamaapps\Kizami\Secret;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Access::class)]
+#[CoversClass(\Sayamaapps\Kizami\Analysis::class)]
+#[CoversClass(\Sayamaapps\Kizami\Capture::class)]
+#[CoversClass(\Sayamaapps\Kizami\Comparison::class)]
+#[CoversClass(\Sayamaapps\Kizami\I18n::class)]
+#[CoversClass(\Sayamaapps\Kizami\Names::class)]
+#[CoversClass(\Sayamaapps\Kizami\Redirect::class)]
+#[CoversClass(\Sayamaapps\Kizami\Secret::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class CoreTest extends TestCase
 {

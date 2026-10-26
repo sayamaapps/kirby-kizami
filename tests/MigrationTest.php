@@ -16,7 +16,7 @@
  *   counting twice
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 /**
  * A database as the pre-1.0 copy left it. $columns limits the events table
@@ -28,7 +28,10 @@ use Sayamaapps\Kizami\Migration;
 use Sayamaapps\Kizami\Options;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Migration::class)]
+#[CoversClass(\Sayamaapps\Kizami\Options::class)]
+#[CoversClass(\Sayamaapps\Kizami\Runtime::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class MigrationTest extends TestCase
 {

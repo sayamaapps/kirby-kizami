@@ -9,12 +9,12 @@ use PHPUnit\Framework\Assert;
 /** All bytes the database occupies on disk: main file and, if present, -wal. */
 /** Insert rows and delete them again on a connection WITHOUT secure_delete: what older versions did. */
 
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class ResidueTest extends TestCase
 {

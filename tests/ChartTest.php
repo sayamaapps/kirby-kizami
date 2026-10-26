@@ -4,7 +4,7 @@
  *   php tests/ChartTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 // K5: hit areas must not overlap — the boundary to the neighbour lies on the
 // midpoint, so the first and last area are half as wide.
 // C-b: forced decimal for uniform comparison values.
@@ -18,7 +18,7 @@ use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Chart;
 use Sayamaapps\Kizami\I18n;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Chart::class)]
 #[RunTestsInSeparateProcesses]
 final class ChartTest extends TestCase
 {

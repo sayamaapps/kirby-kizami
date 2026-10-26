@@ -8,11 +8,11 @@
  */
 
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Runtime::class)]
 #[RunTestsInSeparateProcesses]
 final class SubdirectoryTest extends TestCase
 {

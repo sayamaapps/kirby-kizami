@@ -5,12 +5,12 @@
  *   php tests/LockoutTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Lockout;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Lockout::class)]
 #[RunTestsInSeparateProcesses]
 final class LockoutTest extends TestCase
 {

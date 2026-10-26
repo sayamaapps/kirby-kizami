@@ -11,13 +11,15 @@
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Capture;
 use Sayamaapps\Kizami\Secret;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Capture::class)]
+#[CoversClass(\Sayamaapps\Kizami\Runtime::class)]
+#[CoversClass(\Sayamaapps\Kizami\Secret::class)]
 #[RunTestsInSeparateProcesses]
 final class PagePathTest extends TestCase
 {

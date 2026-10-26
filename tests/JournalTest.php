@@ -9,12 +9,12 @@
  * file stays one file without -wal/-shm. Every opener has to respect the
  * mode; CLI tools without Kirby options keep the mode the file already has.
  */
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class JournalTest extends TestCase
 {

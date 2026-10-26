@@ -7,7 +7,7 @@
  *   php tests/RetentionTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 // Time in UTC, the given number of months before today (Berlin).
 
@@ -16,7 +16,9 @@ use Sayamaapps\Kizami\Options;
 use Sayamaapps\Kizami\Report;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Options::class)]
+#[CoversClass(\Sayamaapps\Kizami\Report::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class RetentionTest extends TestCase
 {

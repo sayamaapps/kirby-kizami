@@ -3,11 +3,13 @@
 /** Direct link hits must create neither website visits nor a contact rate. */
 
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Analysis::class)]
+#[CoversClass(\Sayamaapps\Kizami\Names::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class VisitsTest extends TestCase
 {

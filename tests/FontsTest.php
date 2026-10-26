@@ -4,12 +4,12 @@
 use PHPUnit\Framework\Assert;
 // Sans-serif throughout: serif points to the sans, only one file.
 
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Fonts;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Fonts::class)]
 #[RunTestsInSeparateProcesses]
 final class FontsTest extends TestCase
 {

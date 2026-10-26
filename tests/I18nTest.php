@@ -6,12 +6,12 @@
  *   php tests/I18nTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\I18n;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\I18n::class)]
 #[RunTestsInSeparateProcesses]
 final class I18nTest extends TestCase
 {

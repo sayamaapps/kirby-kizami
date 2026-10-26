@@ -7,13 +7,14 @@
  *   php tests/SetupTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\Setup;
 use Sayamaapps\Kizami\SetupError;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Setup::class)]
+#[CoversClass(\Sayamaapps\Kizami\SetupError::class)]
 #[RunTestsInSeparateProcesses]
 final class SetupTest extends TestCase
 {

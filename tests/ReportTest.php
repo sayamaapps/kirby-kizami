@@ -8,7 +8,7 @@
  *   ddev exec php tests/ReportTest.php
  */
 use PHPUnit\Framework\Assert;
-use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
 use Sayamaapps\Kizami\I18n;
@@ -24,7 +24,12 @@ use Sayamaapps\Kizami\Report;
 use Sayamaapps\Kizami\ReportService;
 use Sayamaapps\Kizami\Store;
 
-#[CoversNothing]
+#[CoversClass(\Sayamaapps\Kizami\Names::class)]
+#[CoversClass(\Sayamaapps\Kizami\Report::class)]
+#[CoversClass(\Sayamaapps\Kizami\ReportService::class)]
+#[CoversClass(\Sayamaapps\Kizami\SnapshotResponse::class)]
+#[CoversClass(\Sayamaapps\Kizami\SnapshotService::class)]
+#[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class ReportTest extends TestCase
 {
