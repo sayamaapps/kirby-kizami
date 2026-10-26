@@ -120,10 +120,12 @@ final class Runtime
 	/** Origin check for the beacons /k/image, /k/duration and /k/event, and the page they report. */
 	public static function beaconPath(): string|null
 	{
-		$url = parse_url(App::instance()->url('index'));
+		$kirby = App::instance();
+		$url = parse_url($kirby->url('index'));
 		$origin = ($url['scheme'] ?? '') . '://' . ($url['host'] ?? '') . (isset($url['port']) ? ':' . $url['port'] : '');
-		if (($_SERVER['HTTP_ORIGIN'] ?? '') !== $origin ||
-			(isset($_SERVER['HTTP_SEC_FETCH_SITE']) && $_SERVER['HTTP_SEC_FETCH_SITE'] !== 'same-origin')) {
+		$fetchSite = $kirby->request()->header('Sec-Fetch-Site');
+		if (($kirby->request()->header('Origin') ?? '') !== $origin ||
+			($fetchSite !== null && $fetchSite !== 'same-origin')) {
 			return null;
 		}
 		$path = get('path');

@@ -183,12 +183,11 @@ final class Capture
 	 * between page view and click is not counted.
 	 *
 	 * Strict variant (also discards every Safari click without a page-view
-	 * match): insert this one line before the last return
-	 *     if (isset($server['HTTP_SEC_FETCH_MODE'])) { return false; }
+	 * match): return false here when the request has a Sec-Fetch-Mode header.
 	 */
-	public static function linkClickCounts(array $server, callable $hasPageView): bool
+	public static function linkClickCounts(bool $userActivated, callable $hasPageView): bool
 	{
-		if (($server['HTTP_SEC_FETCH_USER'] ?? null) === '?1') {
+		if ($userActivated === true) {
 			return true;
 		}
 		return $hasPageView() === true;

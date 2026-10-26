@@ -313,7 +313,7 @@ return function () {
 					'target'   => $name,
 					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)Runtime::option('positionNames', [])) ? get('position') : '',
 				], fn (Store $store, string $session, \DateTimeImmutable $now) => Capture::linkClickCounts(
-					$_SERVER,
+					App::instance()->request()->header('Sec-Fetch-User') === '?1',
 					fn () => $store->hasPageView($session, $now)
 				));
 

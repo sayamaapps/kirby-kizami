@@ -40,7 +40,7 @@ return [
 				'type'         => 'page',
 				'action'       => 'view',
 				'path'         => Capture::cleanPath('/' . ltrim((string)$path, '/')),
-				'referrer'     => Capture::cleanReferrer($_SERVER['HTTP_REFERER'] ?? null, Runtime::ownHosts()),
+				'referrer'     => Capture::cleanReferrer(App::instance()->request()->header('Referer'), Runtime::ownHosts()),
 				'utm_source'   => Capture::cleanId(get('utm_source')),
 				'utm_medium'   => Capture::cleanId(get('utm_medium')),
 				'utm_campaign' => Runtime::campaign(),
