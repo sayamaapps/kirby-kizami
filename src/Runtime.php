@@ -3,7 +3,6 @@
 namespace Sayamaapps\Kizami;
 
 use Kirby\Cms\App;
-use Kirby\Cms\Helpers;
 use Kirby\Cms\Page;
 use Kirby\Http\Response;
 use Throwable;

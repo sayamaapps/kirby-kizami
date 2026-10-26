@@ -5,8 +5,6 @@ use Kirby\Filesystem\F;
 F::loadClasses(require __DIR__ . '/autoload.php', __DIR__);
 require_once __DIR__ . '/legacy.php';
 
-use Sayamaapps\Kizami\Options;
-
 /**
  * Kizami — server-side page counting, off by default.
  *

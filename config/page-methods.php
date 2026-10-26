@@ -1,8 +1,6 @@
 <?php
 
 use Kirby\Cms\App;
-use Sayamaapps\Kizami\Events;
-use Sayamaapps\Kizami\Names;
 use Sayamaapps\Kizami\Redirect;
 use Sayamaapps\Kizami\Runtime;
 

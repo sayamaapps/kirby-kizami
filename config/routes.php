@@ -2,7 +2,6 @@
 
 use Kirby\Cms\App;
 use Kirby\Http\Response;
-use Sayamaapps\Kizami\Access;
 use Sayamaapps\Kizami\Analysis;
 use Sayamaapps\Kizami\Capture;
 use Sayamaapps\Kizami\Chart;
