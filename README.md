@@ -1,5 +1,7 @@
 # Kizami
 
+**Versions:** Kirby 5 · PHP 8.2 to 8.5 · MIT · [Changes](CHANGELOG.md)
+
 Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com).
 
 Kizami counts page views, contact clicks and optional actions on a Kirby site and shows them in a dashboard linked from the Panel. It stores nothing on visitors' devices and needs no tracking script. It is built for small businesses where phone calls, e-mails and route requests matter.
@@ -15,16 +17,29 @@ Kizami counts page views, contact clicks and optional actions on a Kirby site an
 
 ## Requirements
 
-- PHP 8.2–8.4 with the `sqlite3` extension, and Kirby 5.
+- Kirby 5 (`getkirby/cms` 5.0 or newer).
+- PHP 8.2, 8.3, 8.4 or 8.5 with the `sqlite3` and `ctype` extensions.
 - A Kirby `storage` root outside the web root. Without it, nothing is counted.
 
 ## Installation
+
+Pick one of three ways. The plugin always ends up in `site/plugins/kizami/`.
+
+**Composer** (the plugin goes to `vendor/` and is linked into `site/plugins/`):
 
 ```sh
 composer require sayamaapps/kirby-kizami
 ```
 
-Composer installs to `site/plugins/kizami/`. Add that path to `.gitignore` and deploy it like `vendor/`.
+Add `/site/plugins/kizami` to `.gitignore` and deploy it like `vendor/`.
+
+**Git submodule** (no Composer on the server):
+
+```sh
+git submodule add https://github.com/sayamaapps/kirby-kizami.git site/plugins/kizami
+```
+
+**ZIP.** Download the release archive from GitHub and unpack it to `site/plugins/kizami/`. The archive holds the runtime files only.
 
 A stock Kirby has no `storage` root. Define it in `public/index.php`; `storage/` sits beside `public/`, outside the web root:
 
@@ -42,8 +57,8 @@ Off by default. Minimal `site/config/config.php` (redirects work even while `act
 
 ```php
 return [
-    'kizami.active' => true,
-    'kizami.redirects' => ['call' => 'tel:+491234567890'],
+    'sayamaapps.kizami.active' => true,
+    'sayamaapps.kizami.redirects' => ['call' => 'tel:+491234567890'],
 ];
 ```
 
@@ -57,11 +72,11 @@ return [
 
 The optional fourth argument is a position, recorded only if it is listed in `positionNames`. Safari sends no `Sec-Fetch-User`, so its clicks count only if the same IP address and user agent viewed a page that day.
 
-**Actions.** Declare them in `kizami.events` (see [Options](#options)), then count them from PHP:
+**Actions.** Declare them in `sayamaapps.kizami.events` (see [Options](#options)), then count them from PHP:
 
 ```php
 // site/config/config.php
-'kizami.events' => ['download' => ['label' => ['en' => 'Download'], 'detail' => true]],
+'sayamaapps.kizami.events' => ['download' => ['label' => ['en' => 'Download'], 'detail' => true]],
 
 // route or template, once per request
 $page->kizamiEvent('download', 'prices.pdf');
@@ -75,7 +90,7 @@ A cached page never runs the call, so count in a route or exclude that page from
 <?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
 ```
 
-**JSON report.** Set `'kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
+**JSON report.** Set `'sayamaapps.kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
 
 ```sh
 curl -u 'reader:password' 'https://example.com/k/report?kind=week'
@@ -85,9 +100,9 @@ curl -u 'reader:password' 'https://example.com/k/report?kind=week'
 
 ## Options
 
-Keys are `kizami.<name>`, flat or nested. `null` means "not set".
+Keys are `sayamaapps.kizami.<name>`, flat or nested. `null` means "not set". The 1.x spelling `kizami.<name>` still works when the new key is not set; it is reported as a deprecation in debug mode (see [Deprecations](#deprecations)).
 
-| Option | Default | Description |
+| Option (1.x spelling `kizami.<name>`) | Default | Description |
 |---|---|---|
 | `active` | `false` | Master switch for counting, dashboard, report and snapshot. |
 | `redirects` | `[]` | Counted redirects `name => target` (`tel:`, `mailto:`, `https://` or a path; closures allowed). Route: `/<name>`. |
@@ -119,6 +134,18 @@ Keys are `kizami.<name>`, flat or nested. `null` means "not set".
 | `snapshot` | `false` | Enable the backup download `/k/snapshot` (needs `active`); registers the role `kizami-snapshot`. |
 | `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. |
 
+## Deprecations
+
+Kizami renames the public names below. The 1.x names keep working for now. Option names and functions report a deprecation in debug mode; class names do not. The old names are removed in a later major version.
+
+| 1.x | Replacement |
+|---|---|
+| Option `kizami.<name>` | `sayamaapps.kizami.<name>` (same name, same values) |
+| Global functions `kizami_*()` | Static methods of `Sayamaapps\Kizami\Runtime`, for example `Runtime::option($key, $default)` |
+| Classes `Kizami\<Name>` | `Sayamaapps\Kizami\<Name>` |
+
+Templates and snippets that call `kizami_option()` keep working. Switch them to the new names at your own pace.
+
 ## Privacy
 
 - **No cookies, no browser storage, no third parties.** Nothing is stored on the visitor's device.
@@ -135,7 +162,7 @@ php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami
 php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite
 ```
 
-Run `compact` daily if the site may go days without visits; it also removes the previous day's salt key. Add `--retention-months=N` after `maintenance.php` if `kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
+Run `compact` daily if the site may go days without visits; it also removes the previous day's salt key. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
 
 Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](CHANGELOG.md).
 
