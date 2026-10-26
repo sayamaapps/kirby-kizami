@@ -288,6 +288,7 @@ function kizami_event(mixed $key, mixed $page, mixed $detail = null): void
 Kirby::plugin(
 	name: 'sayamaapps/kizami',
 	extends: [
+		'options'      => require __DIR__ . '/config/options.php',
 		'blueprints'   => require __DIR__ . '/config/blueprints.php',
 		'translations' => require __DIR__ . '/config/translations.php',
 		'snippets'     => require __DIR__ . '/config/snippets.php',

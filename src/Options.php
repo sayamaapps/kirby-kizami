@@ -4,6 +4,7 @@ namespace Sayamaapps\Kizami;
 
 use Closure;
 use Kirby\Cms\App;
+use Kirby\Cms\Helpers;
 
 /**
  * Reads `kizami.*` options.
@@ -16,6 +17,10 @@ use Kirby\Cms\App;
  */
 final class Options
 {
+	/** Option names since 2.0: `sayamaapps.kizami.<key>`. */
+	public const NAME_PREFIX = 'sayamaapps.kizami.';
+
+	/** Option names of the 1.x releases: `kizami.<key>`, read as fallback. */
 	public const PREFIX = 'kizami.';
 
 	/** Dashboard access file: `site/config/kizami.php` with `user` and `hash`. */
@@ -42,9 +47,27 @@ final class Options
 		return $brand !== '' ? $brand : (string)$kirby->site()->title();
 	}
 
+	/**
+	 * Reads `sayamaapps.kizami.<key>`. The 1.x spelling `kizami.<key>` is read
+	 * when the new one is not set, and reported as a deprecation (debug mode).
+	 */
 	public static function get(App $kirby, string $key, mixed $default = null): mixed
 	{
-		return $kirby->option(self::PREFIX . $key) ?? $default;
+		$value = $kirby->option(self::NAME_PREFIX . $key);
+		if ($value !== null) {
+			return $value;
+		}
+
+		$legacy = $kirby->option(self::PREFIX . $key);
+		if ($legacy !== null) {
+			Helpers::deprecated(
+				'The option ' . self::PREFIX . $key . ' is deprecated, use ' . self::NAME_PREFIX . $key,
+				'option-prefix'
+			);
+			return $legacy;
+		}
+
+		return $default;
 	}
 
 	/**
