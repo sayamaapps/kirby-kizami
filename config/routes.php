@@ -88,7 +88,7 @@ return function () {
 				if (Runtime::option('active', false) !== true || $events === []) {
 					return Runtime::notFound();
 				}
-				if (Capture::requestTooLarge($_SERVER, 2048)) {
+				if (Capture::requestTooLarge(Runtime::requestValues(), 2048)) {
 					return $done();
 				}
 				$path = Runtime::beaconPath();

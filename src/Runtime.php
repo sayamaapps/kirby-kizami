@@ -425,7 +425,7 @@ class Runtime
 			// A filtered request is still a request: yesterday's key must not
 			// outlive the day because nobody was counted. Removed, not replaced:
 			// no key is needed here.
-			$server = $_SERVER;
+			$server = self::requestValues();
 			if (Capture::optedOut($server)) {
 				Secret::expire($directory, $now->format('Y-m-d'));
 				return;

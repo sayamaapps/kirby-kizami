@@ -152,6 +152,8 @@ final class PagePathTest extends TestCase
 			foreach (['DNT' => ['HTTP_DNT' => '1'], 'GPC' => ['HTTP_SEC_GPC' => '1'], 'bot' => ['HTTP_USER_AGENT' => 'Googlebot/2.1'],
 				'empty user agent' => ['HTTP_USER_AGENT' => ''], 'HeadlessChrome' => ['HTTP_USER_AGENT' => 'Mozilla/5.0 HeadlessChrome/130.0']] as $what => $server) {
 				$_SERVER = array_merge($_SERVER, $browser, $server);
+				// A new app reads the request values again, as a new request does.
+				$app();
 				$book->kizamiEvent('shortcode_access');
 				unset($_SERVER['HTTP_DNT'], $_SERVER['HTTP_SEC_GPC']);
 				self::expect($count, count($rows()), "not counted: $what");
