@@ -26,9 +26,13 @@ final class AutoloadTest extends TestCase
 
 		foreach (require dirname(__DIR__) . '/autoload.php' as $class => $path) {
 			$short = substr($class, strlen('sayamaapps\\kizami\\'));
+			if ($short === 'runtime') {
+				// Added with the function wrappers; it has no 1.x class name.
+				continue;
+			}
 			$this->assertSame(
 				strtolower('Sayamaapps\\Kizami\\' . $short),
-				strtolower((new ReflectionClass('Kizami\\' . $short))->getName()),
+				strtolower((new ReflectionClass('Kizami\\' . ucfirst($short)))->getName()),
 				'Kizami\\' . $short . ' is an alias of the new class'
 			);
 		}

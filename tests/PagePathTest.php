@@ -73,16 +73,16 @@ final class PagePathTest extends TestCase
 			]);
 
 			// The path of a page: '/' or '/' and its ID, the same in every language,
-			// and kizami_find_page() — the lookup of /k/event — finds it again.
+			// and \Sayamaapps\Kizami\Runtime::findPage() — the lookup of /k/event — finds it again.
 			$kirby = $app();
 			foreach (['de', 'en'] as $current) {
 				$kirby->setCurrentLanguage($current);
 				$pages = ['/' => $kirby->site()->homePage(), '/books' => page('books'), '/books/kizami' => page('books/kizami')];
 				foreach ($pages as $path => $page) {
-					self::expect($path, kizami_page_path($page), "path of {$page->id()} ($current)");
+					self::expect($path, \Sayamaapps\Kizami\Runtime::pagePath($page), "path of {$page->id()} ($current)");
 					foreach (['de', 'en'] as $lookup) {
 						$kirby->setCurrentLanguage($lookup);
-						self::expect($page->id(), kizami_find_page($path)?->id(), "$path found again ($current → $lookup)");
+						self::expect($page->id(), \Sayamaapps\Kizami\Runtime::findPage($path)?->id(), "$path found again ($current → $lookup)");
 					}
 					$kirby->setCurrentLanguage($current);
 				}
@@ -91,11 +91,11 @@ final class PagePathTest extends TestCase
 			// for the attribute (multi-language addresses, short codes).
 			$kirby->setCurrentLanguage('de');
 			foreach (['/en/library/the-book', '/en', '/EEAQ77', '/de/books'] as $address) {
-				self::expect(null, kizami_find_page($address), "address $address is no page for /k/event");
+				self::expect(null, \Sayamaapps\Kizami\Runtime::findPage($address), "address $address is no page for /k/event");
 			}
-			self::expect(null, kizami_page_path($kirby->site()->errorPage()), 'no path for the error page');
-			self::expect(null, kizami_page_path(null), 'no path without a page');
-			self::expect(null, kizami_page_path('/books'), 'no path for a string');
+			self::expect(null, \Sayamaapps\Kizami\Runtime::pagePath($kirby->site()->errorPage()), 'no path for the error page');
+			self::expect(null, \Sayamaapps\Kizami\Runtime::pagePath(null), 'no path without a page');
+			self::expect(null, \Sayamaapps\Kizami\Runtime::pagePath('/books'), 'no path for a string');
 
 			// The snippet in the rendered page: under its own URL in both languages
 			// and under the short code of the route.
@@ -109,7 +109,7 @@ final class PagePathTest extends TestCase
 			}
 			self::expect('', $tag((string)$app()->render('/missing')->body() . (string)$app()->snippet('kizami/events', [], true)), 'snippet without a page: no attribute');
 
-			// Server side: $page->kizamiEvent(). kizami_write() reads $_SERVER.
+			// Server side: $page->kizamiEvent(). \Sayamaapps\Kizami\Runtime::write() reads $_SERVER.
 			ini_set('error_log', $log);
 			$rows = function () use ($tmp): array {
 				$db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
@@ -142,7 +142,7 @@ final class PagePathTest extends TestCase
 				'invalid key' => fn () => $book->kizamiEvent("shortcode_access\n"),
 				'key no string' => fn () => $book->kizamiEvent(['shortcode_access']),
 				'error page' => fn () => $kirby->site()->errorPage()->kizamiEvent('shortcode_access'),
-				'no page' => fn () => kizami_event('shortcode_access', null),
+				'no page' => fn () => \Sayamaapps\Kizami\Runtime::event('shortcode_access', null),
 			] as $what => $call) {
 				$call();
 				self::expect($count, count($rows()), "not counted: $what");

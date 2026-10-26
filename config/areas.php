@@ -2,6 +2,7 @@
 
 use Kirby\Cms\App;
 use Sayamaapps\Kizami\Access;
+use Sayamaapps\Kizami\Runtime;
 
 /**
  * Panel menu entry "Statistics" / "Kennzahlen" — the Panel is where
@@ -25,6 +26,6 @@ return [
 		'icon'  => 'chart',
 		'link'  => App::instance()->url('index') . '/k/dashboard',
 		'target' => '_blank',
-		'menu'  => fn () => kizami_option('active', false) === true,
+		'menu'  => fn () => Runtime::option('active', false) === true,
 	],
 ];

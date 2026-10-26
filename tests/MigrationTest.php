@@ -287,13 +287,13 @@ final class MigrationTest extends TestCase
 			self::expect(true, is_file($storage . '/kennzahlen/kennzahlen.sqlite'), 'both present: old data left alone');
 			self::expect(true, str_contains((string)@file_get_contents($log), 'not migrating'), 'both present: logged');
 
-			// Through Kirby: kizami_directory() runs the move. The dashboard calls
+			// Through Kirby: \Sayamaapps\Kizami\Runtime::directory() runs the move. The dashboard calls
 			// above already created storage/kizami/ — start from the pre-1.0 state.
 			self::removeTree($tmp . '/storage/kizami');
 			mkdir($tmp . '/storage/kennzahlen');
 			self::legacyDatabase($tmp . '/storage/kennzahlen/kennzahlen.sqlite')->close();
 			$app();
-			self::expect($tmp . '/storage/kizami', kizami_directory(), 'kizami_directory() moves the legacy directory');
+			self::expect($tmp . '/storage/kizami', \Sayamaapps\Kizami\Runtime::directory(), '\Sayamaapps\Kizami\Runtime::directory() moves the legacy directory');
 			self::expect([true, false], [is_file($tmp . '/storage/kizami/kizami.sqlite'), is_dir($tmp . '/storage/kennzahlen')], '… with the database renamed');
 
 			// Old copy next to the package: separate process, because Kirby loads each plugin file only once.

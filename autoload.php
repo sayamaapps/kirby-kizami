@@ -24,6 +24,7 @@ return [
 	'sayamaapps\\kizami\\report' => 'src/Report.php',
 	'sayamaapps\\kizami\\reporterror' => 'src/ReportError.php',
 	'sayamaapps\\kizami\\reportservice' => 'src/ReportService.php',
+	'sayamaapps\\kizami\\runtime' => 'src/Runtime.php',
 	'sayamaapps\\kizami\\secret' => 'src/Secret.php',
 	'sayamaapps\\kizami\\setup' => 'src/Setup.php',
 	'sayamaapps\\kizami\\setuperror' => 'src/SetupError.php',

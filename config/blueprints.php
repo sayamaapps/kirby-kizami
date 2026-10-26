@@ -2,6 +2,7 @@
 
 use Kirby\Cms\App;
 use Sayamaapps\Kizami\ReportService;
+use Sayamaapps\Kizami\Runtime;
 use Sayamaapps\Kizami\SnapshotService;
 
 /**
@@ -14,9 +15,9 @@ use Sayamaapps\Kizami\SnapshotService;
  * process, though: several App instances in one test see the roles as
  * the first one created them. On a server that is one request.
  */
-return (kizami_option('report', false) === true
+return (Runtime::option('report', false) === true
 		? ['users/' . ReportService::ROLE => dirname(__DIR__) . '/blueprints/kizami-report.yml']
 		: [])
-	+ (kizami_option('snapshot', false) === true
+	+ (Runtime::option('snapshot', false) === true
 		? ['users/' . SnapshotService::ROLE => dirname(__DIR__) . '/blueprints/kizami-snapshot.yml']
 		: []);

@@ -14,6 +14,7 @@ use Sayamaapps\Kizami\Names;
 use Sayamaapps\Kizami\Options;
 use Sayamaapps\Kizami\Redirect;
 use Sayamaapps\Kizami\ReportService;
+use Sayamaapps\Kizami\Runtime;
 use Sayamaapps\Kizami\SetupError;
 use Sayamaapps\Kizami\SnapshotService;
 use Sayamaapps\Kizami\Store;
@@ -32,15 +33,15 @@ return function () {
 				// Only explicitly allowed image IDs and own browser requests.
 				// No file paths from the request are opened, no cookies or identifiers sent.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				if (kizami_option('active', false) !== true || !(array)kizami_option('images', [])) {
-					return kizami_not_found();
+				if (Runtime::option('active', false) !== true || !(array)Runtime::option('images', [])) {
+					return Runtime::notFound();
 				}
-				$path = kizami_beacon_path();
+				$path = Runtime::beaconPath();
 				$image = get('image');
-				if ($path === null || !is_string($image) || !array_key_exists($image, (array)kizami_option('images', []))) {
+				if ($path === null || !is_string($image) || !array_key_exists($image, (array)Runtime::option('images', []))) {
 					return $done();
 				}
-				kizami_write(fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
+				Runtime::write(fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
 				return $done();
 			},
 		],
@@ -52,10 +53,10 @@ return function () {
 				// script sends the same request shape as the gallery script.
 				// Always 204 — the browser never learns whether anything was written.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				if (kizami_option('active', false) !== true || kizami_option('dwellTime', false) !== true) {
-					return kizami_not_found();
+				if (Runtime::option('active', false) !== true || Runtime::option('dwellTime', false) !== true) {
+					return Runtime::notFound();
 				}
-				$path = kizami_beacon_path();
+				$path = Runtime::beaconPath();
 				$raw = get('seconds');
 				// Unsigned integer, no decimals: anything else is no
 				// plausible number of seconds and is discarded, not guessed.
@@ -70,7 +71,7 @@ return function () {
 				// discard but a cap — otherwise a manipulated value could
 				// distort the median of a whole page.
 				$seconds = min($seconds, 1800);
-				kizami_write(fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
+				Runtime::write(fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
 				return $done();
 			},
 		],
@@ -85,21 +86,21 @@ return function () {
 				// more than 2 KB of data is discarded before any field is
 				// looked at. No rate limit of its own, like the other beacons.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				$events = Events::config(kizami_option('events', []));
-				if (kizami_option('active', false) !== true || $events === []) {
-					return kizami_not_found();
+				$events = Events::config(Runtime::option('events', []));
+				if (Runtime::option('active', false) !== true || $events === []) {
+					return Runtime::notFound();
 				}
 				if (Capture::requestTooLarge($_SERVER, 2048)) {
 					return $done();
 				}
-				$path = kizami_beacon_path();
+				$path = Runtime::beaconPath();
 				$event = get('event');
 				if ($path === null || !Events::isKey($event) || !array_key_exists($event, $events)) {
 					return $done();
 				}
 				// Without 'detail' => true a detail sent along is dropped, not stored.
 				$detail = $events[$event]['detail'] ? Capture::cleanDetail(get('detail')) : '';
-				kizami_write(fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
+				Runtime::write(fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
 				return $done();
 			},
 		],
@@ -118,8 +119,8 @@ return function () {
 			'pattern' => 'k/event.js',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (kizami_option('active', false) !== true || Events::config(kizami_option('events', [])) === []) {
-					return kizami_not_found();
+				if (Runtime::option('active', false) !== true || Events::config(Runtime::option('events', [])) === []) {
+					return Runtime::notFound();
 				}
 				return new Response((string)file_get_contents(dirname(__DIR__) . '/views/event.js'), 'text/javascript', 200, [
 					'Cache-Control' => 'public, max-age=86400',
@@ -131,11 +132,11 @@ return function () {
 			'pattern' => 'k/dashboard',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (kizami_option('active', false) !== true) {
-					return kizami_not_found();
+				if (Runtime::option('active', false) !== true) {
+					return Runtime::notFound();
 				}
 
-				if ($refused = kizami_dashboard_refused()) {
+				if ($refused = Runtime::dashboardRefused()) {
 					return $refused;
 				}
 
@@ -147,33 +148,33 @@ return function () {
 				$kirby = App::instance();
 				I18n::setLanguage(Options::language($kirby));
 				try {
-					$store = kizami_store();
+					$store = Runtime::store();
 					$store->compact();
-					kizami_rotate_secret();
+					Runtime::rotateSecret();
 					$names = new Names(
-						(array)kizami_option('targetNames', []),
-						(array)kizami_option('sourceNames', []),
-						(array)kizami_option('pageNames', []),
+						(array)Runtime::option('targetNames', []),
+						(array)Runtime::option('sourceNames', []),
+						(array)Runtime::option('pageNames', []),
 						// Page titles from Kirby, without Analysis knowing Kirby.
 						fn (string $path) => $kirby->site()->find(trim($path, '/'))?->title()->value()
 					);
-					$redirects = array_keys((array)kizami_option('redirects', []));
+					$redirects = array_keys((array)Runtime::option('redirects', []));
 					$data = Analysis::data($store, $names, $days, [
 						'brand'          => Options::brand($kirby),
 						'targets'        => $redirects,
-						'tiles'          => (array)kizami_option('tiles', array_slice($redirects, 0, 2)),
-						'contactTargets' => array_values(array_intersect((array)kizami_option('contactTargets', []), $redirects)),
-						'positionNames'  => (array)kizami_option('positionNames', []),
-						'images'         => (array)kizami_option('images', []),
-						'tileNames'      => (array)kizami_option('tileNames', []),
-						'color'          => (string)kizami_option('color', '#2f4f2a'),
-						'dwellTime'      => kizami_option('dwellTime', false) === true,
-						'events'         => Events::config(kizami_option('events', [])),
-						'gaps'           => Gaps::config(kizami_option('gaps', [])),
+						'tiles'          => (array)Runtime::option('tiles', array_slice($redirects, 0, 2)),
+						'contactTargets' => array_values(array_intersect((array)Runtime::option('contactTargets', []), $redirects)),
+						'positionNames'  => (array)Runtime::option('positionNames', []),
+						'images'         => (array)Runtime::option('images', []),
+						'tileNames'      => (array)Runtime::option('tileNames', []),
+						'color'          => (string)Runtime::option('color', '#2f4f2a'),
+						'dwellTime'      => Runtime::option('dwellTime', false) === true,
+						'events'         => Events::config(Runtime::option('events', [])),
+						'gaps'           => Gaps::config(Runtime::option('gaps', [])),
 					]);
 				} catch (\Throwable $e) {
 					error_log('Kizami: dashboard not available: ' . $e->getMessage());
-					kizami_log_error($e);
+					Runtime::logError($e);
 					$data = ['days' => $days, 'error' => true, 'brand' => Options::brand($kirby)];
 					if ($e instanceof SetupError) {
 						$data['setup'] = $e->getMessage();
@@ -235,14 +236,14 @@ return function () {
 			'pattern' => 'k/dashboard.css',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (kizami_option('active', false) !== true) {
-					return kizami_not_found();
+				if (Runtime::option('active', false) !== true) {
+					return Runtime::notFound();
 				}
-				if ($refused = kizami_dashboard_refused()) {
+				if ($refused = Runtime::dashboardRefused()) {
 					return $refused;
 				}
 
-				$base = (string)kizami_option('color', '#2f4f2a');
+				$base = (string)Runtime::option('color', '#2f4f2a');
 				$css = (string)file_get_contents(dirname(__DIR__) . '/views/dashboard.css');
 				if (preg_match('/^#[0-9a-f]{6}$/i', $base)) {
 					$css .= "\n:root { --base: $base; --up: $base;";
@@ -253,14 +254,14 @@ return function () {
 				}
 				// Fonts from the configuration (src/Fonts.php) — the usual
 				// reason for extra CSS, now without a file of its own.
-				$fonts = Fonts::css(kizami_option('fonts'));
+				$fonts = Fonts::css(Runtime::option('fonts'));
 				foreach ($fonts['errors'] as $message) {
 					error_log('Kizami: ' . $message);
 				}
 				$css .= $fonts['css'] === '' ? '' : "\n" . $fonts['css'];
 				// Project extras (fine-tuning): a file relative to the project root, loaded last — so it wins,
 				// for example 'site/config/kizami-extra.css'. Fonts are better set via kizami.fonts.
-				$extra = kizami_option('extraCss');
+				$extra = Runtime::option('extraCss');
 				if (is_string($extra) && $extra !== '' && !str_contains($extra, '..') && str_ends_with($extra, '.css')) {
 					$file = App::instance()->root('base') . '/' . ltrim($extra, '/');
 					if (is_file($file)) {
@@ -281,11 +282,11 @@ return function () {
 	 *
 	 * So the split is: the redirect is a function of the SITE and depends
 	 * only on a configured target. Counting is optional and depends on
-	 * `active` (checked in kizami_write()). "Without configuration
+	 * `active` (checked in Runtime::write()). "Without configuration
 	 * nothing happens" still holds: without `redirects` no route is
 	 * registered here.
 	 */
-	foreach (kizami_option('redirects', []) as $rawName => $entry) {
+	foreach (Runtime::option('redirects', []) as $rawName => $entry) {
 		$name = Redirect::cleanName((string)$rawName);
 		if ($name === '') {
 			continue;
@@ -301,18 +302,18 @@ return function () {
 				// that a module sits here.
 				if (!Redirect::targetAllowed($target)) {
 					error_log('Kizami: redirect "' . $name . '" has no allowed target');
-					return kizami_not_found();
+					return Runtime::notFound();
 				}
 
-				// Count, then redirect. kizami_write() never throws — so
+				// Count, then redirect. Runtime::write() never throws — so
 				// the order is harmless. The other way round it wouldn't
 				// be: after a redirect no code runs.
-				kizami_write(fn () => [
+				Runtime::write(fn () => [
 					'type'     => 'redirect',
 					'action'   => 'click',
 					'path'     => Capture::cleanPath(get('from')),
 					'target'   => $name,
-					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)kizami_option('positionNames', [])) ? get('position') : '',
+					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)Runtime::option('positionNames', [])) ? get('position') : '',
 				], fn (Store $store, string $session, \DateTimeImmutable $now) => Capture::linkClickCounts(
 					$_SERVER,
 					fn () => $store->hasPageView($session, $now)

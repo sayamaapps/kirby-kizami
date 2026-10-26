@@ -24,6 +24,26 @@ final class OptionsPrefixTest extends TestCase
 		]);
 	}
 
+	public function testLegacyFunctionReadsTheNewOptionAndIsDeprecated(): void
+	{
+		require_once dirname(__DIR__) . '/legacy.php';
+
+		$messages = [];
+		set_error_handler(function (int $level, string $message) use (&$messages): bool {
+			$messages[] = $message;
+			return true;
+		}, E_USER_DEPRECATED);
+
+		try {
+			$this->app(['debug' => true, 'sayamaapps.kizami.active' => true]);
+			$this->assertTrue(kizami_option('active'));
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertSame(['kizami_option() is deprecated, use Sayamaapps\\Kizami\\Runtime::option()'], $messages);
+	}
+
 	public function testNewSpellingIsRead(): void
 	{
 		$app = $this->app(['sayamaapps.kizami.active' => true]);
