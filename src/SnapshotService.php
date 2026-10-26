@@ -56,18 +56,18 @@ final class SnapshotService
 	public static function respond(App $kirby): Response
 	{
 		if (Options::get($kirby, 'active', false) !== true || Options::get($kirby, 'snapshot', false) !== true) {
-			return kizami_not_found();
+			return Runtime::notFound();
 		}
 		$temp = null;
 		try {
 			ReportService::authenticate($kirby, (array)Options::get($kirby, 'snapshotRoles', [self::ROLE]));
-			kizami_rotate_secret();
-			self::sweep(kizami_directory());
-			$db = kizami_directory() . '/' . Store::FILE;
+			Runtime::rotateSecret();
+			self::sweep(Runtime::directory());
+			$db = Runtime::directory() . '/' . Store::FILE;
 			if (!is_file($db)) {
 				throw new ReportError('No data yet.', 404);
 			}
-			$temp = kizami_directory() . '/.snapshot-' . bin2hex(random_bytes(8)) . '.sqlite';
+			$temp = Runtime::directory() . '/.snapshot-' . bin2hex(random_bytes(8)) . '.sqlite';
 			// Safety net for a fatal error between creating the copy and the
 			// answer: `finally` does not run then, a shutdown function does.
 			register_shutdown_function([self::class, 'cleanup'], $temp);
@@ -98,7 +98,7 @@ final class SnapshotService
 			return ReportService::json(['ok' => false, 'error' => $e->getMessage()], $e->status);
 		} catch (Throwable $e) {
 			error_log('Kizami: snapshot not available: ' . $e->getMessage());
-			kizami_log_error($e);
+			Runtime::logError($e);
 			return ReportService::json(['ok' => false, 'error' => 'Internal error.'], 500);
 		} finally {
 			if ($temp !== null) {

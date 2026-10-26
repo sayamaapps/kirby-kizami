@@ -277,6 +277,8 @@ final class Report
 		// (or a quiet day) gets the same text as before 1.4.0.
 		$events = array_filter($d['events'] ?? [], fn ($e) => $e['count'] > 0);
 		if ($events !== []) {
+			// Psalm sees the event list of the report data as never; the list is built from the rows above.
+			/** @psalm-suppress NoValue */
 			$lines[] = I18n::t('report.events', ['list' => self::list(array_map(fn ($e) => ['name' => $e['name'], 'value' => $e['count']], $events))]);
 		}
 		if ($week && !empty($d['perDay'])) {

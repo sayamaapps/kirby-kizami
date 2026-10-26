@@ -44,6 +44,7 @@ final class SnapshotResponse extends Response
 	 * everything into memory, which is exactly what production avoids by
 	 * calling send(). The handle is rewound, so send() still works after it.
 	 */
+	#[\Override]
 	public function body(): string
 	{
 		if (!is_resource($this->handle)) {
@@ -72,6 +73,7 @@ final class SnapshotResponse extends Response
 	 * output in chunks. Returns '' because the body is already out; the
 	 * caller's `echo` adds nothing.
 	 */
+	#[\Override]
 	public function send(): string
 	{
 		http_response_code($this->code());

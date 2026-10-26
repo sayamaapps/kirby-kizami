@@ -74,7 +74,7 @@ final class Lockout
 			throw new \RuntimeException('malformed');
 		}
 		$entries = ['ip' => [], 'user' => []];
-		foreach ($entries as $section => $_) {
+		foreach (array_keys($entries) as $section) {
 			$list = $data[$section] ?? [];
 			if (!is_array($list)) {
 				throw new \RuntimeException('malformed');

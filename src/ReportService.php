@@ -102,14 +102,14 @@ final class ReportService
 	public static function respond(App $kirby, DateTimeImmutable $now): Response
 	{
 		if (Options::get($kirby, 'active', false) !== true || Options::get($kirby, 'report', false) !== true) {
-			return kizami_not_found();
+			return Runtime::notFound();
 		}
 		// Here and not in the route: sites may call respond() from a route
 		// of their own, and the text must still follow the site language.
 		I18n::setLanguage(Options::language($kirby));
 		try {
 			self::authenticate($kirby);
-			kizami_rotate_secret();
+			Runtime::rotateSecret();
 			$kind = $kirby->request()->get('kind', 'day');
 			if (!in_array($kind, Report::KINDS, true)) {
 				throw new ReportError('"kind" must be "day" or "week".');
@@ -124,7 +124,7 @@ final class ReportService
 				throw new ReportError($e->getMessage());
 			}
 
-			$store = kizami_store();
+			$store = Runtime::store();
 			// As in the dashboard: a site whose dashboard is rarely opened
 			// still gets its maintenance from the daily script call.
 			// Maintenance must not cost the report: before it existed here, the
@@ -168,7 +168,7 @@ final class ReportService
 			return self::json(['ok' => false, 'error' => $e->getMessage()], $e->status);
 		} catch (Throwable $e) {
 			error_log('Kizami: report not available: ' . $e->getMessage());
-			kizami_log_error($e);
+			Runtime::logError($e);
 			return self::json(['ok' => false, 'error' => 'Internal error.'], 500);
 		}
 	}
