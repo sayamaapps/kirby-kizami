@@ -4,18 +4,18 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
 	xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
-	<description>PHP Mess Detector rules for Kizami (TST-10). Every exclusion and raised threshold has its reason here.</description>
+	<description>PHP Mess Detector rules for Kizami. Every exclusion and raised threshold has its reason here.</description>
 
 	<rule ref="rulesets/cleancode.xml">
 		<!-- The helper classes are static by design, as in Kirby's own code. -->
 		<exclude name="StaticAccess" />
-		<!-- Public flags such as withNote, merge and withYear are part of the public API (VER-3). -->
+		<!-- Public flags such as withNote, merge and withYear are part of the public API. -->
 		<exclude name="BooleanArgumentFlag" />
 		<!-- The assignment in a condition keeps the status cascade in reading order. -->
 		<exclude name="IfStatementAssignment" />
 		<!-- Early returns are not enforced; some guards read better with else. -->
 		<exclude name="ElseExpression" />
-		<!-- The @ operator silences warnings that the code checks afterwards (file and SQLite calls). Removing it changes what a visitor or operator sees, so it waits for a behaviour change (IDM-14). -->
+		<!-- The @ operator silences warnings that the code checks afterwards (file and SQLite calls). Removing it changes what a visitor or operator sees, so it stays until a behaviour change is planned. -->
 		<exclude name="ErrorControlOperator" />
 		<!-- Global PHP and Kirby classes are written fully qualified in several places; adding imports is cosmetic. -->
 		<exclude name="MissingImport" />
@@ -36,7 +36,7 @@
 	<rule ref="rulesets/codesize.xml/ExcessiveParameterList" />
 
 	<rule ref="rulesets/design.xml">
-		<!-- The domain classes (Store, Schedule-like Report and Analysis classes) are large by design; splitting them changes the API (VER-3). -->
+		<!-- The domain classes (Store, Schedule-like Report and Analysis classes) are large by design; splitting them changes the API. -->
 		<exclude name="TooManyPublicMethods" />
 		<exclude name="TooManyMethods" />
 		<exclude name="CouplingBetweenObjects" />

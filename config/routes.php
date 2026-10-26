@@ -19,11 +19,10 @@ use Sayamaapps\Kizami\SetupError;
 use Sayamaapps\Kizami\SnapshotService;
 use Sayamaapps\Kizami\Store;
 
-// Routes as a closure, not an array: the redirect routes are only known
-// once the config is read. Verified: optionsFromConfig()
-// runs BEFORE extensionsFromPlugins(), so option() works here. setSite()
-// runs AFTERWARDS, though — that is why the target is resolved in the
-// route, not at registration.
+// Routes as a closure, not an array: the redirect routes depend on the
+// options, which Kirby reads before the plugin extensions are loaded, so
+// option() works here. setSite() runs later, which is why the target is
+// resolved inside the route and not at registration.
 return function () {
 	$routes = [
 		[
@@ -319,13 +318,9 @@ return function () {
 					fn () => $store->hasPageView($session, $now)
 				));
 
-				// NOT Response::redirect() — it sends the target through
-				// Url::unIdn(), and Uri::setScheme() only allows
-				// http/https. Verified against Kirby:
-				// Response::redirect('tel:+49…') throws
-				// "InvalidArgumentException: Invalid URL scheme: tel".
-				// Of all things the most important click on the site.
-				// Whoever "tidies this up" breaks it.
+				// Response::redirect() is not used: it sends the target through
+				// Url::unIdn(), and Uri::setScheme() only accepts http and https,
+				// so a tel: target would throw. The header is set by hand here.
 				//
 				// 302, not 301: a permanent redirect would stick in the
 				// browser and future clicks would never be counted again.

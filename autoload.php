@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Class map for Kirby's F::loadClasses() (AUT-2). Keys are lowercase class names,
+ * Class map for Kirby's F::loadClasses(). Keys are lowercase class names,
  * values are paths relative to the plugin root. tests/AutoloadTest.php checks the
  * map against src/.
  */
