@@ -4,8 +4,14 @@ if (PHP_SAPI !== 'cli') {
 	http_response_code(404);
 	exit;
 }
-require_once __DIR__ . '/src/Secret.php';
-require_once __DIR__ . '/src/Store.php';
+// The classes are loaded through the class map, because Store uses other
+// classes (Names, Analysis) that a fixed list of require_once would miss.
+$classes = require __DIR__ . '/autoload.php';
+spl_autoload_register(function (string $class) use ($classes): void {
+	if (isset($classes[strtolower($class)]) === true) {
+		require_once __DIR__ . '/' . $classes[strtolower($class)];
+	}
+});
 try {
 	// `--retention-months=N` must carry the value of kizami.retentionMonths
 	// when the site sets it: this job has no Kirby options of its own.
