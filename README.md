@@ -67,7 +67,7 @@ return [
 **Link clicks.** Route links through a counted redirect. The fallback keeps the link working while the redirect is not configured:
 
 ```php
-<?= $page->redirectAnchor('call', 'Call us', 'tel:+491234567890', 'header') ?>
+<?= $page->kizamiRedirectAnchor('call', 'Call us', 'tel:+491234567890', 'header') ?>
 ```
 
 The optional fourth argument is a position, recorded only if it is listed in `positionNames`. Safari sends no `Sec-Fetch-User`, so its clicks count only if the same IP address and user agent viewed a page that day.

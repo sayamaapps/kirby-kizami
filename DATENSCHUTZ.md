@@ -141,7 +141,7 @@ nicht archivieren.
 - `kizami.contactTargets`: explizite Teilmenge der Weiterleitungsnamen für die
   Herkunftsauswertung. Ohne Konfiguration erscheint dieser Block nicht.
 - `kizami.positionNames`: erlaubte Positionskennungen mit lesbaren Namen.
-  `$page->redirectLink('anruf', 'tel:+490000', 'header')` ergänzt die Position.
+  `$page->kizamiRedirectLink('anruf', 'tel:+490000', 'header')` ergänzt die Position.
   Ohne bekannte Kennung bleibt die Position leer; der Link funktioniert weiter.
 - `kizami.images`: erlaubte Bildkennungen mit lesbaren Namen. Ohne diese
   Konfiguration sendet die Galerie keine Bildmeldungen. Am Bildlink steht

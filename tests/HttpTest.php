@@ -75,7 +75,7 @@ final class HttpTest extends TestCase
 			symlink($repo, $tmp . '/site/plugins/kizami');
 			file_put_contents($tmp . '/content/home/home.txt', "Title: Test\n");
 			file_put_contents($tmp . '/content/error/error.txt', "Title: Error\n");
-			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } echo isset($_GET["links"]) ? $page->redirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
+			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } echo isset($_GET["links"]) ? $page->kizamiRedirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
 			file_put_contents($tmp . '/site/templates/error.php', '<?php echo "Fixture 404";');
 			// A page that a route of the site's own also serves under a short code (/EEAQ77).
 			mkdir($tmp . '/content/book');

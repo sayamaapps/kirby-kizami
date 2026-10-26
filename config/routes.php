@@ -180,7 +180,7 @@ return function () {
 				}
 
 				// Under a subdirectory install /k/ lives below the index
-				// URL. A path, not the full URL, like redirectLink(): if the
+				// URL. A path, not the full URL, like kizamiRedirectLink(): if the
 				// `url` option differs from the host of the request or says
 				// http://, an absolute link would load cross-origin or as
 				// mixed content, and the browser would not send the login.
@@ -326,7 +326,7 @@ return function () {
 				//
 				// X-Robots-Tag: search engines should neither index nor
 				// follow the redirect; rel="nofollow" on the link itself
-				// is set by the template (or $page->redirectAnchor()).
+				// is set by the template (or $page->kizamiRedirectAnchor()).
 				return new Response('', 'text/plain', 302, ['Location' => $target, 'X-Robots-Tag' => 'noindex, nofollow']);
 			},
 		];

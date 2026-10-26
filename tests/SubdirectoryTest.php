@@ -61,10 +61,10 @@ final class SubdirectoryTest extends TestCase
 				$kirby = $app($index);
 				$home = $kirby->site()->homePage();
 				$contact = $kirby->page('contact');
-				self::same($prefix . '/call?from=%2F', $home->redirectLink('call'), "Home link ($index)");
-				self::same($prefix . '/call?from=%2Fcontact', $contact->redirectLink('call'), "Subpage link ($index)");
-				self::same('tel:+1', $home->redirectLink('missing', 'tel:+1'), "Fallback stays untouched ($index)");
-				self::same(true, str_contains($contact->redirectAnchor('call', 'Call', 'tel:+1', '', ['class' => 'button']), 'href="' . $prefix . '/call?from=%2Fcontact"'), "Anchor carries the prefixed href ($index)");
+				self::same($prefix . '/call?from=%2F', $home->kizamiRedirectLink('call'), "Home link ($index)");
+				self::same($prefix . '/call?from=%2Fcontact', $contact->kizamiRedirectLink('call'), "Subpage link ($index)");
+				self::same('tel:+1', $home->kizamiRedirectLink('missing', 'tel:+1'), "Fallback stays untouched ($index)");
+				self::same(true, str_contains($contact->kizamiRedirectAnchor('call', 'Call', 'tel:+1', '', ['class' => 'button']), 'href="' . $prefix . '/call?from=%2Fcontact"'), "Anchor carries the prefixed href ($index)");
 
 				$kirby = $app($index, '/k/dashboard');
 				$kirby->impersonate('kirby');
