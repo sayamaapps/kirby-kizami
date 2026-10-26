@@ -24,14 +24,14 @@ use PHPUnit\Framework\TestCase;
 #[RunTestsInSeparateProcesses]
 final class ChartTest extends TestCase
 {
-	private static function check(string $what, bool $ok): void { global $n, $failures; $n++; Assert::assertTrue(true); if (!$ok) { $failures[] = $what; } }
-
-	private static function wellFormed(string $html): bool {
-	    $before = libxml_use_internal_errors(true);
-	    $dom = new DOMDocument();
-	    $ok = $dom->loadXML('<wrap>' . $html . '</wrap>');
-	    libxml_clear_errors(); libxml_use_internal_errors($before);
-	    return $ok !== false;
+	private static function check(string $what, bool $ok): void
+	{
+		global $n, $failures;
+		$n++;
+		Assert::assertTrue(true);
+		if (!$ok) {
+			$failures[] = $what;
+		}
 	}
 
 	public function testSuite(): void
@@ -45,12 +45,17 @@ final class ChartTest extends TestCase
 		self::check('First shade is lighter than the base', hexdec(substr($shades[0], 1, 2)) > hexdec('2f'));
 		self::check('All shades are hex', count(array_filter($shades, fn ($s) => preg_match('/^#[0-9a-f]{6}$/i', $s))) === 5);
 		$luminance = static function (string $hex): float {
-		    $rgb = array_map(static function ($v) { $v /= 255; return $v <= .04045 ? $v / 12.92 : (($v + .055) / 1.055) ** 2.4; }, sscanf($hex, '#%02x%02x%02x'));
-		    return .2126 * $rgb[0] + .7152 * $rgb[1] + .0722 * $rgb[2];
+			$rgb = array_map(static function ($v) {
+				$v /= 255;
+				return $v <= .04045 ? $v / 12.92 : (($v + .055) / 1.055) ** 2.4;
+			}, sscanf($hex, '#%02x%02x%02x'));
+			return .2126 * $rgb[0] + .7152 * $rgb[1] + .0722 * $rgb[2];
 		};
-		for ($i = 1; $i < count($shades); $i++) { self::check('Shades get steadily darker', $luminance($shades[$i]) < $luminance($shades[$i - 1])); }
+		for ($i = 1; $i < count($shades); $i++) {
+			self::check('Shades get steadily darker', $luminance($shades[$i]) < $luminance($shades[$i - 1]));
+		}
 		foreach (['#37352c', '#6b675a', '#2f4f2a', '#a8412f', '#3a6db0'] as $color) {
-		    self::check('Text contrast ' . $color, ($luminance('#f8f4e9') + .05) / ($luminance($color) + .05) >= 4.5);
+			self::check('Text contrast ' . $color, ($luminance('#f8f4e9') + .05) / ($luminance($color) + .05) >= 4.5);
 		}
 		$sp = Chart::sparkline([1, 5, 3, 8, 2]);
 		self::check('Sparkline well-formed', self::wellFormed($sp));
@@ -59,8 +64,8 @@ final class ChartTest extends TestCase
 		self::check('Sparkline with one value', self::wellFormed(Chart::sparkline([7])));
 		self::check('Sparkline of only zeros without division by 0', self::wellFormed(Chart::sparkline([0, 0, 0])));
 		$b = Chart::bars([
-		    ['name' => 'Call <script>alert(1)</script>', 'value' => 61],
-		    ['name' => 'Route', 'value' => 26, 'share' => '30 %'],
+			['name' => 'Call <script>alert(1)</script>', 'value' => 61],
+			['name' => 'Route', 'value' => 26, 'share' => '30 %'],
 		]);
 		self::check('Bars well-formed', self::wellFormed($b));
 		self::check('Bars escape names', !str_contains($b, '<script>') && str_contains($b, '&lt;script&gt;'));
@@ -88,7 +93,7 @@ final class ChartTest extends TestCase
 		$matrix = array_fill(0, 7, array_fill(0, 17, 0));
 		$matrix[2][5] = 40;
 		$matrix[0][0] = 1;
-		$r = Chart::grid($matrix, ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], array_map('strval', range(6, 22)));
+		$r = Chart::grid($matrix, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], array_map('strval', range(6, 22)));
 		self::check('Grid well-formed', self::wellFormed($r));
 		self::check('Grid: maximum is shade-5', str_contains($r, 'class="shade-5"'));
 		self::check('Grid: zero is shade-0', substr_count($r, 'class="shade-0"') === 7 * 17 - 2);
@@ -97,7 +102,7 @@ final class ChartTest extends TestCase
 		self::check('Grid: cell has tooltip and hidden number', str_contains($r, 'title="Wed 11:00: 40"') && str_contains($r, '<span class="sr-only">40</span>'));
 		self::check('Area has an accessible name', str_contains(Chart::area([['name' => 'x', 'value' => 1]], 'Visits per day'), 'aria-label="Visits per day"'));
 		self::check('Columns have an accessible name', str_contains(Chart::columns([['name' => 'x', 'value' => 1]], 'Months'), 'aria-label="Months"'));
-		self::check('Grid of only zeros', self::wellFormed(Chart::grid(array_fill(0, 7, array_fill(0, 17, 0)), ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], array_map('strval', range(6, 22)))));
+		self::check('Grid of only zeros', self::wellFormed(Chart::grid(array_fill(0, 7, array_fill(0, 17, 0)), ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], array_map('strval', range(6, 22)))));
 		self::check('Number with thousands separator', Chart::number(1117) === '1,117');
 		self::check('Number with decimal point', Chart::number(12.4) === '12.4');
 		self::check('Number with fixed decimal on a whole number', Chart::number(15, 1) === '15.0');
@@ -108,12 +113,12 @@ final class ChartTest extends TestCase
 		self::check('Duration exactly on the minute', Chart::duration(120) === '2 min 0 s');
 		self::check('Duration over an hour stays in minutes', Chart::duration(3600) === '60 min 0 s');
 		self::check('Negative seconds are not shown negative', Chart::duration(-5) === '0 s');
-		foreach (['sparkline' => [0, 0], 'bars' => [['name'=>'x', 'value'=>0]], 'columns' => [['name'=>'x', 'value'=>0]], 'area' => [['name'=>'x', 'value'=>0]]] as $form => $data) {
-		    self::check("$form: zero series is a placeholder", str_contains(Chart::$form($data), 'No data yet'));
+		foreach (['sparkline' => [0, 0], 'bars' => [['name' => 'x', 'value' => 0]], 'columns' => [['name' => 'x', 'value' => 0]], 'area' => [['name' => 'x', 'value' => 0]]] as $form => $data) {
+			self::check("$form: zero series is a placeholder", str_contains(Chart::$form($data), 'No data yet'));
 		}
 		foreach (['bars', 'columns', 'area'] as $form) {
-		    $graphic = Chart::$form([['name'=>'<script>"&', 'value'=>1], ['name'=>'Outlier', 'value'=>100000]]);
-		    self::check("$form: outliers and special characters", self::wellFormed($graphic) && !str_contains($graphic, '<script>') && str_contains($graphic, '&lt;script&gt;'));
+			$graphic = Chart::$form([['name' => '<script>"&', 'value' => 1], ['name' => 'Outlier', 'value' => 100000]]);
+			self::check("$form: outliers and special characters", self::wellFormed($graphic) && !str_contains($graphic, '<script>') && str_contains($graphic, '&lt;script&gt;'));
 		}
 		self::check('Empty grid as a placeholder', str_contains(Chart::grid([], [], []), 'No data yet'));
 		I18n::setLanguage('de');
@@ -125,12 +130,22 @@ final class ChartTest extends TestCase
 		self::check('de: duration over an hour', Chart::duration(3600) === '60 Min 0 s');
 		self::check('de: empty placeholder', str_contains(Chart::bars([]), 'Noch keine Daten'));
 		self::check('de: Other is "Sonstige"', str_contains(Chart::bars($many, 8), '<title>Sonstige: 38</title>'));
-		self::check('de: grid tooltip', str_contains(Chart::grid($matrix, ['Mo','Di','Mi','Do','Fr','Sa','So'], array_map('strval', range(6, 22))), 'title="Mi 11 Uhr: 40"'));
+		self::check('de: grid tooltip', str_contains(Chart::grid($matrix, ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'], array_map('strval', range(6, 22))), 'title="Mi 11 Uhr: 40"'));
 		I18n::setLanguage('en');
 		$invalidBars = Chart::bars([['name' => "foo\xFF.example", 'value' => 3]]);
 		self::check('Bars: invalid UTF-8 in a name becomes U+FFFD, not empty', str_contains($invalidBars, "<span class=\"bar-name\">foo\u{FFFD}.example</span>") && str_contains($invalidBars, "<title>foo\u{FFFD}.example: 3</title>"));
 		self::check('Bars: output with an invalid name stays valid UTF-8', preg_match('//u', $invalidBars) === 1);
 		self::check('Column titles: invalid UTF-8 becomes U+FFFD', str_contains(Chart::columns([['name' => "a\xFFb", 'value' => 2]]), "<title>a\u{FFFD}b: 2</title>"));
 		$this->assertSame([], $failures);
+	}
+
+	private static function wellFormed(string $html): bool
+	{
+		$before = libxml_use_internal_errors(true);
+		$dom = new DOMDocument();
+		$ok = $dom->loadXML('<wrap>' . $html . '</wrap>');
+		libxml_clear_errors();
+		libxml_use_internal_errors($before);
+		return $ok !== false;
 	}
 }

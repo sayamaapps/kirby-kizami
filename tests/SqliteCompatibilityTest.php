@@ -39,33 +39,38 @@ final class SqliteCompatibilityTest extends TestCase
 {
 	private static function columnList(string $list): array
 	{
-	    $parts = [];
-	    $depth = 0;
-	    $current = '';
-	    foreach (str_split($list) as $c) {
-	        if ($c === '(') { $depth++; Assert::assertTrue(true); }
-	        if ($c === ')') { $depth--; }
-	        if ($c === ',' && $depth === 0) {
-	            $parts[] = trim($current);
-	            $current = '';
-	            continue;
-	        }
-	        $current .= $c;
-	    }
-	    $parts[] = trim($current);
-	    return $parts;
+		$parts = [];
+		$depth = 0;
+		$current = '';
+		foreach (str_split($list) as $c) {
+			if ($c === '(') {
+				$depth++;
+				Assert::assertTrue(true);
+			}
+			if ($c === ')') {
+				$depth--;
+			}
+			if ($c === ',' && $depth === 0) {
+				$parts[] = trim($current);
+				$current = '';
+				continue;
+			}
+			$current .= $c;
+		}
+		$parts[] = trim($current);
+		return $parts;
 	}
 
 	private static function sqlOf(string $text): string
 	{
-	    $sql = '';
-	    foreach (token_get_all($text) as $token) {
-	        if (is_array($token) && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
-	            && preg_match('/\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\b/', $token[1])) {
-	            $sql .= $token[1] . "\n";
-	        }
-	    }
-	    return $sql;
+		$sql = '';
+		foreach (token_get_all($text) as $token) {
+			if (is_array($token) && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true) &&
+				preg_match('/\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\b/', $token[1])) {
+				$sql .= $token[1] . "\n";
+			}
+		}
+		return $sql;
 	}
 
 	public function testSuite(): void
@@ -74,79 +79,84 @@ final class SqliteCompatibilityTest extends TestCase
 		$failures = [];
 		$root = dirname(__DIR__);
 		$files = array_merge(
-		    glob($root . '/src/*.php'),
-		    glob($root . '/views/*.php'),
-		    [$root . '/index.php', $root . '/maintenance.php', $root . '/bin/kizami-snapshot'],
+			glob($root . '/src/*.php'),
+			glob($root . '/views/*.php'),
+			[$root . '/index.php', $root . '/maintenance.php', $root . '/bin/kizami-snapshot'],
 		);
 		$sources = [];
 		foreach ($files as $file) {
-		    if (!is_file($file)) {
-		        $failures[] = 'File to scan missing: ' . substr($file, strlen($root) + 1);
-		        continue;
-		    }
-		    $sources[substr($file, strlen($root) + 1)] = file_get_contents($file);
+			if (!is_file($file)) {
+				$failures[] = 'File to scan missing: ' . substr($file, strlen($root) + 1);
+				continue;
+			}
+			$sources[substr($file, strlen($root) + 1)] = file_get_contents($file);
 		}
 		$forbidden = [
-		    '/\bOVER\s*\(/i'                    => 'window function (OVER)',
-		    '/\bWITH\s+(RECURSIVE\s+)?\w+\s*(\([^)]*\))?\s+AS\s*\(/i' => 'CTE (WITH … AS)',
-		    '/->>?/'                            => 'JSON arrow operator',
-		    '/\bRETURNING\b/i'                  => 'RETURNING',
-		    '/\bDO\s+UPDATE\b/i'                => 'UPSERT (ON CONFLICT DO UPDATE)',
-		    '/\bFILTER\s*\(\s*WHERE/i'          => 'FILTER (WHERE …)',
-		    '/\bNULLS\s+(FIRST|LAST)\b/i'       => 'NULLS FIRST/LAST',
-		    '/\biif\s*\(/i'                     => 'iif()',
-		    '/\bunixepoch\s*\(/i'               => 'unixepoch()',
-		    '/\)\s*STRICT\b/i'                  => 'STRICT table',
-		    '/\b(DROP|RENAME)\s+COLUMN\b/i'     => 'DROP/RENAME COLUMN',
+			'/\bOVER\s*\(/i'                    => 'window function (OVER)',
+			'/\bWITH\s+(RECURSIVE\s+)?\w+\s*(\([^)]*\))?\s+AS\s*\(/i' => 'CTE (WITH … AS)',
+			'/->>?/'                            => 'JSON arrow operator',
+			'/\bRETURNING\b/i'                  => 'RETURNING',
+			'/\bDO\s+UPDATE\b/i'                => 'UPSERT (ON CONFLICT DO UPDATE)',
+			'/\bFILTER\s*\(\s*WHERE/i'          => 'FILTER (WHERE …)',
+			'/\bNULLS\s+(FIRST|LAST)\b/i'       => 'NULLS FIRST/LAST',
+			'/\biif\s*\(/i'                     => 'iif()',
+			'/\bunixepoch\s*\(/i'               => 'unixepoch()',
+			'/\)\s*STRICT\b/i'                  => 'STRICT table',
+			'/\b(DROP|RENAME)\s+COLUMN\b/i'     => 'DROP/RENAME COLUMN',
 		];
 		$scanned = [];
 		foreach ($sources as $name => $text) {
-		    $sql = self::sqlOf($text);
-		    $scanned[$name] = $sql;
-		
-		    foreach ($forbidden as $pattern => $what) {
-		        if (preg_match($pattern, $sql, $m)) {
-		            $failures[] = "$name: $what in \"" . trim($m[0]) . '"';
-		        } else {
-		            $passed++; Assert::assertTrue(true);
-		        }
-		    }
-		
-		    preg_match_all('/\bSELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\b/is', $sql, $selects);
-		    foreach ($selects[1] as $list) {
-		        foreach (self::columnList($list) as $column) {
-		            if (preg_match('/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/', $column)) {
-		                $failures[] = "$name: result column \"{$column}\" without AS — SQLite 3.7.17 returns it as \"{$column}\"";
-		            } else {
-		                $passed++; Assert::assertTrue(true);
-		            }
-		        }
-		    }
+			$sql = self::sqlOf($text);
+			$scanned[$name] = $sql;
+
+			foreach ($forbidden as $pattern => $what) {
+				if (preg_match($pattern, $sql, $m)) {
+					$failures[] = "$name: $what in \"" . trim($m[0]) . '"';
+				} else {
+					$passed++;
+					Assert::assertTrue(true);
+				}
+			}
+
+			preg_match_all('/\bSELECT\s+(?:DISTINCT\s+)?(.*?)\s+FROM\b/is', $sql, $selects);
+			foreach ($selects[1] as $list) {
+				foreach (self::columnList($list) as $column) {
+					if (preg_match('/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/', $column)) {
+						$failures[] = "$name: result column \"{$column}\" without AS — SQLite 3.7.17 returns it as \"{$column}\"";
+					} else {
+						$passed++;
+						Assert::assertTrue(true);
+					}
+				}
+			}
 		}
 		foreach ([
-		    'Store schema' => 'CREATE TABLE IF NOT EXISTS kizami_events',
-		    'Store queries' => 'FROM kizami_events',
-		    'legacy schema migration (events)' => 'INSERT INTO kizami_events (id, created_at, type, action, path, target, referrer',
-		    'legacy schema migration (daily totals)' => 'INSERT INTO kizami_days (day, views, clicks, devices) SELECT',
-		    'actions table (1.4.0)' => 'CREATE TABLE IF NOT EXISTS kizami_custom_events',
-		    'actions queries (1.4.0)' => 'FROM kizami_custom_events',
+			'Store schema' => 'CREATE TABLE IF NOT EXISTS kizami_events',
+			'Store queries' => 'FROM kizami_events',
+			'legacy schema migration (events)' => 'INSERT INTO kizami_events (id, created_at, type, action, path, target, referrer',
+			'legacy schema migration (daily totals)' => 'INSERT INTO kizami_days (day, views, clicks, devices) SELECT',
+			'actions table (1.4.0)' => 'CREATE TABLE IF NOT EXISTS kizami_custom_events',
+			'actions queries (1.4.0)' => 'FROM kizami_custom_events',
 		] as $what => $needle) {
-		    if (str_contains($scanned['src/Store.php'] ?? '', $needle)) {
-		        $passed++; Assert::assertTrue(true);
-		    } else {
-		        $failures[] = "Scan does not see the SQL of the $what in src/Store.php";
-		    }
+			if (str_contains($scanned['src/Store.php'] ?? '', $needle)) {
+				$passed++;
+				Assert::assertTrue(true);
+			} else {
+				$failures[] = "Scan does not see the SQL of the $what in src/Store.php";
+			}
 		}
 		$probe = self::columnList('e.source, COUNT(DISTINCT e.id) AS visits');
 		if (preg_match('/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/', $probe[0]) && count($probe) === 2) {
-		    $passed++; Assert::assertTrue(true);
+			$passed++;
+			Assert::assertTrue(true);
 		} else {
-		    $failures[] = 'Self-check: "e.source" without AS is not detected';
+			$failures[] = 'Self-check: "e.source" without AS is not detected';
 		}
 		if (preg_match('/\bDO\s+UPDATE\b/i', self::sqlOf('<?php $x = "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = 2";'))) {
-		    $passed++; Assert::assertTrue(true);
+			$passed++;
+			Assert::assertTrue(true);
 		} else {
-		    $failures[] = 'Self-check: UPSERT in a string literal is not detected';
+			$failures[] = 'Self-check: UPSERT in a string literal is not detected';
 		}
 		$this->assertSame([], $failures);
 	}

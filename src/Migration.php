@@ -23,56 +23,55 @@ namespace Kizami;
  */
 final class Migration
 {
-    public const LEGACY_DIRECTORY = 'kennzahlen';
-    public const DIRECTORY = 'kizami';
+	public const DIRECTORY = 'kizami';
+	private const FILES = [
+		'kennzahlen.sqlite' => Store::FILE,
+		'kennzahlen.sqlite-wal' => Store::FILE . '-wal',
+		'kennzahlen.sqlite-shm' => Store::FILE . '-shm',
+		'kennzahlen.sqlite-journal' => Store::FILE . '-journal',
+		'geheimnis.txt' => Secret::FILE,
+		'fehler.log' => 'errors.log',
+	];
+	public const LEGACY_DIRECTORY = 'kennzahlen';
 
-    private const FILES = [
-        'kennzahlen.sqlite' => Store::FILE,
-        'kennzahlen.sqlite-wal' => Store::FILE . '-wal',
-        'kennzahlen.sqlite-shm' => Store::FILE . '-shm',
-        'kennzahlen.sqlite-journal' => Store::FILE . '-journal',
-        'geheimnis.txt' => Secret::FILE,
-        'fehler.log' => 'errors.log',
-    ];
+	/** Returns the data directory, after moving the legacy one if needed. */
+	public static function storage(string $storageRoot): string
+	{
+		$legacy = $storageRoot . '/' . self::LEGACY_DIRECTORY;
+		$current = $storageRoot . '/' . self::DIRECTORY;
+		if (!is_dir($legacy)) {
+			return $current;
+		}
+		if (is_dir($current)) {
+			error_log('Kizami: both ' . $legacy . ' and ' . $current . ' exist — not migrating, using ' . $current);
+			return $current;
+		}
 
-    /** Returns the data directory, after moving the legacy one if needed. */
-    public static function storage(string $storageRoot): string
-    {
-        $legacy = $storageRoot . '/' . self::LEGACY_DIRECTORY;
-        $current = $storageRoot . '/' . self::DIRECTORY;
-        if (!is_dir($legacy)) {
-            return $current;
-        }
-        if (is_dir($current)) {
-            error_log('Kizami: both ' . $legacy . ' and ' . $current . ' exist — not migrating, using ' . $current);
-            return $current;
-        }
-
-        $lockFile = $storageRoot . '/.kizami-migration.lock';
-        $lock = @fopen($lockFile, 'c');
-        if ($lock === false || !flock($lock, LOCK_EX)) {
-            error_log('Kizami: storage migration lock not available in ' . $storageRoot);
-            return $current;
-        }
-        try {
-            if (is_dir($legacy) && !is_dir($current)) {
-                foreach (self::FILES as $old => $new) {
-                    if (is_file($legacy . '/' . $old) && !file_exists($legacy . '/' . $new)) {
-                        @rename($legacy . '/' . $old, $legacy . '/' . $new);
-                    }
-                }
-                if (!@rename($legacy, $current)) {
-                    // The files inside already carry their new names, so the
-                    // old directory works as it is; the next request tries again.
-                    error_log('Kizami: could not move ' . $legacy . ' to ' . $current);
-                    return $legacy;
-                }
-            }
-        } finally {
-            flock($lock, LOCK_UN);
-            fclose($lock);
-            @unlink($lockFile);
-        }
-        return $current;
-    }
+		$lockFile = $storageRoot . '/.kizami-migration.lock';
+		$lock = @fopen($lockFile, 'c');
+		if ($lock === false || !flock($lock, LOCK_EX)) {
+			error_log('Kizami: storage migration lock not available in ' . $storageRoot);
+			return $current;
+		}
+		try {
+			if (is_dir($legacy) && !is_dir($current)) {
+				foreach (self::FILES as $old => $new) {
+					if (is_file($legacy . '/' . $old) && !file_exists($legacy . '/' . $new)) {
+						@rename($legacy . '/' . $old, $legacy . '/' . $new);
+					}
+				}
+				if (!@rename($legacy, $current)) {
+					// The files inside already carry their new names, so the
+					// old directory works as it is; the next request tries again.
+					error_log('Kizami: could not move ' . $legacy . ' to ' . $current);
+					return $legacy;
+				}
+			}
+		} finally {
+			flock($lock, LOCK_UN);
+			fclose($lock);
+			@unlink($lockFile);
+		}
+		return $current;
+	}
 }

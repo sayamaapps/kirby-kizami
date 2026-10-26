@@ -16,24 +16,24 @@ namespace Kizami;
  */
 final class Access
 {
-    /**
-     * @param array{user?:string,hash?:string}|null $credentials contents of kizami.php
-     */
-    public static function checkFile(?array $credentials, ?string $user, ?string $password): bool
-    {
-        $expectedUser = $credentials['user'] ?? '';
-        $expectedHash = $credentials['hash'] ?? '';
+	/**
+	 * @param array{user?:string,hash?:string}|null $credentials contents of kizami.php
+	 */
+	public static function checkFile(array|null $credentials, string|null $user, string|null $password): bool
+	{
+		$expectedUser = $credentials['user'] ?? '';
+		$expectedHash = $credentials['hash'] ?? '';
 
-        if (!is_string($expectedUser) || !is_string($expectedHash) || $expectedUser === '' || $expectedHash === '') {
-            return false; // not set up → fail closed
-        }
-        if ($user === null || $password === null) {
-            return false;
-        }
+		if (!is_string($expectedUser) || !is_string($expectedHash) || $expectedUser === '' || $expectedHash === '') {
+			return false; // not set up → fail closed
+		}
+		if ($user === null || $password === null) {
+			return false;
+		}
 
-        // hash_equals against timing attacks on the user name; password_verify
-        // is constant-time anyway.
-        return hash_equals($expectedUser, $user)
-            && password_verify($password, $expectedHash);
-    }
+		// hash_equals against timing attacks on the user name; password_verify
+		// is constant-time anyway.
+		return hash_equals($expectedUser, $user) &&
+			password_verify($password, $expectedHash);
+	}
 }

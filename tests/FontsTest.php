@@ -14,7 +14,14 @@ use PHPUnit\Framework\TestCase;
 #[RunTestsInSeparateProcesses]
 final class FontsTest extends TestCase
 {
-	private static function holds(bool $ok, string $what): void { global $n; if (!$ok) { throw $e; } $n++; Assert::assertTrue(true); }
+	private static function holds(bool $ok, string $what): void
+	{
+		global $n;
+		if (!$ok) {
+			throw $e;
+		} $n++;
+		Assert::assertTrue(true);
+	}
 
 	public function testSuite(): void
 	{
@@ -28,15 +35,15 @@ final class FontsTest extends TestCase
 		$r = Fonts::css(['serif' => ['name' => 'Source Sans 3'], 'sans' => ['name' => 'Source Sans 3', 'file' => '/assets/fonts/source-sans-3-latin.woff2']]);
 		self::holds(substr_count($r['css'], '@font-face') === 1 && str_contains($r['css'], '--serif: "Source Sans 3"'), 'serif without file uses the loaded sans');
 		foreach ([
-		    ['name' => 'X"; } body { display:none', 'file' => '/a.woff2'],
-		    ['name' => 'Good', 'file' => 'https://foreign.example/a.woff2'],
-		    ['name' => 'Good', 'file' => '/assets/../config/kizami.php'],
-		    ['name' => 'Good', 'file' => '/a.woff2") ; x'],
-		    ['name' => 'Good', 'file' => '/a.ttf'],
-		    'Just a string',
+			['name' => 'X"; } body { display:none', 'file' => '/a.woff2'],
+			['name' => 'Good', 'file' => 'https://foreign.example/a.woff2'],
+			['name' => 'Good', 'file' => '/assets/../config/kizami.php'],
+			['name' => 'Good', 'file' => '/a.woff2") ; x'],
+			['name' => 'Good', 'file' => '/a.ttf'],
+			'Just a string',
 		] as $bad) {
-		    $r = Fonts::css(['sans' => $bad]);
-		    self::holds($r['css'] === '' && count($r['errors']) === 1, 'rejected: ' . json_encode($bad));
+			$r = Fonts::css(['sans' => $bad]);
+			self::holds($r['css'] === '' && count($r['errors']) === 1, 'rejected: ' . json_encode($bad));
 		}
 		$r = Fonts::css(['sans' => ['name' => 'Karla', 'file' => '/assets/fonts/karla.woff'], 'mono' => ['name' => 'Whatever']]);
 		self::holds(str_contains($r['css'], 'format("woff")') && !str_contains($r['css'], 'Whatever'), 'woff allowed, unknown role ignored');

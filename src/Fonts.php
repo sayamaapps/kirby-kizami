@@ -22,40 +22,40 @@ namespace Kizami;
  */
 final class Fonts
 {
-    private const FALLBACK = ['serif' => 'Georgia, "Times New Roman", serif', 'sans' => '-apple-system, system-ui, "Segoe UI", sans-serif'];
+	private const FALLBACK = ['serif' => 'Georgia, "Times New Roman", serif', 'sans' => '-apple-system, system-ui, "Segoe UI", sans-serif'];
 
-    /** @return array{css:string,errors:list<string>} */
-    public static function css(mixed $fonts): array
-    {
-        $css = '';
-        $vars = [];
-        $errors = [];
-        $loaded = [];
-        foreach (self::FALLBACK as $role => $fallback) {
-            $entry = is_array($fonts) ? ($fonts[$role] ?? null) : null;
-            if ($entry === null) {
-                continue;
-            }
-            $name = is_array($entry) ? ($entry['name'] ?? null) : null;
-            $file = is_array($entry) ? ($entry['file'] ?? null) : null;
-            if (!is_string($name) || !preg_match('/^[\p{L}\p{N} \-]{1,60}$/u', $name)) {
-                $errors[] = "fonts.$role: invalid name";
-                continue;
-            }
-            if ($file !== null && (!is_string($file) || !preg_match('#^/[A-Za-z0-9._/\-]+\.(woff2|woff)$#', $file) || str_contains($file, '..'))) {
-                $errors[] = "fonts.$role: invalid file";
-                continue;
-            }
-            if (is_string($file) && !isset($loaded[$name . "\0" . $file])) {
-                $format = str_ends_with($file, '.woff2') ? 'woff2' : 'woff';
-                $css .= '@font-face { font-family: "' . $name . '"; src: url("' . $file . '") format("' . $format . '"); font-display: swap; }' . "\n";
-                $loaded[$name . "\0" . $file] = true;
-            }
-            $vars[] = "--$role: \"$name\", $fallback;";
-        }
-        if ($vars !== []) {
-            $css .= ':root { ' . implode(' ', $vars) . " }\n";
-        }
-        return ['css' => $css, 'errors' => $errors];
-    }
+	/** @return array{css:string,errors:list<string>} */
+	public static function css(mixed $fonts): array
+	{
+		$css = '';
+		$vars = [];
+		$errors = [];
+		$loaded = [];
+		foreach (self::FALLBACK as $role => $fallback) {
+			$entry = is_array($fonts) ? ($fonts[$role] ?? null) : null;
+			if ($entry === null) {
+				continue;
+			}
+			$name = is_array($entry) ? ($entry['name'] ?? null) : null;
+			$file = is_array($entry) ? ($entry['file'] ?? null) : null;
+			if (!is_string($name) || !preg_match('/^[\p{L}\p{N} \-]{1,60}$/u', $name)) {
+				$errors[] = "fonts.$role: invalid name";
+				continue;
+			}
+			if ($file !== null && (!is_string($file) || !preg_match('#^/[A-Za-z0-9._/\-]+\.(woff2|woff)$#', $file) || str_contains($file, '..'))) {
+				$errors[] = "fonts.$role: invalid file";
+				continue;
+			}
+			if (is_string($file) && !isset($loaded[$name . "\0" . $file])) {
+				$format = str_ends_with($file, '.woff2') ? 'woff2' : 'woff';
+				$css .= '@font-face { font-family: "' . $name . '"; src: url("' . $file . '") format("' . $format . '"); font-display: swap; }' . "\n";
+				$loaded[$name . "\0" . $file] = true;
+			}
+			$vars[] = "--$role: \"$name\", $fallback;";
+		}
+		if ($vars !== []) {
+			$css .= ':root { ' . implode(' ', $vars) . " }\n";
+		}
+		return ['css' => $css, 'errors' => $errors];
+	}
 }

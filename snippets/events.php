@@ -18,9 +18,9 @@
  * sends location.pathname as before.
  */
 if (kizami_option('active', false) !== true || Kizami\Events::config(kizami_option('events', [])) === []) {
-    return;
+	return;
 }
-$kizamiSrc = Kirby\Cms\App::instance()->url('index') . '/k/event.js?v=' . substr((string) md5_file(dirname(__DIR__) . '/views/event.js'), 0, 8);
+$kizamiSrc = Kirby\Cms\App::instance()->url('index') . '/k/event.js?v=' . substr((string)md5_file(dirname(__DIR__) . '/views/event.js'), 0, 8);
 $kizamiPath = isset($page) ? kizami_page_path($page) : null;
 ?>
 <script src="<?= htmlspecialchars($kizamiSrc, ENT_QUOTES, 'UTF-8') ?>"<?php if ($kizamiPath !== null): ?> data-kizami-path="<?= htmlspecialchars($kizamiPath, ENT_QUOTES, 'UTF-8') ?>"<?php endif ?> defer></script>

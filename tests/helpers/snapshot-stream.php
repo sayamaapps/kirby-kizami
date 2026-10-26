@@ -18,24 +18,24 @@ require $base . '/vendor/autoload.php';
 
 [, $root, $storage] = $argv + [null, null, null];
 if (!is_string($root) || !is_string($storage)) {
-    fwrite(STDERR, "usage: snapshot-stream.php <Kirby root> <storage root>\n");
-    exit(2);
+	fwrite(STDERR, "usage: snapshot-stream.php <Kirby root> <storage root>\n");
+	exit(2);
 }
 
 $app = new Kirby\Cms\App([
-    'roots' => [
-        'index' => $root . '/public', 'base' => $root, 'content' => $root . '/content',
-        'site' => $root . '/site', 'storage' => $storage, 'accounts' => $root . '/site/accounts',
-    ],
-    'request' => [
-        'method' => 'GET',
-        'url' => 'http://example.invalid/k/snapshot',
-        'auth' => 'Basic ' . base64_encode('snapshot@example.invalid:report-password-very-long-123'),
-    ],
-    'options' => [
-        'url' => 'http://example.invalid',
-        'kizami.active' => true, 'kizami.snapshot' => true, 'kizami.reportWithoutHttps' => true,
-    ],
+	'roots' => [
+		'index' => $root . '/public', 'base' => $root, 'content' => $root . '/content',
+		'site' => $root . '/site', 'storage' => $storage, 'accounts' => $root . '/site/accounts',
+	],
+	'request' => [
+		'method' => 'GET',
+		'url' => 'http://example.invalid/k/snapshot',
+		'auth' => 'Basic ' . base64_encode('snapshot@example.invalid:report-password-very-long-123'),
+	],
+	'options' => [
+		'url' => 'http://example.invalid',
+		'kizami.active' => true, 'kizami.snapshot' => true, 'kizami.reportWithoutHttps' => true,
+	],
 ]);
 
 $response = Kizami\SnapshotService::respond($app);
@@ -44,21 +44,23 @@ $bytes = 0;
 $head = '';
 $context = hash_init('sha256');
 ob_start(function (string $chunk) use (&$bytes, &$head, $context): string {
-    if (strlen($head) < 15) { $head .= substr($chunk, 0, 15 - strlen($head)); }
-    hash_update($context, $chunk);
-    $bytes += strlen($chunk);
-    return '';
+	if (strlen($head) < 15) {
+		$head .= substr($chunk, 0, 15 - strlen($head));
+	}
+	hash_update($context, $chunk);
+	$bytes += strlen($chunk);
+	return '';
 }, 65536);
 $returned = $response->send();
 ob_end_flush();
 
 echo json_encode([
-    'code' => $response->code(),
-    'bytes' => $bytes,
-    'hash' => hash_final($context),
-    'length' => $response->headers()['Content-Length'] ?? null,
-    'sha256' => $response->headers()['X-Kizami-Sha256'] ?? null,
-    'head' => $head,
-    'returned' => $returned,
-    'peak' => memory_get_peak_usage(),
+	'code' => $response->code(),
+	'bytes' => $bytes,
+	'hash' => hash_final($context),
+	'length' => $response->headers()['Content-Length'] ?? null,
+	'sha256' => $response->headers()['X-Kizami-Sha256'] ?? null,
+	'head' => $head,
+	'returned' => $returned,
+	'peak' => memory_get_peak_usage(),
 ]), "\n";
