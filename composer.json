@@ -1,8 +1,8 @@
 {
     "name": "sayamaapps/kirby-kizami",
     "description": "Cookieless, server-side page and link-click statistics for Kirby CMS, no JavaScript required.",
-    "type": "kirby-plugin",
     "license": "MIT",
+    "type": "kirby-plugin",
     "keywords": [
         "kirby",
         "kirby-plugin",
@@ -13,19 +13,21 @@
         "cookieless",
         "sqlite"
     ],
-    "homepage": "https://github.com/sayamaapps/kirby-kizami",
     "authors": [
         {
             "name": "Simon Räder",
             "homepage": "https://sayamaapps.de"
         }
     ],
+    "homepage": "https://github.com/sayamaapps/kirby-kizami",
     "support": {
         "issues": "https://github.com/sayamaapps/kirby-kizami/issues",
         "source": "https://github.com/sayamaapps/kirby-kizami"
     },
     "require": {
         "php": "^8.2",
+        "ext-ctype": "*",
+        "ext-mbstring": "*",
         "ext-sqlite3": "*",
         "getkirby/composer-installer": "^1.2"
     },
@@ -41,14 +43,6 @@
     "bin": [
         "bin/kizami-snapshot"
     ],
-    "scripts": {
-        "analyze:phpmd": "vendor/bin/phpmd src,index.php,legacy.php,autoload.php,config github phpmd.xml.dist",
-        "analyze:psalm": "vendor/bin/psalm",
-        "analyze:require-checker": "vendor/bin/composer-require-checker check --config-file=composer-require-checker.json composer.json",
-        "analyze:unused": "vendor/bin/composer-unused",
-        "normalize:check": "@composer normalize --dry-run",
-        "test": "vendor/bin/phpunit"
-    },
     "config": {
         "allow-plugins": {
             "ergebnis/composer-normalize": true,
@@ -62,9 +56,17 @@
     },
     "extra": {
         "installer-name": "kizami",
-        "kirby-cms-path": false,
         "kirby": {
             "compatible": "^5.0"
-        }
+        },
+        "kirby-cms-path": false
+    },
+    "scripts": {
+        "analyze:phpmd": "vendor/bin/phpmd src,index.php,legacy.php,autoload.php,config github phpmd.xml.dist",
+        "analyze:psalm": "vendor/bin/psalm",
+        "analyze:require-checker": "vendor/bin/composer-require-checker check --config-file=composer-require-checker.json composer.json",
+        "analyze:unused": "vendor/bin/composer-unused",
+        "normalize:check": "@composer normalize --dry-run",
+        "test": "vendor/bin/phpunit"
     }
 }
