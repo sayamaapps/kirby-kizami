@@ -1,7 +1,7 @@
 <?php
 /**
- * Child process of tests/ReportTest.php, not a test itself (run.sh only runs
- * tests/*Test.php). Boots Kirby like the test does, answers GET /k/snapshot
+ * Child process of tests/ReportTest.php, not a test itself (PHPUnit only runs
+ * the *Test.php files). Boots Kirby like the test does, answers GET /k/snapshot
  * and sends the response the way production does (send()), counting and
  * hashing the output in an output buffer callback instead of keeping it.
  * The parent starts it with a small memory_limit to show that the copy is

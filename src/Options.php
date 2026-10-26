@@ -7,7 +7,7 @@ use Kirby\Cms\App;
 use Kirby\Cms\Helpers;
 
 /**
- * Reads `kizami.*` options.
+ * Reads `sayamaapps.kizami.*` options and falls back to the 1.x `kizami.*` names.
  *
  * `null` counts as "not set", like Kirby's own option() (A::get() checks
  * isset() as well), so `'kizami.color' => null` falls back to the default.
