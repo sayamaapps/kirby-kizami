@@ -14,8 +14,6 @@ use Kirby\Cms\Helpers;
  *
  * Both spellings work, flat (`'kizami.active' => true`) and nested
  * (`'kizami' => ['active' => true]`), because Kirby's option() finds both.
- *
- * @package Sayamaapps\Kizami
  */
 class Options
 {

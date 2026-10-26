@@ -19,8 +19,6 @@ namespace Sayamaapps\Kizami;
  * digits, spaces and hyphens; file only an own path to .woff2/.woff without
  * "..". Invalid entries are dropped entirely (falling back to the system
  * fonts from dashboard.css) instead of being half written.
- *
- * @package Sayamaapps\Kizami
  */
 class Fonts
 {

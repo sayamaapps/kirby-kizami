@@ -13,8 +13,6 @@ namespace Sayamaapps\Kizami;
  * IMPORTANT: if the configuration is missing or empty, access is DENIED
  * (false), not granted. Open statistics on the web would be worse than an
  * unreachable dashboard.
- *
- * @package Sayamaapps\Kizami
  */
 class Access
 {

@@ -15,8 +15,6 @@ use Closure;
  * NO OPEN REDIRECT: the target always comes from the configuration, never
  * from the URL. The URL only supplies the NAME, and an unknown name ends in
  * Kirby's real 404.
- *
- * @package Sayamaapps\Kizami
  */
 class Redirect
 {

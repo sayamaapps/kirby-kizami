@@ -34,8 +34,6 @@ use Throwable;
  * job needs it.
  *
  * Never included: storage/kizami/secret.txt (the daily key).
- *
- * @package Sayamaapps\Kizami
  */
 class SnapshotService
 {

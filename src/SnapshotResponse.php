@@ -13,8 +13,6 @@ use Kirby\Http\Response;
  * $kirby->render()`, which calls send() — so the override below is what
  * runs in production. The file is already unlinked by then (see
  * SnapshotService::respond()); the handle keeps its content readable.
- *
- * @package Sayamaapps\Kizami
  */
 class SnapshotResponse extends Response
 {

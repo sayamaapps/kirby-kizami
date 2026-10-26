@@ -27,8 +27,6 @@ use Throwable;
  * for all accounts.
  *
  * A site with its own bot account allows that role via `kizami.reportRoles`.
- *
- * @package Sayamaapps\Kizami
  */
 class ReportService
 {

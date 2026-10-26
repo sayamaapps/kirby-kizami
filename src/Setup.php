@@ -7,8 +7,6 @@ namespace Sayamaapps\Kizami;
  * exist as a setting and must lie outside the web root. A web server without
  * a deny rule serves kizami.sqlite and secret.txt from a directory below the
  * document root as plain files, no login involved.
- *
- * @package Sayamaapps\Kizami
  */
 class Setup
 {

@@ -15,8 +15,6 @@ namespace Sayamaapps\Kizami;
  * against the closing day Monday says nothing), the week with the week
  * before. Absolute numbers instead of percentages — at 30 visits a day a
  * percentage is mostly noise (see Comparison::MIN_BASE).
- *
- * @package Sayamaapps\Kizami
  */
 class Report
 {

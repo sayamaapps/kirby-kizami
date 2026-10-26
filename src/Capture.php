@@ -8,8 +8,6 @@ use DateTimeImmutable;
  * The computing half of the capture, deliberately without Kirby: the hook in
  * index.php passes in $_SERVER values and the secret, so the tests check all
  * of this without a running Kirby.
- *
- * @package Sayamaapps\Kizami
  */
 class Capture
 {

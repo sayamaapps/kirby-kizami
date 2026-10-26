@@ -16,8 +16,6 @@ use Throwable;
  * @link      https://github.com/sayamaapps/kirby-kizami
  * @copyright Simon Räder
  * @license   https://opensource.org/licenses/MIT
- *
- * @package Sayamaapps\Kizami
  */
 class Runtime
 {

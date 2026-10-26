@@ -13,8 +13,6 @@ namespace Sayamaapps\Kizami;
  *
  * The language is set once per request (index.php, from Options::language())
  * and defaults to English. Missing keys fall back to English, then to the key.
- *
- * @package Sayamaapps\Kizami
  */
 class I18n
 {

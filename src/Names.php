@@ -12,8 +12,6 @@ use Closure;
  *
  * Source keys are what Store returns: a referrer domain, `utm:<value>`, or
  * one of the tokens below.
- *
- * @package Sayamaapps\Kizami
  */
 class Names
 {

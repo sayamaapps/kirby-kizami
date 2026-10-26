@@ -19,8 +19,6 @@ use DateTimeZone;
  * Times are site time (Europe/Berlin, like the day identifiers), `from` is
  * inclusive, `to` exclusive. Invalid entries are logged and ignored, never
  * fatal. Kirby-free, like Events.
- *
- * @package Sayamaapps\Kizami
  */
 class Gaps
 {
