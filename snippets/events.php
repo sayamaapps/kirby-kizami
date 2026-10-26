@@ -25,5 +25,6 @@ if (Runtime::option('active', false) !== true || Sayamaapps\Kizami\Events::confi
 }
 $kizamiSrc = Kirby\Cms\App::instance()->url('index') . '/k/event.js?v=' . substr((string)md5_file(dirname(__DIR__) . '/views/event.js'), 0, 8);
 $kizamiPath = isset($page) ? Runtime::pagePath($page) : null;
+$kizamiAttr = $kizamiPath === null ? '' : ' data-kizami-path="' . htmlspecialchars($kizamiPath, ENT_QUOTES, 'UTF-8') . '"';
 ?>
-<script src="<?= htmlspecialchars($kizamiSrc, ENT_QUOTES, 'UTF-8') ?>"<?php if ($kizamiPath !== null): ?> data-kizami-path="<?= htmlspecialchars($kizamiPath, ENT_QUOTES, 'UTF-8') ?>"<?php endif ?> defer></script>
+<script src="<?= htmlspecialchars($kizamiSrc, ENT_QUOTES, 'UTF-8') ?>"<?= $kizamiAttr ?> defer></script>
