@@ -13,6 +13,21 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [Unreleased]
+
+### Fixed
+
+- **A data directory that links into the web root is refused.** The storage
+  root check only resolved the root itself, so `storage/kizami` (or the
+  pre-1.0 `kennzahlen`) as a symlink into the web root was accepted and the
+  database and the daily key were written there. Both directories are now
+  resolved and checked before anything is written; the error names the
+  directory. A normal setup is unaffected. No schema change.
+- **The test suite passes in the week of a DST change.** The previous-period
+  check added seven UTC days to a Berlin time, one hour off across the change.
+  It now adds Berlin calendar days and also checks fixed reference times on
+  both sides of the 2026 and 2027 changes.
+
 ## [1.8.1] — 2026-10-24
 
 ### Fixed
