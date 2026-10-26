@@ -359,23 +359,6 @@ class Runtime
 	}
 
 	/**
-	 * Retire a stale daily key outside a counted visit (dashboard, report and
-	 * snapshot after authentication). The Berlin day as in self::write(); never
-	 * throws, a failure only reaches the error log.
-	 */
-	public static function rotateSecret(): void
-	{
-		try {
-			$day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
-			if (!Secret::rotate(self::directory(), $day)) {
-				error_log('Kizami: stale daily key could not be replaced');
-			}
-		} catch (Throwable $e) {
-			error_log('Kizami: daily key rotation failed: ' . $e->getMessage());
-		}
-	}
-
-	/**
 	 * The request values the capture rules read, taken from Kirby's request
 	 * and environment objects instead of the superglobals.
 	 *
@@ -394,6 +377,23 @@ class Runtime
 			'CONTENT_LENGTH' => $request->header('Content-Length'),
 			'QUERY_STRING' => $kirby->environment()->get('QUERY_STRING'),
 		];
+	}
+
+	/**
+	 * Retire a stale daily key outside a counted visit (dashboard, report and
+	 * snapshot after authentication). The Berlin day as in self::write(); never
+	 * throws, a failure only reaches the error log.
+	 */
+	public static function rotateSecret(): void
+	{
+		try {
+			$day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+			if (!Secret::rotate(self::directory(), $day)) {
+				error_log('Kizami: stale daily key could not be replaced');
+			}
+		} catch (Throwable $e) {
+			error_log('Kizami: daily key rotation failed: ' . $e->getMessage());
+		}
 	}
 
 	/** Opens the site's database with the configured journal mode (`sayamaapps.kizami.journal`). */
