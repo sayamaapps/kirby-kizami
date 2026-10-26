@@ -866,8 +866,23 @@ $w0 = $stW->window(7, 0, $nowFix); $w1 = $stW->window(7, 1, $nowFix);
 // The previous period no longer ends exactly where the current window
 // starts (both windows compare the same elapsed time, so "until" is no
 // longer the start of a day) — it ends n days before the current window's end.
-$w1UntilPlusN = (new DateTimeImmutable($w1['until'], new DateTimeZone('UTC')))->modify('+7 days')->format('Y-m-d H:i:s');
+// Seven Berlin calendar days, not seven UTC days: across a DST change the two differ by one hour.
+$berlinZone = new DateTimeZone('Europe/Berlin');
+$utcZone = new DateTimeZone('UTC');
+$w1UntilPlusN = (new DateTimeImmutable($w1['until'], $utcZone))->setTimezone($berlinZone)->modify('+7 days')->setTimezone($utcZone)->format('Y-m-d H:i:s');
 check('Previous period end + n days is the end of the current window', $w0['until'], $w1UntilPlusN);
+// Fixed reference times on both sides of the DST changes (2026-10-25, 2027-03-28), independent of the day the suite runs.
+foreach ([
+    ['2026-10-28 20:00', '2026-10-28 19:00:00', '2026-10-21 18:00:00'],
+    ['2027-03-30 20:00', '2027-03-30 18:00:00', '2027-03-23 19:00:00'],
+] as [$fixedNow, $expectUntil, $expectPrevUntil]) {
+    $fixedAt = new DateTimeImmutable($fixedNow, $berlinZone);
+    $wf0 = Store::window(7, 0, $fixedAt);
+    $wf1 = Store::window(7, 1, $fixedAt);
+    check("Fixed $fixedNow (DST): current window ends at the reference time", $expectUntil, $wf0['until']);
+    check("Fixed $fixedNow (DST): previous period ends 7 Berlin days earlier", $expectPrevUntil, $wf1['until']);
+    check("Fixed $fixedNow (DST): previous period + 7 days lines up with the current window", $wf0['until'], (new DateTimeImmutable($wf1['until'], $utcZone))->setTimezone($berlinZone)->modify('+7 days')->setTimezone($utcZone)->format('Y-m-d H:i:s'));
+}
 check('Current window: 3 visits', 3, $stW->visits(7));
 check('Previous period: 2 visits', 2, $stW->visits(7, 1));
 check('Page views current', 3, $stW->pageViews(7));

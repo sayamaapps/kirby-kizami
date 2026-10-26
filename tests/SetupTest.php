@@ -9,6 +9,7 @@ $base = dirname(__DIR__);
 if (!is_file($base . '/vendor/autoload.php')) { fwrite(STDERR, "Composer dependencies missing; run composer install first\n"); exit(1); }
 require $base . '/vendor/autoload.php';
 require_once $base . '/src/Setup.php';
+require_once $base . '/src/Migration.php';
 
 use Kizami\Setup;
 use Kizami\SetupError;
@@ -62,6 +63,17 @@ try {
     same(null, refused($tmp . '/storage-link', $tmp . '/pub-link'), 'Both links, outside');
     symlink($public, $tmp . '/storage/in-public');
     same(true, refused($tmp . '/storage/in-public/x', $public) !== null, 'Link below the storage root that leads into the web root');
+
+    // The data directory itself: storage/kizami (or the pre-1.0 kennzahlen) as a link into the web root.
+    mkdir($tmp . '/storage2', 0700);
+    symlink($public . '/a&b', $tmp . '/storage2/kizami');
+    same(true, refused($tmp . '/storage2', $public) !== null, 'Data directory kizami linked into the web root');
+    mkdir($tmp . '/storage3', 0700);
+    symlink($public . '/a&b', $tmp . '/storage3/kennzahlen');
+    same(true, refused($tmp . '/storage3', $public) !== null, 'Legacy data directory kennzahlen linked into the web root');
+    mkdir($tmp . '/storage4', 0700);
+    symlink($tmp . '/storage', $tmp . '/storage4/kizami');
+    same(null, refused($tmp . '/storage4', $public), 'Data directory linked to a place outside the web root is fine');
 
     // Real Kirby.
     foreach (['site/plugins', 'site/config', 'site/templates', 'content/home', 'content/error'] as $dir) { mkdir($tmp . '/' . $dir, 0700, true); }
