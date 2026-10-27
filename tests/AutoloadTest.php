@@ -6,7 +6,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * The class map in autoload.php matches src/: one entry per file, the file
  * name is the class name, and every class loads through the map. The legacy
- * names stay aliases of the new classes.
+ * names stay aliases of the new classes; the two exception classes keep their
+ * 1.x names.
  */
 #[CoversNothing]
 final class AutoloadTest extends TestCase
@@ -25,6 +26,10 @@ final class AutoloadTest extends TestCase
 		require_once dirname(__DIR__) . '/legacy.php';
 
 		foreach (require dirname(__DIR__) . '/autoload.php' as $class => $path) {
+			if (str_starts_with($class, 'kizami\\')) {
+				// The exception classes keep their 1.x names; they have no new name.
+				continue;
+			}
 			$short = substr($class, strlen('sayamaapps\\kizami\\'));
 			if ($short === 'runtime') {
 				// Added with the function wrappers; it has no 1.x class name.
@@ -45,8 +50,13 @@ final class AutoloadTest extends TestCase
 
 		$expected = [];
 		foreach (glob($root . '/src/*.php') as $file) {
-			$expected[strtolower('sayamaapps\\kizami\\' . basename($file, '.php'))] = 'src/' . basename($file);
+			$name = basename($file, '.php');
+			// The exception classes are declared in the 1.x namespace (see legacy.php).
+			$namespace = in_array($name, ['SetupError', 'ReportError'], true) ? 'kizami\\' : 'sayamaapps\\kizami\\';
+			$expected[strtolower($namespace . $name)] = 'src/' . $name . '.php';
 		}
+		ksort($expected);
+		ksort($map);
 
 		$this->assertSame($expected, $map);
 	}

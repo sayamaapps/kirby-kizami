@@ -1,9 +1,9 @@
 <?php
 
-namespace Sayamaapps\Kizami;
+namespace Kizami;
 
 /** An error the report and snapshot routes answer with as JSON, with its HTTP status. */
-class ReportError extends \RuntimeException
+final class ReportError extends \RuntimeException
 {
 	public function __construct(string $message, public readonly int $status = 422)
 	{

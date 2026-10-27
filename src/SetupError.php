@@ -1,8 +1,8 @@
 <?php
 
-namespace Sayamaapps\Kizami;
+namespace Kizami;
 
 /** The site's setup is unusable for Kizami; the message tells the operator what to change. */
-class SetupError extends \RuntimeException
+final class SetupError extends \RuntimeException
 {
 }

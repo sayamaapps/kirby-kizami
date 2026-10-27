@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use DateTimeZone;
 use Kirby\Cms\App;
 use Kirby\Http\Response;
+use Kizami\SetupError;
 use Throwable;
 
 /**

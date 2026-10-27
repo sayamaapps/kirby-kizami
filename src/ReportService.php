@@ -6,6 +6,7 @@ use DateTimeImmutable;
 use Kirby\Cms\App;
 use Kirby\Http\Request\Auth\BasicAuth;
 use Kirby\Http\Response;
+use Kizami\ReportError;
 use Throwable;
 
 /**

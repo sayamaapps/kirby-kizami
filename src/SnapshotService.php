@@ -4,6 +4,7 @@ namespace Sayamaapps\Kizami;
 
 use Kirby\Cms\App;
 use Kirby\Http\Response;
+use Kizami\ReportError;
 use Throwable;
 
 /**

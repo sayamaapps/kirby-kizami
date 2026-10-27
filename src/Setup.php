@@ -2,6 +2,8 @@
 
 namespace Sayamaapps\Kizami;
 
+use Kizami\SetupError;
+
 /**
  * Checks the one setup rule Kizami cannot work around: the storage root must
  * exist as a setting and must lie outside the web root. A web server without
