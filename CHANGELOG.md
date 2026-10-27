@@ -13,6 +13,29 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [Unreleased]
+
+Structure and naming for the next major version. Counting and output are
+unchanged, the 1.x names keep working. The login change below is the one
+exception to check.
+
+### Changed
+
+- Options are read as `sayamaapps.kizami.*`. `kizami.*` remains as fallback.
+  With `debug => true`, the old spelling reports a deprecation.
+- Global `kizami_*()` functions are wrappers around `Sayamaapps\Kizami\Runtime`.
+  The wrappers report a deprecation.
+- Classes live in `Sayamaapps\Kizami\`; the 1.x names `Kizami\*` are class aliases.
+- Dashboard login reads the `Authorization` header of the Kirby request. Servers
+  that pass only `PHP_AUTH_USER` and `PHP_AUTH_PW` (mod_php) need the header
+  forwarded, as with any Kirby Basic Auth.
+- Page methods are prefixed `kizami…()`; `redirectLink()` and `redirectAnchor()` remain as deprecated aliases.
+
+### Fixed
+
+- Own referrer hosts are bound as SQL parameters instead of inline literals.
+- The report reference time is a view on the store, not a setter that stayed set.
+
 ## [1.8.2] — 2026-10-26
 
 ### Fixed
