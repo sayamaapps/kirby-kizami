@@ -1,4 +1,5 @@
 <?php
+
 /**
  * views/event.js in Node with a minimal stand-in for the browser: which
  * path the script reports (data-kizami-path of its own tag, else
@@ -6,13 +7,23 @@
  * send it. Skipped without Node (the SQLite container jobs have none).
  *   php tests/EventJsTest.php
  */
-$node = trim((string) shell_exec('command -v node 2>/dev/null'));
-if ($node === '') {
-    echo "Kizami event.js: skipped (no node)\n";
-    exit(0);
-}
 
-$harness = <<<'JS'
+use PHPUnit\Framework\Assert;
+use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
+use PHPUnit\Framework\TestCase;
+
+#[CoversClass(\Sayamaapps\Kizami\Events::class)]
+#[RunTestsInSeparateProcesses]
+final class EventJsTest extends TestCase
+{
+	public function testSuite(): void
+	{
+		$node = trim((string)shell_exec('command -v node 2>/dev/null'));
+		if ($node === '') {
+			$this->markTestSkipped('Node is not installed');
+		}
+		$harness = <<<'JS'
 const vm = require('vm');
 const fs = require('fs');
 const code = fs.readFileSync(process.argv[2], 'utf8');
@@ -53,34 +64,36 @@ const cases = {
 };
 process.stdout.write(JSON.stringify(cases));
 JS;
-
-$n = 0;
-$failed = false;
-$dir = sys_get_temp_dir() . '/kizami-eventjs-' . bin2hex(random_bytes(6));
-try {
-    mkdir($dir, 0700);
-    file_put_contents($dir . '/harness.js', $harness);
-    $output = shell_exec(escapeshellarg($node) . ' ' . escapeshellarg($dir . '/harness.js') . ' ' . escapeshellarg(dirname(__DIR__) . '/views/event.js') . ' 2>&1');
-    $cases = json_decode((string) $output, true);
-    if (!is_array($cases)) { throw new RuntimeException('Node harness failed: ' . $output); }
-    $expect = function (string $case, string $path) use ($cases, &$n): void {
-        $sent = $cases[$case] ?? [];
-        $wanted = [
-            ['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'download', 'path' => $path, 'detail' => 'book.pdf']],
-            ['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'video_play', 'path' => $path]],
-            ['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'shortcode_access', 'path' => $path, 'detail' => 'manual']],
-        ];
-        if ($sent !== $wanted) { throw new RuntimeException("$case: " . json_encode($sent)); }
-        $n++;
-    };
-    $expect('attribute', '/books/kizami'); // click, play and kizami.event() send the path of the tag
-    $expect('without', '/EEAQ77');         // no attribute: location.pathname as before
-    $expect('empty', '/en/library');       // an empty attribute is no path
-    echo "Kizami event.js: all $n checks passed\n";
-} catch (Throwable $e) {
-    fwrite(STDERR, 'Kizami event.js: ' . $e->getMessage() . "\n");
-    $failed = true;
-} finally {
-    exec('rm -rf ' . escapeshellarg($dir));
+		$failed = false;
+		$dir = sys_get_temp_dir() . '/kizami-eventjs-' . bin2hex(random_bytes(6));
+		try {
+			mkdir($dir, 0700);
+			file_put_contents($dir . '/harness.js', $harness);
+			$output = shell_exec(escapeshellarg($node) . ' ' . escapeshellarg($dir . '/harness.js') . ' ' . escapeshellarg(dirname(__DIR__) . '/views/event.js') . ' 2>&1');
+			$cases = json_decode((string)$output, true);
+			if (!is_array($cases)) {
+				Assert::fail('Node harness failed: ' . $output);
+			}
+			$expect = function (string $case, string $path) use ($cases, &$n): void {
+				$sent = $cases[$case] ?? [];
+				$wanted = [
+					['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'download', 'path' => $path, 'detail' => 'book.pdf']],
+					['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'video_play', 'path' => $path]],
+					['url' => 'https://example.invalid/k/event', 'body' => ['event' => 'shortcode_access', 'path' => $path, 'detail' => 'manual']],
+				];
+				if ($sent !== $wanted) {
+					Assert::fail("$case: " . json_encode($sent));
+				}
+				Assert::assertTrue(true);
+			};
+			$expect('attribute', '/books/kizami'); // click, play and kizami.event() send the path of the tag
+			$expect('without', '/EEAQ77');         // no attribute: location.pathname as before
+			$expect('empty', '/en/library');       // an empty attribute is no path
+		} catch (Throwable $e) {
+			throw $e;
+		} finally {
+			exec('rm -rf ' . escapeshellarg($dir));
+		}
+		$this->assertFalse((bool)$failed, 'no failure');
+	}
 }
-exit($failed ? 1 : 0);

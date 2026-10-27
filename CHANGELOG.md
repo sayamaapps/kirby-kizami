@@ -13,6 +13,40 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [Unreleased]
+
+Structure and naming, as a 1.x minor release: counting, output, storage, schema
+and the 1.x API are unchanged, nothing here breaks existing code. The new names
+are the ones to use; the 1.x names keep working silently and are listed under
+Deprecations in the README. Removals and other breaking changes are planned for
+2.0 (README, Planned for 2.0).
+
+### Changed
+
+- Options are read as `sayamaapps.kizami.*`. `kizami.*` remains read as fallback,
+  without a deprecation notice.
+- Global `kizami_*()` functions are wrappers around `Sayamaapps\Kizami\Runtime`.
+  Marked `@deprecated`; no notice at run time.
+- Classes live in `Sayamaapps\Kizami\`; the 1.x names `Kizami\*` are class aliases.
+  `SetupError` and `ReportError` keep their 1.x names (`Kizami\SetupError`,
+  `Kizami\ReportError`), so `get_class()` and error logs show the same names as
+  in 1.x. `get_class()` and Reflection report the new names of the other classes;
+  `catch`, `instanceof` and type declarations accept both.
+- Dashboard login reads `PHP_AUTH_USER` and `PHP_AUTH_PW` first, as in 1.x. The
+  `Authorization` header is a fallback for FastCGI setups.
+- Page methods are prefixed `kizami…()`. `redirectLink()` and `redirectAnchor()`
+  remain as deprecated names.
+- The 1.x methods of the plugin's classes stay callable and return what they
+  returned in 1.x, also without a Kirby app where 1.x did not need one.
+
+### Fixed
+
+- Own referrer hosts are bound as SQL parameters instead of inline literals.
+- The retention error message names the option spelling in use (`kizami.` or
+  `sayamaapps.kizami.`).
+- The report reference time is a view on the store (`Store::atTime()`), not a
+  setter that stayed set. `Store::setNow()` remains as a deprecated method.
+
 ## [1.8.2] — 2026-10-26
 
 ### Fixed

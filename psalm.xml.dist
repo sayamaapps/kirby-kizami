@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<psalm
+    errorLevel="3"
+    phpVersion="8.2"
+    resolveFromConfigFile="true"
+    baseline="psalm-baseline.xml"
+    findUnusedBaselineEntry="false"
+    findUnusedCode="false"
+    errorBaseline="psalm-baseline.xml"
+>
+    <projectFiles>
+        <directory name="src" />
+        <file name="index.php" />
+        <file name="legacy.php" />
+        <file name="autoload.php" />
+        <ignoreFiles>
+            <directory name="vendor" />
+            <directory name="tests" />
+            <!-- config/ returns closures that Kirby binds to the page or site at runtime -->
+            <directory name="config" />
+        </ignoreFiles>
+    </projectFiles>
+</psalm>

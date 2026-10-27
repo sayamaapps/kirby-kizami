@@ -1,9 +1,10 @@
 <?php
 
-namespace Kizami;
+namespace Sayamaapps\Kizami;
 
 use Kirby\Cms\App;
 use Kirby\Http\Response;
+use Kizami\ReportError;
 use Throwable;
 
 /**
@@ -35,99 +36,100 @@ use Throwable;
  *
  * Never included: storage/kizami/secret.txt (the daily key).
  */
-final class SnapshotService
+class SnapshotService
 {
-    public const ROLE = 'kizami-snapshot';
+	public const ROLE = 'kizami-snapshot';
 
-    /** Leftover `.snapshot-*` files older than this many seconds are removed. */
-    public const STALE_AFTER = 3600;
+	/** Leftover `.snapshot-*` files older than this many seconds are removed. */
+	public const STALE_AFTER = 3600;
+	private const SUFFIXES = ['', '-wal', '-shm', '-journal'];
 
-    private const SUFFIXES = ['', '-wal', '-shm', '-journal'];
+	/** Removes a snapshot copy and its SQLite side files, where they exist. */
+	public static function cleanup(string $temp): void
+	{
+		foreach (self::SUFFIXES as $suffix) {
+			if (is_file($temp . $suffix)) {
+				unlink($temp . $suffix);
+			}
+		}
+	}
 
-    public static function respond(App $kirby): Response
-    {
-        if (Options::get($kirby, 'active', false) !== true || Options::get($kirby, 'snapshot', false) !== true) {
-            return kizami_not_found();
-        }
-        $temp = null;
-        try {
-            ReportService::authenticate($kirby, (array) Options::get($kirby, 'snapshotRoles', [self::ROLE]));
-            kizami_rotate_secret();
-            self::sweep(kizami_directory());
-            $db = kizami_directory() . '/' . Store::FILE;
-            if (!is_file($db)) {
-                throw new ReportError('No data yet.', 404);
-            }
-            $temp = kizami_directory() . '/.snapshot-' . bin2hex(random_bytes(8)) . '.sqlite';
-            // Safety net for a fatal error between creating the copy and the
-            // answer: `finally` does not run then, a shutdown function does.
-            register_shutdown_function([self::class, 'cleanup'], $temp);
-            (new Store($db, Store::journal(Options::get($kirby, 'journal'))))->snapshot($temp);
-            $handle = fopen($temp, 'rb');
-            if ($handle === false) {
-                throw new \RuntimeException('Snapshot copy not readable');
-            }
-            // Unlink right away: on POSIX the open handle stays readable, and
-            // from here on no file is left in the storage, even if the process
-            // dies while sending. Where unlinking an open file fails (Windows),
-            // SnapshotResponse::send() removes it after sending, and sweep()
-            // at the latest.
-            @unlink($temp);
-            $context = hash_init('sha256');
-            hash_update_stream($context, $handle);
-            rewind($handle);
-            $size = (int) (fstat($handle)['size'] ?? 0);
-            $day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
-            return new SnapshotResponse($handle, $temp, [
-                'Content-Disposition' => 'attachment; filename="kizami-' . $day . '.sqlite"',
-                'Content-Length' => (string) $size,
-                'X-Kizami-Sha256' => hash_final($context),
-                'Cache-Control' => 'no-store',
-                'X-Robots-Tag' => 'noindex, nofollow, noarchive',
-            ]);
-        } catch (ReportError $e) {
-            return ReportService::json(['ok' => false, 'error' => $e->getMessage()], $e->status);
-        } catch (Throwable $e) {
-            error_log('Kizami: snapshot not available: ' . $e->getMessage());
-            kizami_log_error($e);
-            return ReportService::json(['ok' => false, 'error' => 'Internal error.'], 500);
-        } finally {
-            if ($temp !== null) {
-                self::cleanup($temp);
-            }
-        }
-    }
+	public static function respond(App $kirby): Response
+	{
+		if (Options::get($kirby, 'active', false) !== true || Options::get($kirby, 'snapshot', false) !== true) {
+			return Runtime::notFound($kirby);
+		}
+		$temp = null;
+		try {
+			ReportService::authenticate($kirby, (array)Options::get($kirby, 'snapshotRoles', [self::ROLE]));
+			Runtime::rotateSecret($kirby);
+			self::sweep(Runtime::directory($kirby));
+			$db = Runtime::directory($kirby) . '/' . Store::FILE;
+			if (!is_file($db)) {
+				throw new ReportError('No data yet.', 404);
+			}
+			$temp = Runtime::directory($kirby) . '/.snapshot-' . bin2hex(random_bytes(8)) . '.sqlite';
+			// Safety net for a fatal error between creating the copy and the
+			// answer: `finally` does not run then, a shutdown function does.
+			register_shutdown_function([self::class, 'cleanup'], $temp);
+			(new Store($db, Store::journal(Options::get($kirby, 'journal'))))->snapshot($temp);
+			$handle = fopen($temp, 'rb');
+			if ($handle === false) {
+				throw new \RuntimeException('Snapshot copy not readable');
+			}
+			// Unlink right away: on POSIX the open handle stays readable, and
+			// from here on no file is left in the storage, even if the process
+			// dies while sending. Where unlinking an open file fails (Windows),
+			// SnapshotResponse::send() removes it after sending, and sweep()
+			// at the latest.
+			unlink($temp);
+			$context = hash_init('sha256');
+			hash_update_stream($context, $handle);
+			rewind($handle);
+			$size = (int)(fstat($handle)['size'] ?? 0);
+			$day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+			return new SnapshotResponse($handle, $temp, [
+				'Content-Disposition' => 'attachment; filename="kizami-' . $day . '.sqlite"',
+				'Content-Length' => (string)$size,
+				'X-Kizami-Sha256' => hash_final($context),
+				'Cache-Control' => 'no-store',
+				'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+			]);
+		} catch (ReportError $e) {
+			return ReportService::json(['ok' => false, 'error' => $e->getMessage()], $e->status);
+		} catch (Throwable $e) {
+			error_log('Kizami: snapshot not available: ' . $e->getMessage());
+			Runtime::logError($kirby, $e);
+			return ReportService::json(['ok' => false, 'error' => 'Internal error.'], 500);
+		} finally {
+			if ($temp !== null) {
+				self::cleanup($temp);
+			}
+		}
+	}
 
-    /** Removes a snapshot copy and its SQLite side files, where they exist. */
-    public static function cleanup(string $temp): void
-    {
-        foreach (self::SUFFIXES as $suffix) {
-            if (is_file($temp . $suffix)) { @unlink($temp . $suffix); }
-        }
-    }
-
-    /**
-     * Removes `.snapshot-*` files (and their side files) in $directory whose
-     * modification time is older than STALE_AFTER seconds: what a request
-     * that died between creating the copy and sending it left behind. Younger
-     * files stay — a parallel download may still be running.
-     *
-     * @return int number of files removed
-     */
-    public static function sweep(string $directory): int
-    {
-        $names = @scandir($directory);
-        if ($names === false) {
-            return 0;
-        }
-        $limit = time() - self::STALE_AFTER;
-        $removed = 0;
-        foreach ($names as $name) {
-            $file = $directory . '/' . $name;
-            if (str_starts_with($name, '.snapshot-') && is_file($file) && (int) @filemtime($file) < $limit && @unlink($file)) {
-                $removed++;
-            }
-        }
-        return $removed;
-    }
+	/**
+	 * Removes `.snapshot-*` files (and their side files) in $directory whose
+	 * modification time is older than STALE_AFTER seconds: what a request
+	 * that died between creating the copy and sending it left behind. Younger
+	 * files stay — a parallel download may still be running.
+	 *
+	 * @return int number of files removed
+	 */
+	public static function sweep(string $directory): int
+	{
+		$names = is_dir($directory) ? scandir($directory) : false;
+		if ($names === false) {
+			return 0;
+		}
+		$limit = time() - self::STALE_AFTER;
+		$removed = 0;
+		foreach ($names as $name) {
+			$file = $directory . '/' . $name;
+			if (str_starts_with($name, '.snapshot-') && is_file($file) && (int)filemtime($file) < $limit && unlink($file)) {
+				$removed++;
+			}
+		}
+		return $removed;
+	}
 }

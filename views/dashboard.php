@@ -9,20 +9,24 @@
  * No inline JavaScript and no inline styles (strict CSP "style-src 'self';
  * script-src 'self'"). Colours are classes; bar widths are viewBox units.
  */
-use Kizami\Chart;
-use Kizami\I18n;
+use Sayamaapps\Kizami\Chart;
+use Sayamaapps\Kizami\I18n;
 
-$e = fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$e = fn ($s) => htmlspecialchars((string)$s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $t = fn (string $key, array $values = []) => $e(I18n::t($key, $values));
-$days = (int) ($data['days'] ?? 30);
+$days = (int)($data['days'] ?? 30);
 $failed = !empty($data['error']) || !empty($data['technical']['schema'] ?? []) || (($data['technical']['writeError'] ?? null) !== null);
 $shortDate = fn (string $iso) => $e(I18n::shortDate(new \DateTimeImmutable($iso)));
-$table = function (array $rows, ?string $columnA = null, ?string $columnB = null, ?string $summary = null) use ($e) {
-    if ($rows === []) { return ''; }
-    $h = '<details class="as-table"><summary>' . $e($summary ?? I18n::t('table.summary')) . '</summary><table><thead><tr><th scope="col">'
-        . $e($columnA ?? I18n::t('table.name')) . '</th><th scope="col" class="num">' . $e($columnB ?? I18n::t('table.count')) . '</th></tr></thead><tbody>';
-    foreach ($rows as $r) { $h .= '<tr><td>' . $e($r['name']) . '</td><td class="num">' . Chart::number($r['value']) . '</td></tr>'; }
-    return $h . '</tbody></table></details>';
+$table = function (array $rows, string|null $columnA = null, string|null $columnB = null, string|null $summary = null) use ($e) {
+	if ($rows === []) {
+		return '';
+	}
+	$h = '<details class="as-table"><summary>' . $e($summary ?? I18n::t('table.summary')) . '</summary><table><thead><tr><th scope="col">'
+		. $e($columnA ?? I18n::t('table.name')) . '</th><th scope="col" class="num">' . $e($columnB ?? I18n::t('table.count')) . '</th></tr></thead><tbody>';
+	foreach ($rows as $r) {
+		$h .= '<tr><td>' . $e($r['name']) . '</td><td class="num">' . Chart::number($r['value']) . '</td></tr>';
+	}
+	return $h . '</tbody></table></details>';
 };
 ?>
 <!doctype html>
@@ -56,7 +60,11 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
 <?php endif; ?>
 
 <?php if (empty($data['error'])): ?>
-<p class="subtitle"><?= $t('dashboard.subtitle', ['from' => I18n::date(new \DateTimeImmutable($data['from'])), 'to' => I18n::date(new \DateTimeImmutable($data['to'])), 'days' => $days]) ?></p>
+<p class="subtitle"><?= $t('dashboard.subtitle', [
+	'from' => I18n::date(new \DateTimeImmutable($data['from'])),
+	'to' => I18n::date(new \DateTimeImmutable($data['to'])),
+	'days' => $days,
+]) ?></p>
 
 <section class="tiles" aria-label="<?= $t('dashboard.keyFigures') ?>">
   <?php foreach ($data['tiles'] as $tile): ?>
@@ -109,7 +117,8 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <?php endif; ?>
   <?php $rate = $data['actionRate']; ?>
   <p class="rate"><strong><?= $e($rate['text']) ?>.</strong>
-    <?= $t($rate['contact'] ? 'rate.contactLabel' : 'rate.label') ?>: <?= Chart::number($rate['value'], 1) ?> %<?php if ($rate['previous'] > 0): ?> (<?= $t('rate.before') ?> <?= Chart::number($rate['previous'], 1) ?> %)<?php endif; ?>.</p>
+    <?= $t($rate['contact'] ? 'rate.contactLabel' : 'rate.label') ?>: <?= Chart::number($rate['value'], 1) ?> %<?php if ($rate['previous'] > 0):
+	?> (<?= $t('rate.before') ?> <?= Chart::number($rate['previous'], 1) ?> %)<?php endif; ?>.</p>
   <p class="hint"><?= $t($rate['contact'] ? 'rate.contactHint' : 'rate.hint') ?></p>
 </section>
 
@@ -128,9 +137,13 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <p class="hint"><?= $t('contact.hint', ['targets' => implode(', ', $data['contact']['targets'])]) ?></p>
   <?php if ($data['contact']['sources'] === []): ?><?= Chart::empty() ?><?php else: ?>
   <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('contact.region') ?>"><table class="contact-table">
-    <thead><tr><th scope="col"><?= $t('contact.source') ?></th><th scope="col" class="num"><?= $t('tile.visits') ?></th><th scope="col" class="num"><?= $t('contact.clicks') ?></th><th scope="col" class="num"><?= $t('contact.withContact') ?></th><th scope="col" class="num"><?= $t('contact.rate') ?></th></tr></thead>
+    <thead><tr><th scope="col"><?= $t('contact.source') ?></th><th scope="col" class="num"><?= $t('tile.visits')
+	?></th><th scope="col" class="num"><?= $t('contact.clicks') ?></th><th scope="col" class="num"><?= $t('contact.withContact')
+	?></th><th scope="col" class="num"><?= $t('contact.rate') ?></th></tr></thead>
     <tbody><?php foreach ($data['contact']['sources'] as $s): ?><tr>
-      <th scope="row"><?= $e($s['name']) ?></th><td class="num"><?= Chart::number($s['visits']) ?></td><td class="num"><?= Chart::number($s['clicks']) ?></td><td class="num"><?= Chart::number($s['withContact']) ?></td><td class="num"><?= $s['rate'] === null ? '–' : Chart::number($s['rate']) . ' %' ?></td>
+      <th scope="row"><?= $e($s['name']) ?></th><td class="num"><?= Chart::number($s['visits']) ?></td><td class="num"><?= Chart::number($s['clicks'])
+	  ?></td><td class="num"><?= Chart::number($s['withContact']) ?></td><td class="num"><?= $s['rate'] === null ? '–' : Chart::number($s['rate']) . ' %'
+	  ?></td>
     </tr><?php endforeach; ?></tbody>
   </table></div>
   <p class="hint scroll-hint"><?= $t('contact.swipe') ?></p>
@@ -144,10 +157,19 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <h2 id="trend-title"><?= $t('trend.title') ?></h2>
   <?php $sum = fn (array $series) => array_sum(array_column($series, 'value')); ?>
   <h3><?= $t('trend.visits') ?></h3>
-  <?= $sum($data['trend']['visits']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty() : Chart::area($data['trend']['visits'], I18n::t('trend.visits'), $data['trend']['gapMarks']) ?>
+  <?= $sum($data['trend']['visits']) === 0 && $data['trend']['gapMarks'] === []
+	? Chart::empty()
+	: Chart::area($data['trend']['visits'], I18n::t('trend.visits'), $data['trend']['gapMarks']) ?>
   <h3 class="small"><?= $t('trend.actions') ?></h3>
-  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty(I18n::t('trend.noActions')) : Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
-  <div class="axis"><?php foreach (array_unique([0, (int) round(($days - 1) / 3), (int) round(2 * ($days - 1) / 3), $days - 1]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
+  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 && $data['trend']['gapMarks'] === []
+	? Chart::empty(I18n::t('trend.noActions'))
+	: Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
+  <div class="axis"><?php foreach (array_unique([
+  	0,
+  	(int)round(($days - 1) / 3),
+  	(int)round(2 * ($days - 1) / 3),
+  	$days - 1,
+  ]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
   <?php if ($data['gaps'] !== []): ?>
   <div class="gaps">
     <h3><?= $t('gap.title') ?></h3>
@@ -171,15 +193,21 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
     <?php if ($gridSum === 0): ?>
       <?= Chart::empty() ?>
     <?php else: ?>
-    <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><?= Chart::grid($data['weekGrid']['values'], $data['weekGrid']['rows'], $data['weekGrid']['columns']) ?></div>
-    <p class="grid-legend" aria-label="<?= $t('when.legend') ?>"><?= $t('when.few') ?> <span class="shade-1"></span><span class="shade-2"></span><span class="shade-3"></span><span class="shade-4"></span><span class="shade-5"></span> <?= $t('when.many') ?></p>
+    <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><?= Chart::grid(
+	$data['weekGrid']['values'],
+	$data['weekGrid']['rows'],
+	$data['weekGrid']['columns']
+) ?></div>
+    <p class="grid-legend" aria-label="<?= $t('when.legend') ?>"><?= $t('when.few') ?> <?php for ($shade = 1; $shade <= 5; $shade++):
+	?><span class="shade-<?= $shade ?>"></span><?php endfor; ?> <?= $t('when.many')
+	?></p>
     <p class="hint scroll-hint"><?= $t('when.swipe') ?></p>
     <details class="as-table"><summary><?= $t('table.summary') ?></summary>
       <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><table class="grid-table"><thead><tr><th scope="col"><?= $t('trend.day') ?></th>
         <?php foreach ($data['weekGrid']['columns'] as $hour): ?><th scope="col" class="num"><?= $e($hour) ?></th><?php endforeach; ?>
       </tr></thead><tbody>
         <?php foreach ($data['weekGrid']['rows'] as $ri => $rowName): ?>
-          <tr><th scope="row"><?= $e($rowName) ?></th><?php foreach ($data['weekGrid']['values'][$ri] as $v): ?><td class="num"><?= (int) $v ?></td><?php endforeach; ?></tr>
+          <tr><th scope="row"><?= $e($rowName) ?></th><?php foreach ($data['weekGrid']['values'][$ri] as $v): ?><td class="num"><?= (int)$v ?></td><?php endforeach; ?></tr>
         <?php endforeach; ?>
       </tbody></table></div>
     </details>
@@ -227,8 +255,10 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <?= $table($data['dwellTime']['buckets'], I18n::t('dwell.column'), I18n::t('tile.visits')) ?>
   <h3><?= $t('dwell.perPage') ?></h3>
   <?php if ($data['dwellTime']['pages'] === []): ?><?= Chart::empty() ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('dwell.medianColumn') ?></th><th scope="col" class="num"><?= $t('dwell.measurements') ?></th></tr></thead><tbody>
-    <?php foreach ($data['dwellTime']['pages'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td class="num"><?= $e(Chart::duration($p['median'])) ?></td><td class="num"><?= Chart::number($p['measurements']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('dwell.medianColumn')
+  ?></th><th scope="col" class="num"><?= $t('dwell.measurements') ?></th></tr></thead><tbody>
+    <?php foreach ($data['dwellTime']['pages'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td class="num"><?= $e(Chart::duration($p['median']))
+	?></td><td class="num"><?= Chart::number($p['measurements']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
   <p class="hint"><?= $t('dwell.hint', ['date' => I18n::date(new \DateTimeImmutable($data['dwellTime']['firstMeasurement']))]) ?></p>
@@ -242,15 +272,23 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <p class="hint"><?= $t('events.hint') ?></p>
   <?php if (array_sum(array_column($data['events'], 'count')) === 0): ?><?= Chart::empty(I18n::t('events.none')) ?><?php else: ?>
   <?= Chart::bars(array_map(fn ($ev) => ['name' => $ev['name'], 'value' => $ev['count']], $data['events'])) ?>
-  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.column') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
-    <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count']) ?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.column') ?></th><th scope="col" class="num"><?= $t('events.count')
+  ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+    <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count'])
+	?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
-    <?php if (!$ev['detail'] || $ev['count'] === 0) { continue; } ?>
+    <?php
+	if (!$ev['detail'] || $ev['count'] === 0) {
+		continue;
+	}
+	?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
-  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
-      <?php foreach ($ev['details'] as $d): ?><tr><td><?= $e($d['name']) ?></td><td class="num"><?= Chart::number($d['count']) ?></td><td class="num"><?= Chart::number($d['visits']) ?></td></tr><?php endforeach; ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count')
+  ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+      <?php foreach ($ev['details'] as $d): ?><tr><td><?= $e($d['name']) ?></td><td class="num"><?= Chart::number($d['count'])
+	  ?></td><td class="num"><?= Chart::number($d['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
       <?php if ($ev['detailsOmitted'] > 0): ?><p class="hint"><?= $t('events.more', ['n' => Chart::number($ev['detailsOmitted'])]) ?></p><?php endif; ?>
     <?php endif; ?>
@@ -263,8 +301,10 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <summary><?= $t('positions.title') ?></summary>
   <p class="hint"><?= $t('positions.hint') ?></p>
   <?php if ($data['positions'] === []): ?><?= Chart::empty() ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('actions.column') ?></th><th scope="col"><?= $t('positions.column') ?></th><th scope="col" class="num"><?= $t('positions.clicks') ?></th></tr></thead><tbody>
-    <?php foreach ($data['positions'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td><?= $e($p['position']) ?></td><td class="num"><?= Chart::number($p['value']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('actions.column') ?></th><th scope="col"><?= $t('positions.column')
+  ?></th><th scope="col" class="num"><?= $t('positions.clicks') ?></th></tr></thead><tbody>
+    <?php foreach ($data['positions'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td><?= $e($p['position']) ?></td><td class="num"><?= Chart::number($p['value'])
+	?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
 </details>
@@ -274,8 +314,10 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <h2 id="images-title"><?= $t('images.title') ?></h2>
   <p class="hint"><?= $t('images.hint') ?></p>
   <?php if ($data['images'] === []): ?><?= Chart::empty(I18n::t('images.none')) ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('images.column') ?></th><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('images.opened') ?></th></tr></thead><tbody>
-    <?php foreach ($data['images'] as $i): ?><tr><td><?= $e($i['name']) ?></td><td><?= $e($i['page']) ?></td><td class="num"><?= Chart::number($i['value']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('images.column') ?></th><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('images.opened')
+  ?></th></tr></thead><tbody>
+    <?php foreach ($data['images'] as $i): ?><tr><td><?= $e($i['name']) ?></td><td><?= $e($i['page']) ?></td><td class="num"><?= Chart::number($i['value'])
+	?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
 </section>
@@ -285,9 +327,9 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <h2 id="long-term-title"><?= $t('longTerm.title') ?></h2>
   <p class="hint"><?= $t('longTerm.hint') ?></p>
   <dl class="long-term-totals">
-    <div><dt><?= $t('tile.pageViews') ?></dt><dd><?= Chart::number((int) ($data['longTerm']['total']['views'] ?? 0)) ?></dd></div>
-    <div><dt><?= $t('trend.actionsColumn') ?></dt><dd><?= Chart::number((int) ($data['longTerm']['total']['clicks'] ?? 0)) ?></dd></div>
-    <div><dt><?= $t('tile.visits') ?></dt><dd><?= Chart::number((int) ($data['longTerm']['total']['devices'] ?? 0)) ?></dd></div>
+    <div><dt><?= $t('tile.pageViews') ?></dt><dd><?= Chart::number((int)($data['longTerm']['total']['views'] ?? 0)) ?></dd></div>
+    <div><dt><?= $t('trend.actionsColumn') ?></dt><dd><?= Chart::number((int)($data['longTerm']['total']['clicks'] ?? 0)) ?></dd></div>
+    <div><dt><?= $t('tile.visits') ?></dt><dd><?= Chart::number((int)($data['longTerm']['total']['devices'] ?? 0)) ?></dd></div>
   </dl>
   <h3><?= $t('longTerm.perMonth') ?></h3>
   <?= $sum($data['longTerm']['months']) === 0 ? Chart::empty() : Chart::columns($data['longTerm']['months'], I18n::t('longTerm.perMonth')) ?>
@@ -299,7 +341,7 @@ $table = function (array $rows, ?string $columnA = null, ?string $columnB = null
   <h3><?= $t('technical.notFound') ?></h3>
   <?php if ($data['technical']['notFound'] === []): ?><p class="empty"><?= $t('technical.noneInPeriod') ?></p><?php else: ?>
   <table><thead><tr><th scope="col"><?= $t('technical.address') ?></th><th scope="col" class="num"><?= $t('tile.pageViews') ?></th></tr></thead><tbody>
-    <?php foreach ($data['technical']['notFound'] as $row): ?><tr><td><?= $e($row['path']) ?></td><td class="num"><?= (int) $row['count'] ?></td></tr><?php endforeach; ?>
+    <?php foreach ($data['technical']['notFound'] as $row): ?><tr><td><?= $e($row['path']) ?></td><td class="num"><?= (int)$row['count'] ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
   <h3><?= $t('technical.howTitle') ?></h3>

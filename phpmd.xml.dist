@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<ruleset name="Kizami"
+	xmlns="http://pmd.sf.net/ruleset/1.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://pmd.sf.net/ruleset/1.0.0 http://pmd.sf.net/ruleset_xml_schema.xsd"
+	xsi:noNamespaceSchemaLocation="http://pmd.sf.net/ruleset_xml_schema.xsd">
+	<description>PHP Mess Detector rules for Kizami. Every exclusion and raised threshold has its reason here.</description>
+
+	<rule ref="rulesets/cleancode.xml">
+		<!-- The helper classes are static by design, as in Kirby's own code. -->
+		<exclude name="StaticAccess" />
+		<!-- Public flags such as withNote, merge and withYear are part of the public API. -->
+		<exclude name="BooleanArgumentFlag" />
+		<!-- The assignment in a condition keeps the status cascade in reading order. -->
+		<exclude name="IfStatementAssignment" />
+		<!-- Early returns are not enforced; some guards read better with else. -->
+		<exclude name="ElseExpression" />
+		<!-- Global PHP and Kirby classes are written fully qualified in several places; adding imports is cosmetic. -->
+		<exclude name="MissingImport" />
+	</rule>
+
+	<rule ref="rulesets/codesize.xml/CyclomaticComplexity">
+		<!-- The report sections (Analysis::data, Report::text) and the route checks branch on purpose, one branch per shown value. -->
+		<properties>
+			<property name="reportLevel" value="31" />
+		</properties>
+	</rule>
+	<rule ref="rulesets/codesize.xml/ExcessiveMethodLength" />
+	<rule ref="rulesets/codesize.xml/ExcessiveParameterList" />
+
+	<rule ref="rulesets/design.xml/CouplingBetweenObjects">
+		<!-- Routes and Runtime wire the Kirby hooks, routes and page methods to the plugin classes; 21 and 18 classes are the current count, so the limit is 22 (PHPMD reports at the limit). Lowering it means splitting the routes, planned with the removal of the 1.x names in 2.0. -->
+		<properties>
+			<property name="maximum" value="22" />
+		</properties>
+	</rule>
+
+	<rule ref="rulesets/naming.xml">
+		<!-- Short names are the formulas of the Easter algorithm and array keys in tables. -->
+		<exclude name="ShortVariable" />
+		<!-- I18n::t() is the translation shorthand used in snippets and tests. -->
+		<exclude name="ShortMethodName" />
+	</rule>
+
+	<rule ref="rulesets/unusedcode.xml" />
+</ruleset>

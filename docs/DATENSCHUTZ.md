@@ -1,7 +1,7 @@
 # Kizami: technische Grundlage für den Datenschutztext
 
-(English version: [PRIVACY.md](PRIVACY.md). Optionen heißen `kizami.*`; die Namen
-stehen im [README](README.md#options).)
+(English version: [PRIVACY.md](../PRIVACY.md). Optionen heißen `sayamaapps.kizami.*` (bis 1.x: `kizami.*`); die Namen
+stehen im [README](../README.md#options).)
 
 Dieser Baustein beschreibt die Implementierung. Rechtsgrundlage, Interessenabwägung,
 Aufbewahrungsdauer, Betroffenenrechte und Angaben zum Hosting müssen vor Veröffentlichung
@@ -77,7 +77,7 @@ gezählt werden. Tagesgrenzen verwenden Europe/Berlin.
 Sendet der Browser Do Not Track oder Global Privacy Control mit dem Wert 1,
 entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
-Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `kizami.retentionMonths`) aus der aktiven
+Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `sayamaapps.kizami.retentionMonths`) aus der aktiven
 Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
 nächsten Wartung (Dashboard, Report, Wartungsjob) nicht mehr in der
 Datenbankdatei enthalten, und neue Snapshots werden ohne solche Reste neu aufgebaut.
@@ -98,11 +98,11 @@ nicht archivieren.
 
 ## Betrieb (nicht als Seitentext veröffentlichen)
 
-- Die Aufbewahrung von 13 Monaten (Standard von `kizami.retentionMonths`) ist ein technischer Standard, keine rechtliche
+- Die Aufbewahrung von 13 Monaten (Standard von `sayamaapps.kizami.retentionMonths`) ist ein technischer Standard, keine rechtliche
   Begründung; die notwendige Dauer muss der Betreiber festlegen.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
   kann zusätzlich täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
-  Wartungsfehler. Ist `kizami.retentionMonths` gesetzt, muss derselbe Wert als
+  Wartungsfehler. Ist `sayamaapps.kizami.retentionMonths` gesetzt, muss derselbe Wert als
   `--retention-months=N` angegeben werden, sonst gelten 13 Monate. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
   Der Job löscht außerdem einen veralteten Tagesschlüssel (er erzeugt keinen,
   damit keine Datei mit dem Cron-Benutzer als Eigentümer entsteht) und meldet
@@ -122,7 +122,7 @@ nicht archivieren.
   auch bei WAL. Bestehende Ziele werden abgewiesen. Das Geheimnis wird nicht kopiert.
 - `php site/plugins/kizami/bin/kizami-snapshot /absolut/storage/kizami /sicherungen/NEU.sqlite`
   erstellt denselben Snapshot ohne vorheriges Zusammenfassen. Für Hoster ohne Shell
-  liefert `GET /k/snapshot` (Schalter `kizami.snapshot`, Basic Auth, nur HTTPS) die
+  liefert `GET /k/snapshot` (Schalter `sayamaapps.kizami.snapshot`, Basic Auth, nur HTTPS) die
   Kopie aus. Der Snapshot wird ohne freie Seiten neu aufgebaut. Sie enthält alle Einzelereignisse — Empfänger und Aufbewahrung der
   Sicherungen gehören in den Datenschutztext.
 - `storage/kizami/secret.txt` und temporäre Geheimnisdateien aus allgemeinen
@@ -131,19 +131,19 @@ nicht archivieren.
 - Vollständige Anonymität folgt weder aus einem Hash noch aus Schlüsselrotation:
   Zusatzwissen, URL-Inhalte und Backups sind zu berücksichtigen. Keine Namen,
   E-Mail-Adressen oder anderen persönlichen Angaben in UTM-Werten/Seitenpfaden verwenden.
-- Weitere eigene Domains können über `kizami.ownHosts` als Array angegeben
+- Weitere eigene Domains können über `sayamaapps.kizami.ownHosts` als Array angegeben
   werden, damit Verweise zwischen Domain-Aliasen nicht als externe Herkunft erscheinen.
 - Server-Logs, Hosting-Auftragsverarbeitung, gesetzliche Rechtsgrundlage und
   Widerspruchsverfahren müssen im projektspezifischen Datenschutztext erklärt werden.
 
 ## Optionale Interaktionen konfigurieren
 
-- `kizami.contactTargets`: explizite Teilmenge der Weiterleitungsnamen für die
+- `sayamaapps.kizami.contactTargets`: explizite Teilmenge der Weiterleitungsnamen für die
   Herkunftsauswertung. Ohne Konfiguration erscheint dieser Block nicht.
-- `kizami.positionNames`: erlaubte Positionskennungen mit lesbaren Namen.
-  `$page->redirectLink('anruf', 'tel:+490000', 'header')` ergänzt die Position.
+- `sayamaapps.kizami.positionNames`: erlaubte Positionskennungen mit lesbaren Namen.
+  `$page->kizamiRedirectLink('anruf', 'tel:+490000', 'header')` ergänzt die Position.
   Ohne bekannte Kennung bleibt die Position leer; der Link funktioniert weiter.
-- `kizami.images`: erlaubte Bildkennungen mit lesbaren Namen. Ohne diese
+- `sayamaapps.kizami.images`: erlaubte Bildkennungen mit lesbaren Namen. Ohne diese
   Konfiguration sendet die Galerie keine Bildmeldungen. Am Bildlink steht
   `data-kizami-image="hof"`, passend etwa zu `['hof' => 'Hofansicht']`.
   Das Snippet `bildschau` übergibt den eigenen Endpunkt an `bildschau.js` nur bei
@@ -152,7 +152,7 @@ nicht archivieren.
   gelten ebenso wie für Seitenaufrufe. Browser-Speicher wird nicht verwendet.
 - Ein atomarer `INSERT … SELECT … WHERE NOT EXISTS` dedupliziert Bildöffnungen
   auch bei parallelen Requests. Bildöffnungen sind Ereignisse vom Typ `image`. SQL bleibt mit SQLite 3.7.17 kompatibel.
-- `kizami.events`: erlaubte Aktionen mit Namen und dem Schalter `detail` für
+- `sayamaapps.kizami.events`: erlaubte Aktionen mit Namen und dem Schalter `detail` für
   Zusatzangaben. Ohne diese Konfiguration gibt es weder `/k/event` noch
   `/k/event.js`, und das Snippet `kizami/events` gibt nichts aus. Fremde Origins,
   unbekannte Aktionen, nicht vorhandene Seiten und Anfragen über 2 KB werden

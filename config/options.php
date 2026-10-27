@@ -1,0 +1,36 @@
+<?php
+
+// Options Kizami reads, relative to the plugin: `sayamaapps.kizami.<key>`.
+// Each value is null on purpose. Options::get() gives the default at every read,
+// and a default here would hide the 1.x spelling `kizami.<key>` (fallback).
+return [
+	'active' => null,
+	'brand' => null,
+	'campaignParam' => null,
+	'color' => null,
+	'contactTargets' => null,
+	'dwellTime' => null,
+	'events' => null,
+	'extraCss' => null,
+	'fonts' => null,
+	'gaps' => null,
+	'images' => null,
+	'journal' => null,
+	'language' => null,
+	'ownHosts' => null,
+	'pageNames' => null,
+	'positionNames' => null,
+	'previewAccess' => null,
+	'redirects' => null,
+	'report' => null,
+	'reportRoles' => null,
+	'reportWithoutHttps' => null,
+	'retentionMonths' => null,
+	'siteId' => null,
+	'snapshot' => null,
+	'snapshotRoles' => null,
+	'sourceNames' => null,
+	'targetNames' => null,
+	'tileNames' => null,
+	'tiles' => null,
+];
