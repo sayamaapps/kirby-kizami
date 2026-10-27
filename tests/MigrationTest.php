@@ -162,12 +162,11 @@ final class MigrationTest extends TestCase
 			$config = $tmp . '/site/config';
 			self::expect($config . '/kizami.php', Options::accessFile($app()), 'access file name');
 			$dashboard = function (string $user, string $password, array $options) use ($app) {
-				$_SERVER['PHP_AUTH_USER'] = $user;
-				$_SERVER['PHP_AUTH_PW'] = $password;
+				$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode($user . ':' . $password);
 				try {
 					return $app($options)->call('k/dashboard')->code();
 				} finally {
-					unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
+					unset($_SERVER['HTTP_AUTHORIZATION']);
 				}
 			};
 			file_put_contents($config . '/kennzahlen.php', '<?php return ' . var_export(['benutzer' => 'old', 'hash' => password_hash('old-pw', PASSWORD_DEFAULT)], true) . ';');
@@ -176,10 +175,9 @@ final class MigrationTest extends TestCase
 			self::expect(200, $dashboard('new', 'new-pw', ['kizami.active' => true]), 'dashboard with kizami.php');
 			self::expect(401, $dashboard('old', 'old-pw', ['kizami.active' => true]), 'old credentials rejected');
 			self::expect(404, $dashboard('new', 'new-pw', []), 'without active: real 404');
-			$_SERVER['PHP_AUTH_USER'] = 'new';
-			$_SERVER['PHP_AUTH_PW'] = 'new-pw';
+			$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('new' . ':' . 'new-pw');
 			$css = $app(['kizami.active' => true, 'kizami.fonts' => ['sans' => ['name' => 'Karla', 'file' => '/assets/fonts/karla.woff2']]])->call('k/dashboard.css');
-			unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
+			unset($_SERVER['HTTP_AUTHORIZATION']);
 			self::expect([200, true], [$css->code(), str_contains($css->body(), '--sans: "Karla"')], 'kizami.fonts ends up in dashboard.css');
 
 			// Removed transition names stay removed.

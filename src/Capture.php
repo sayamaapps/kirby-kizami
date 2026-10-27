@@ -5,9 +5,9 @@ namespace Sayamaapps\Kizami;
 use DateTimeImmutable;
 
 /**
- * The computing half of the capture, deliberately without Kirby: the hook in
- * index.php passes in $_SERVER values and the secret, so the tests check all
- * of this without a running Kirby.
+ * The computing half of the capture, deliberately without Kirby: the routes
+ * in config/routes.php pass in the Kirby request values and the secret, so
+ * the tests check all of this without a running Kirby.
  */
 class Capture
 {

@@ -48,18 +48,7 @@ class Runtime
 			return self::deny();
 		}
 
-		$user = $_SERVER['PHP_AUTH_USER'] ?? null;
-		$password = $_SERVER['PHP_AUTH_PW'] ?? null;
-		// FastCGI sometimes passes Basic Auth only as HTTP_AUTHORIZATION.
-		if ($user === null) {
-			$header = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
-			if (stripos($header, 'basic ') === 0) {
-				$decoded = base64_decode(substr($header, 6), true);
-				if ($decoded !== false && str_contains($decoded, ':')) {
-					[$user, $password] = explode(':', $decoded, 2);
-				}
-			}
-		}
+		[$user, $password] = self::basicCredentials((string)App::instance()->request()->header('Authorization', ''));
 		if ($user === null || $password === null) {
 			return self::deny();
 		}
@@ -115,6 +104,25 @@ class Runtime
 			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
 		}
 		return self::deny();
+	}
+
+	/**
+	 * Basic Auth credentials from the Authorization header of the Kirby request
+	 * (also set by FastCGI as REDIRECT_HTTP_AUTHORIZATION, which Kirby reads too).
+	 *
+	 * @return array{string|null, string|null} username and password, or nulls
+	 */
+	private static function basicCredentials(string $header): array
+	{
+		if (stripos($header, 'basic ') !== 0) {
+			return [null, null];
+		}
+		$decoded = base64_decode(substr($header, 6), true);
+		if ($decoded === false || str_contains($decoded, ':') === false) {
+			return [null, null];
+		}
+
+		return explode(':', $decoded, 2);
 	}
 
 	/** Origin check for the beacons /k/image, /k/duration and /k/event, and the page they report. */

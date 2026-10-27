@@ -126,8 +126,7 @@ final class SetupTest extends TestCase
 			};
 			$visitor = fn () => $_SERVER = array_merge($_SERVER, ['HTTP_USER_AGENT' => 'Mozilla/5.0 (X11; Linux x86_64) Firefox/120.0', 'REMOTE_ADDR' => '203.0.113.7', 'HTTP_SEC_FETCH_USER' => '?1']);
 			$login = function () {
-				$_SERVER['PHP_AUTH_USER'] = 'client';
-				$_SERVER['PHP_AUTH_PW'] = 'client-password';
+				$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('client' . ':' . 'client-password');
 			};
 			$visitor();
 
@@ -161,7 +160,7 @@ final class SetupTest extends TestCase
 				// In preview mode the module hides behind Kirby's 404.
 				$response = $app($storage, 'https://example.invalid/k/dashboard', [], ['kizami.previewAccess' => ['user' => 'client', 'hash' => password_hash('client-password', PASSWORD_DEFAULT)]])->call('k/dashboard', 'GET');
 				self::same(404, $response->code(), "Preview mode with a setup error: real 404 ($label)");
-				unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
+				unset($_SERVER['HTTP_AUTHORIZATION']);
 
 				$kirby = $app($storage, 'https://example.invalid/k/dashboard');
 				$kirby->impersonate('kirby');

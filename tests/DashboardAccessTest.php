@@ -52,10 +52,9 @@ final class DashboardAccessTest extends TestCase
 
 			// The route as Kirby calls it; the login comes from $_SERVER like under PHP-FPM.
 			$get = function (string $path, string $url, string|null $password = 'client-password', array $options = []) use ($tmp) {
-				unset($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']);
+				unset($_SERVER['HTTP_AUTHORIZATION']);
 				if ($password !== null) {
-					$_SERVER['PHP_AUTH_USER'] = 'client';
-					$_SERVER['PHP_AUTH_PW'] = $password;
+					$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('client' . ':' . $password);
 				}
 				$kirby = new Kirby\Cms\App([
 					'roots' => ['index' => $tmp . '/public', 'base' => $tmp, 'content' => $tmp . '/content',
