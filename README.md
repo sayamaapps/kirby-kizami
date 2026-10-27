@@ -100,7 +100,7 @@ curl -u 'reader:password' 'https://example.com/k/report?kind=week'
 
 ## Options
 
-Keys are `sayamaapps.kizami.<name>`, flat or nested. `null` means "not set". The 1.x spelling `kizami.<name>` still works when the new key is not set; it is reported as a deprecation in debug mode (see [Deprecations](#deprecations)).
+Keys are `sayamaapps.kizami.<name>`, flat or nested. `null` means "not set". The 1.x spelling `kizami.<name>` still works when the new key is not set. It is read silently and listed under [Deprecations](#deprecations).
 
 The defaults are not written into the plugin's option block (`config/options.php`), which declares every key with `null`. A value there would count as set and hide the 1.x spelling. The default in the table applies when the key is `null` in both spellings.
 
@@ -138,16 +138,29 @@ The defaults are not written into the plugin's option block (`config/options.php
 
 ## Deprecations
 
-Kizami renames the public names below. The 1.x names keep working for now. Option names and functions report a deprecation in debug mode; class names do not. The old names are removed in a later major version.
+Kizami renames the public names below. The 1.x names keep working in this release. They are marked `@deprecated` in the code and listed here. Nothing reports them at run time, so debug mode and the error log stay quiet.
 
 | 1.x | Replacement |
 |---|---|
 | Option `kizami.<name>` | `sayamaapps.kizami.<name>` (same name, same values) |
-| Global functions `kizami_*()` | Static methods of `Sayamaapps\Kizami\Runtime`, for example `Runtime::option($key, $default)` |
+| Global functions `kizami_*()` | Static methods of `Sayamaapps\Kizami\Runtime`, for example `Runtime::option($app, $key, $default)` |
 | Classes `Kizami\<Name>` | `Sayamaapps\Kizami\<Name>` |
-| Method `Store::setNow()` (1.x, kept as a shim) | `Store::atTime()`, which returns a view and leaves the store unchanged |
+| Page methods `$page->redirectLink()`, `$page->redirectAnchor()` | `$page->kizamiRedirectLink()`, `$page->kizamiRedirectAnchor()` |
+| Method `Store::setNow()` | `Store::atTime()`, which returns a view and leaves the store unchanged |
+| Method `Store::__destruct()` | Nothing to call: it does nothing now. The connection closes when the last `Store` or view is destroyed |
 
-Templates and snippets that call `kizami_option()` keep working. Switch them to the new names at your own pace.
+Templates and snippets that call `kizami_option()` or `redirectLink()` keep working. Switch them to the new names at your own pace.
+
+The 1.x public test helpers and the 1.x read methods of `Store` are kept as `@deprecated @internal` for the same reason. They are not part of the stable API.
+
+### Planned for 2.0
+
+The following changes break existing code, so they wait for the next major version:
+
+- Removal of all names in the table above.
+- Debug-mode deprecation notices for the 1.x names.
+- Errors of the plugin as Kirby exception classes (`Kirby\Exception\…`) instead of `\RuntimeException`, `\InvalidArgumentException` and the plugin's `SetupError` and `ReportError` (which extend `\RuntimeException`). A `catch` in 1.x code would stop matching.
+- `extraCss`: a stylesheet reached through a symbolic link that points outside the project root is ignored. 1.x reads it, as does this release.
 
 ## Privacy
 

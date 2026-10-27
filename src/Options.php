@@ -4,7 +4,6 @@ namespace Sayamaapps\Kizami;
 
 use Closure;
 use Kirby\Cms\App;
-use Kirby\Cms\Helpers;
 
 /**
  * Reads `sayamaapps.kizami.*` options and falls back to the 1.x `kizami.*` names.
@@ -49,7 +48,8 @@ class Options
 
 	/**
 	 * Reads `sayamaapps.kizami.<key>`. The 1.x spelling `kizami.<key>` is read
-	 * when the new one is not set, and reported as a deprecation (debug mode).
+	 * silently when the new one is not set; it is @deprecated and listed in the
+	 * README, and no run-time deprecation is raised for it.
 	 */
 	public static function get(App $kirby, string $key, mixed $default = null): mixed
 	{
@@ -60,10 +60,6 @@ class Options
 
 		$legacy = $kirby->option(self::PREFIX . $key);
 		if ($legacy !== null) {
-			Helpers::deprecated(
-				'The option ' . self::PREFIX . $key . ' is deprecated, use ' . self::NAME_PREFIX . $key,
-				'option-prefix'
-			);
 			return $legacy;
 		}
 

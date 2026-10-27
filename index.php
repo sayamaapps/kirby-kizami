@@ -9,9 +9,9 @@ require_once __DIR__ . '/legacy.php';
 /**
  * Kizami — server-side page counting, off by default.
  *
- * Defaults are passed as fallback values directly at each option call, NOT
- * in an 'options' block (Kirby would file them under
- * sayamaapps.kizami.active otherwise).
+ * The 'options' block in config/options.php declares every key with null only,
+ * so the 1.x spelling kizami.<key> is still read as fallback. Defaults are
+ * passed at each read.
  */
 
 // Old copy still there? See Migration::oldPluginLoaded().

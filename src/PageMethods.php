@@ -3,7 +3,6 @@
 namespace Sayamaapps\Kizami;
 
 use Kirby\Cms\App;
-use Kirby\Cms\Helpers;
 use Kirby\Cms\Page;
 use Kirby\Toolkit\Html;
 
@@ -32,28 +31,23 @@ class PageMethods
 	}
 
 	/**
-	 * Deprecated 1.x name of redirectAnchor().
+	 * 1.x name of redirectAnchor(), kept for existing templates.
 	 *
+	 * @deprecated Use kizamiRedirectAnchor(). Removal planned for 2.0.
 	 * @param array<string, mixed> $attributes
 	 */
 	public static function legacyRedirectAnchor(Page $page, App $kirby, string $name, string $text, string $fallback = '#', string $position = '', array $attributes = []): string
 	{
-		Helpers::deprecated(
-			'Page method redirectAnchor() is deprecated, use kizamiRedirectAnchor()',
-			'kizami-page-method'
-		);
-
 		return self::redirectAnchor($page, $kirby, $name, $text, $fallback, $position, $attributes);
 	}
 
-	/** Deprecated 1.x name of redirectLink(). */
+	/**
+	 * 1.x name of redirectLink(), kept for existing templates.
+	 *
+	 * @deprecated Use kizamiRedirectLink(). Removal planned for 2.0.
+	 */
 	public static function legacyRedirectLink(Page $page, App $kirby, string $name, string $fallback = '#', string $position = ''): string
 	{
-		Helpers::deprecated(
-			'Page method redirectLink() is deprecated, use kizamiRedirectLink()',
-			'kizami-page-method'
-		);
-
 		return self::redirectLink($page, $kirby, $name, $fallback, $position);
 	}
 

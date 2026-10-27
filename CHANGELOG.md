@@ -15,26 +15,31 @@ All notable changes to this project are documented here. Versions follow
 
 ## [Unreleased]
 
-Structure and naming for the next major version. Counting and output are
-unchanged, the 1.x names keep working. The login change below is the one
-exception to check.
+Structure and naming, as a 1.x minor release: counting, output, storage, schema
+and the 1.x API are unchanged, nothing here breaks existing code. The new names
+are the ones to use; the 1.x names keep working silently and are listed under
+Deprecations in the README. Removals and other breaking changes are planned for
+2.0 (README, Planned for 2.0).
 
 ### Changed
 
-- Options are read as `sayamaapps.kizami.*`. `kizami.*` remains as fallback.
-  With `debug => true`, the old spelling reports a deprecation.
+- Options are read as `sayamaapps.kizami.*`. `kizami.*` remains read as fallback,
+  without a deprecation notice.
 - Global `kizami_*()` functions are wrappers around `Sayamaapps\Kizami\Runtime`.
-  The wrappers report a deprecation.
+  Marked `@deprecated`; no notice at run time.
 - Classes live in `Sayamaapps\Kizami\`; the 1.x names `Kizami\*` are class aliases.
-- Dashboard login reads the `Authorization` header of the Kirby request. Servers
-  that pass only `PHP_AUTH_USER` and `PHP_AUTH_PW` (mod_php) need the header
-  forwarded, as with any Kirby Basic Auth.
-- Page methods are prefixed `kizami…()`; `redirectLink()` and `redirectAnchor()` remain as deprecated aliases.
+- Dashboard login reads `PHP_AUTH_USER` and `PHP_AUTH_PW` first, as in 1.x. The
+  `Authorization` header is a fallback for FastCGI setups.
+- Page methods are prefixed `kizami…()`. `redirectLink()` and `redirectAnchor()`
+  remain as deprecated names.
+- The 1.x methods of the plugin's classes stay callable and return what they
+  returned in 1.x, also without a Kirby app where 1.x did not need one.
 
 ### Fixed
 
 - Own referrer hosts are bound as SQL parameters instead of inline literals.
-- The report reference time is a view on the store, not a setter that stayed set.
+- The report reference time is a view on the store (`Store::atTime()`), not a
+  setter that stayed set. `Store::setNow()` remains as a deprecated method.
 
 ## [1.8.2] — 2026-10-26
 

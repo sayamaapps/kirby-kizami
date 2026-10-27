@@ -93,7 +93,8 @@ class Store
 	private SQLite3 $db;
 
 	/**
-	 * Reference time for tests. null means "now" (Berlin) — see window().
+	 * Reference time of window(); null means "now" (Berlin). Set by atTime(),
+	 * or by the deprecated setNow().
 	 */
 	private \DateTimeImmutable|null $now = null;
 
@@ -168,6 +169,18 @@ class Store
 		$this->exec(self::CUSTOM_EVENTS_TABLE);
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_event ON kizami_custom_events(event, created_at)');
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_created_at ON kizami_custom_events(created_at)');
+	}
+
+	/**
+	 * Destructor of 1.x. It does nothing now: the connection is shared with the
+	 * views of atTime() and is closed by PHP when the last holder is destroyed.
+	 * Closing it here would cut off a view that is still in use.
+	 *
+	 * @deprecated Removal planned for 2.0.
+	 * @internal
+	 */
+	public function __destruct()
+	{
 	}
 
 	/** @return list<array{target:string,count:int}> */
@@ -1076,8 +1089,11 @@ class Store
 	}
 
 	/**
-	 * 1.x API, kept for callers outside the plugin: changes the reference time of
-	 * this object. The plugin itself uses atTime(), which leaves this object alone.
+	 * Fixes the reference time of this object for window().
+	 *
+	 * @deprecated Use atTime(), which returns a view and leaves this object alone.
+	 *             Removal planned for 2.0.
+	 * @internal   Kept for 1.x test code; not for production use.
 	 */
 	public function setNow(\DateTimeImmutable|null $now): void
 	{

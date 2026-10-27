@@ -8,8 +8,8 @@ use Sayamaapps\Kizami\Options;
 
 /**
  * Options are read as sayamaapps.kizami.<key>, with the 1.x spelling
- * kizami.<key> as fallback. The fallback is reported as a deprecation in
- * debug mode.
+ * kizami.<key> as fallback. The fallback is read silently, also in debug
+ * mode: the 1.x names are @deprecated in the code and the README only.
  */
 #[CoversClass(Options::class)]
 #[RunTestsInSeparateProcesses]
@@ -24,7 +24,7 @@ final class OptionsPrefixTest extends TestCase
 		]);
 	}
 
-	public function testLegacyFunctionReadsTheNewOptionAndIsDeprecated(): void
+	public function testLegacyFunctionReadsTheNewOptionWithoutDeprecation(): void
 	{
 		require_once dirname(__DIR__) . '/legacy.php';
 
@@ -41,7 +41,7 @@ final class OptionsPrefixTest extends TestCase
 			restore_error_handler();
 		}
 
-		$this->assertSame(['kizami_option() is deprecated, use Sayamaapps\\Kizami\\Runtime::option()'], $messages);
+		$this->assertSame([], $messages);
 	}
 
 	public function testNewSpellingIsRead(): void
@@ -56,7 +56,7 @@ final class OptionsPrefixTest extends TestCase
 		$this->assertFalse(Options::get($app, 'active'));
 	}
 
-	public function testOldSpellingIsReadAndDeprecated(): void
+	public function testOldSpellingIsReadWithoutDeprecation(): void
 	{
 		$messages = [];
 		set_error_handler(function (int $level, string $message) use (&$messages): bool {
@@ -71,7 +71,7 @@ final class OptionsPrefixTest extends TestCase
 			restore_error_handler();
 		}
 
-		$this->assertSame(['The option kizami.active is deprecated, use sayamaapps.kizami.active'], $messages);
+		$this->assertSame([], $messages);
 	}
 
 	public function testUnsetFallsBackToTheDefault(): void
