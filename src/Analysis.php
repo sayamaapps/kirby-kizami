@@ -228,8 +228,8 @@ class Analysis
 	 * touch is marked in both trend charts, and the gaps of the shown range are
 	 * listed under the charts.
 	 *
-	 * @param list<array<string, mixed>> $gaps
-	 * @param list<array{day: string}> $visitsPerDay
+	 * @param array<mixed> $gaps
+	 * @param array<mixed> $visitsPerDay
 	 * @return array{marks: array<int, string>, list: list<array<string, mixed>>}
 	 */
 	private static function gaps(array $gaps, mixed $now, array $visitsPerDay, string $from, string $to): array
