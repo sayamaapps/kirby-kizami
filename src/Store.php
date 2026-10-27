@@ -202,6 +202,15 @@ class Store
 	}
 
 	/**
+	 * 1.x API, kept for callers outside the plugin: changes the reference time of
+	 * this object. The plugin itself uses atTime(), which leaves this object alone.
+	 */
+	public function setNow(\DateTimeImmutable|null $now): void
+	{
+		$this->now = $now;
+	}
+
+	/**
 	 * A view of the same connection with a fixed reference time for window()
 	 * (the report, tests). The view is a new object; the connection stays with
 	 * the original, which is still the only one that exists after the view is
