@@ -5,6 +5,7 @@ namespace Sayamaapps\Kizami;
 use DateTimeImmutable;
 use DateTimeZone;
 use Kirby\Cms\App;
+use Kirby\Filesystem\F;
 use Kirby\Http\Response;
 use Throwable;
 
@@ -179,15 +180,29 @@ class Routes
 		$css .= $fonts['css'] === '' ? '' : "\n" . $fonts['css'];
 		// Project extras (fine-tuning): a file relative to the project root, loaded
 		// last, so it wins, for example 'site/config/kizami-extra.css'.
-		$extra = Runtime::option($kirby, 'extraCss');
-		if (is_string($extra) && $extra !== '' && !str_contains($extra, '..') && str_ends_with($extra, '.css')) {
-			$file = $kirby->root('base') . '/' . ltrim($extra, '/');
-			if (is_file($file)) {
-				$css .= "\n" . file_get_contents($file);
-			}
-		}
+		$extra = self::extraStylesheet($kirby, Runtime::option($kirby, 'extraCss'));
+		$css .= $extra === '' ? '' : "\n" . $extra;
 
 		return new Response($css, 'text/css', 200, ['X-Robots-Tag' => 'noindex, nofollow']);
+	}
+
+	/**
+	 * The project's extra stylesheet (option extraCss). Read only when it lies
+	 * inside the project root after symlinks are resolved: a path with '..' or
+	 * a link that points out is ignored, as a missing file is.
+	 */
+	private static function extraStylesheet(App $kirby, mixed $option): string
+	{
+		if (!is_string($option) || $option === '' || str_contains($option, '..') || !str_ends_with($option, '.css')) {
+			return '';
+		}
+		$base = realpath((string)$kirby->root('base'));
+		$file = realpath((string)$kirby->root('base') . '/' . ltrim($option, '/'));
+		if ($base === false || $file === false || !str_starts_with($file, $base . DIRECTORY_SEPARATOR) || is_file($file) === false) {
+			return '';
+		}
+
+		return (string)F::read($file);
 	}
 
 	/**
