@@ -102,37 +102,39 @@ curl -u 'reader:password' 'https://example.com/k/report?kind=week'
 
 Keys are `sayamaapps.kizami.<name>`, flat or nested. `null` means "not set". The 1.x spelling `kizami.<name>` still works when the new key is not set; it is reported as a deprecation in debug mode (see [Deprecations](#deprecations)).
 
-| Option (1.x spelling `kizami.<name>`) | Default | Description |
-|---|---|---|
-| `active` | `false` | Master switch for counting, dashboard, report and snapshot. |
-| `redirects` | `[]` | Counted redirects `name => target` (`tel:`, `mailto:`, `https://` or a path; closures allowed). Route: `/<name>`. |
-| `targetNames` | `[]` | Display names for redirect targets, `name => label`. |
-| `sourceNames` | `[]` | Display names for referrer hosts and `utm_source` values. |
-| `pageNames` | `[]` | Display names for paths (default: page title). |
-| `contactTargets` | `[]` | Redirects that count as contacts for the contact rate. |
-| `tiles` | first two redirects | Redirects shown as dashboard tiles. |
-| `tileNames` | `[]` | Tile headings, `name => label`. |
-| `positionNames` | `[]` | Allowed link positions (for example `header`) with labels; others are dropped. |
-| `images` | `[]` | Image IDs for gallery-open counting (needs the site's own script). |
-| `dwellTime` | `false` | Accept time-on-page beacons at `/k/duration` (needs the site's own script). |
-| `events` | `[]` | Allowed actions `key => ['label' => …, 'detail' => true]`; `detail` allows a short detail. |
-| `retentionMonths` | `13` | Months single events and actions are kept (1 to 600). |
-| `gaps` | `[]` | Measurement gaps `['from' => 'Y-m-d H:i', 'to' => …, 'reason' => …]`, marked in dashboard and report. |
-| `ownHosts` | `[]` | Further own domains whose referrers count as internal. |
-| `campaignParam` | `null` | Second campaign parameter (for example `cam`), used as `utm_campaign` when that is missing. |
-| `language` | site language | `en` or `de` for the dashboard and report text. |
-| `brand` | site title | Name in the dashboard title and report (string or closure). |
-| `color` | `#2f4f2a` | Dashboard accent colour (`#rrggbb`). |
-| `fonts` | `null` | Dashboard fonts: `['serif' => ['name' => …, 'file' => …], 'sans' => …]`. |
-| `extraCss` | `null` | Extra dashboard CSS file, relative to the project root. |
-| `previewAccess` | `null` | Closure returning `['user' => …, 'hash' => …]` while a build password protects the site; `null` once live. |
-| `report` | `false` | Enable `/k/report` (needs `active`) and register the role `kizami-report`. |
-| `reportRoles` | `['kizami-report']` | Roles allowed to read the report. |
-| `journal` | `'wal'` | SQLite journal mode, `'wal'` or `'delete'` (use `'delete'` where WAL fails). |
-| `siteId` | site hostname | Site identifier in the report; set it to survive a domain change. |
-| `reportWithoutHttps` | `false` | Allow dashboard, report and snapshot over plain HTTP. Local testing only. |
-| `snapshot` | `false` | Enable the backup download `/k/snapshot` (needs `active`); registers the role `kizami-snapshot`. |
-| `snapshotRoles` | `['kizami-snapshot']` | Roles allowed to download the snapshot. |
+The defaults are not written into the plugin's option block (`config/options.php`), which declares every key with `null`. A value there would count as set and hide the 1.x spelling. The default in the table applies when the key is `null` in both spellings.
+
+| Option (1.x spelling `kizami.<name>`) | Type | Default | Example | Description |
+|---|---|---|---|---|
+| `active` | bool | `false` | `true` | Master switch for counting, dashboard, report and snapshot. |
+| `redirects` | array | `[]` | `['contact' => 'mailto:hello@example.com']` | Counted redirects `name => target` (`tel:`, `mailto:`, `https://` or a path; closures allowed). Route: `/<name>`. |
+| `targetNames` | array | `[]` | `['contact' => 'Contact']` | Display names for redirect targets, `name => label`. |
+| `sourceNames` | array | `[]` | `['newsletter' => 'Newsletter']` | Display names for referrer hosts and `utm_source` values. |
+| `pageNames` | array | `[]` | `['/' => 'Home']` | Display names for paths (default: page title). |
+| `contactTargets` | array | `[]` | `['contact']` | Redirects that count as contacts for the contact rate. |
+| `tiles` | array | first two redirects | `['contact', 'download']` | Redirects shown as dashboard tiles. |
+| `tileNames` | array | `[]` | `['contact' => 'Contacts']` | Tile headings, `name => label`. |
+| `positionNames` | array | `[]` | `['header' => 'Header']` | Allowed link positions (for example `header`) with labels; others are dropped. |
+| `images` | array | `[]` | `['cover' => 'Cover image']` | Image IDs for gallery-open counting (needs the site's own script). |
+| `dwellTime` | bool | `false` | `true` | Accept time-on-page beacons at `/k/duration` (needs the site's own script). |
+| `events` | array | `[]` | `['download' => ['label' => 'Download', 'detail' => true]]` | Allowed actions `key => ['label' => …, 'detail' => true]`; `detail` allows a short detail. |
+| `retentionMonths` | int | `13` | `13` | Months single events and actions are kept (1 to 600). |
+| `gaps` | array | `[]` | `[['from' => '2026-01-01 00:00', 'to' => '2026-01-02 00:00', 'reason' => 'Migration']]` | Measurement gaps `['from' => 'Y-m-d H:i', 'to' => …, 'reason' => …]`, marked in dashboard and report. |
+| `ownHosts` | array | `[]` | `['shop.example.com']` | Further own domains whose referrers count as internal. |
+| `campaignParam` | string\|null | `null` | `'cam'` | Second campaign parameter (for example `cam`), used as `utm_campaign` when that is missing. |
+| `language` | string | site language | `'de'` | `en` or `de` for the dashboard and report text. |
+| `brand` | string\|closure | site title | `'Example Studio'` | Name in the dashboard title and report (string or closure). |
+| `color` | string | `#2f4f2a` | `'#2f4f2a'` | Dashboard accent colour (`#rrggbb`). |
+| `fonts` | array\|null | `null` | `['serif' => ['name' => 'Merriweather', 'file' => 'assets/fonts/merriweather.woff2']]` | Dashboard fonts: `['serif' => ['name' => …, 'file' => …], 'sans' => …]`. |
+| `extraCss` | string\|null | `null` | `'site/config/kizami-extra.css'` | Extra dashboard CSS file, relative to the project root. |
+| `previewAccess` | closure\|null | `null` | `fn () => ['user' => 'client', 'hash' => '…']` | Closure returning `['user' => …, 'hash' => …]` while a build password protects the site; `null` once live. |
+| `report` | bool | `false` | `true` | Enable `/k/report` (needs `active`) and register the role `kizami-report`. |
+| `reportRoles` | array | `['kizami-report']` | `['kizami-report']` | Roles allowed to read the report. |
+| `journal` | string | `'wal'` | `'delete'` | SQLite journal mode, `'wal'` or `'delete'` (use `'delete'` where WAL fails). |
+| `siteId` | string | site hostname | `'example-site'` | Site identifier in the report; set it to survive a domain change. |
+| `reportWithoutHttps` | bool | `false` | `false` | Allow dashboard, report and snapshot over plain HTTP. Local testing only. |
+| `snapshot` | bool | `false` | `true` | Enable the backup download `/k/snapshot` (needs `active`); registers the role `kizami-snapshot`. |
+| `snapshotRoles` | array | `['kizami-snapshot']` | `['kizami-snapshot']` | Roles allowed to download the snapshot. |
 
 ## Deprecations
 
@@ -143,6 +145,7 @@ Kizami renames the public names below. The 1.x names keep working for now. Optio
 | Option `kizami.<name>` | `sayamaapps.kizami.<name>` (same name, same values) |
 | Global functions `kizami_*()` | Static methods of `Sayamaapps\Kizami\Runtime`, for example `Runtime::option($key, $default)` |
 | Classes `Kizami\<Name>` | `Sayamaapps\Kizami\<Name>` |
+| Method `Store::setNow()` (1.x, kept as a shim) | `Store::atTime()`, which returns a view and leaves the store unchanged |
 
 Templates and snippets that call `kizami_option()` keep working. Switch them to the new names at your own pace.
 
@@ -153,7 +156,7 @@ Templates and snippets that call `kizami_option()` keep working. Switch them to 
 - **Do Not Track and GPC.** Requests with `DNT: 1` or `Sec-GPC: 1` are not recorded.
 - **Retention.** Single events are kept 13 months (`retentionMonths`), then reduced to daily totals. Reported actions are deleted after the same period.
 
-See [PRIVACY.md](PRIVACY.md) (English) and [DATENSCHUTZ.md](DATENSCHUTZ.md) (German text for privacy policies). They are not legal advice.
+See [PRIVACY.md](PRIVACY.md) (English) and [docs/DATENSCHUTZ.md](docs/DATENSCHUTZ.md) (German text for privacy policies). They are not legal advice.
 
 ## Maintenance
 
@@ -165,6 +168,14 @@ php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/ne
 Run `compact` daily if the site may go days without visits; it also removes the previous day's salt key. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
 
 Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](CHANGELOG.md).
+
+## Repository layout
+
+The layout follows the Kirby plugin structure with these exceptions:
+
+- `views/` holds the dashboard template, its stylesheet and the action script. Routes and snippets load these files from this path, so they stay at the root.
+- `maintenance.php` stays at the root. Site cron jobs call that path.
+- `docs/` holds the German privacy text. It is excluded from the archive.
 
 ## License
 

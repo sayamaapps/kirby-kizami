@@ -1,7 +1,7 @@
 # Kizami: technische Grundlage für den Datenschutztext
 
-(English version: [PRIVACY.md](PRIVACY.md). Optionen heißen `sayamaapps.kizami.*` (bis 1.x: `kizami.*`); die Namen
-stehen im [README](README.md#options).)
+(English version: [PRIVACY.md](../PRIVACY.md). Optionen heißen `sayamaapps.kizami.*` (bis 1.x: `kizami.*`); die Namen
+stehen im [README](../README.md#options).)
 
 Dieser Baustein beschreibt die Implementierung. Rechtsgrundlage, Interessenabwägung,
 Aufbewahrungsdauer, Betroffenenrechte und Angaben zum Hosting müssen vor Veröffentlichung

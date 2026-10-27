@@ -1,6 +1,6 @@
 # Kizami: privacy notes
 
-This is an English summary of [DATENSCHUTZ.md](DATENSCHUTZ.md), the German text
+This is an English summary of [DATENSCHUTZ.md](docs/DATENSCHUTZ.md), the German text
 block for privacy policies, which is the authoritative version. Both describe
 the implementation. They are not legal advice. Each operator has to determine
 the legal basis, retention period, data subject rights and hosting details for
