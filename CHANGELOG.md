@@ -13,7 +13,7 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
-## [Unreleased]
+## [1.9.0] — 2026-10-27
 
 Structure and naming, as a 1.x minor release: counting, output, storage, schema
 and the 1.x API are unchanged, nothing here breaks existing code. The new names
