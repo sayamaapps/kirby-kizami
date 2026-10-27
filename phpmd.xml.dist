@@ -22,13 +22,13 @@
 	</rule>
 
 	<rule ref="rulesets/codesize.xml/CyclomaticComplexity">
-		<!-- Holidays::ids(), Schedule and the report branches branch on purpose. -->
+		<!-- The report sections (Analysis::data, Report::text) and the route checks branch on purpose, one branch per shown value. -->
 		<properties>
 			<property name="reportLevel" value="31" />
 		</properties>
 	</rule>
 	<rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
-		<!-- Analysis::data() is 191 lines. Splitting it is a follow-up; it is not changed in this step (no behaviour change). -->
+		<!-- Analysis::data() is about 190 lines: one section per dashboard block. Splitting it is open work, not a behaviour change. -->
 		<properties>
 			<property name="minimum" value="200" />
 		</properties>
@@ -36,7 +36,7 @@
 	<rule ref="rulesets/codesize.xml/ExcessiveParameterList" />
 
 	<rule ref="rulesets/design.xml">
-		<!-- The domain classes (Store, Schedule-like Report and Analysis classes) are large by design; splitting them changes the API. -->
+		<!-- Store and Analysis collect the queries of the dashboard and report. Their public methods stay until they are split; the exclusion is temporary. -->
 		<exclude name="TooManyPublicMethods" />
 		<exclude name="TooManyMethods" />
 		<exclude name="CouplingBetweenObjects" />
