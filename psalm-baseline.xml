@@ -1,0 +1,427 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<files psalm-version="6.20.1@376425b8e67b79773add388e16b4f6be5693dc87">
+  <file src="src/Analysis.php">
+    <InvalidOperand>
+      <code><![CDATA[$d[$class] / $deviceTotal * 100]]></code>
+      <code><![CDATA[$visits / $withAction]]></code>
+      <code><![CDATA[$visitsPrevious / $withActionPrevious]]></code>
+      <code><![CDATA[$withAction / $visits * 100]]></code>
+      <code><![CDATA[$withActionPrevious / $visitsPrevious * 100]]></code>
+      <code><![CDATA[round($d[$class] / $deviceTotal * 100)]]></code>
+    </InvalidOperand>
+    <RedundantFunctionCall>
+      <code><![CDATA[array_values]]></code>
+    </RedundantFunctionCall>
+  </file>
+  <file src="src/Capture.php">
+    <InvalidNullableReturnType>
+      <code><![CDATA[string]]></code>
+    </InvalidNullableReturnType>
+    <NullableReturnStatement>
+      <code><![CDATA[preg_replace('/[?#].*$/s', '', $url)]]></code>
+    </NullableReturnStatement>
+    <PossiblyNullArgument>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[$value]]></code>
+      <code><![CDATA[preg_replace('/[\p{Cc}\p{Cf}<>"\']+/u', '', $host)]]></code>
+      <code><![CDATA[preg_replace('/[^a-zA-Z0-9_-]/', '', $value)]]></code>
+      <code><![CDATA[preg_replace('/\s+/u', ' ', $value)]]></code>
+    </PossiblyNullArgument>
+  </file>
+  <file src="src/Chart.php">
+    <InvalidOperand>
+      <code><![CDATA[$b[0] - $p[0]]]></code>
+      <code><![CDATA[$b[1] - $p[1]]]></code>
+      <code><![CDATA[$b[2] - $p[2]]]></code>
+      <code><![CDATA[$c[0]]]></code>
+      <code><![CDATA[$c[1]]]></code>
+      <code><![CDATA[$coords[0][0]]]></code>
+      <code><![CDATA[$from + $step / 2]]></code>
+      <code><![CDATA[$from - $step / 2]]></code>
+      <code><![CDATA[$h]]></code>
+      <code><![CDATA[$i]]></code>
+      <code><![CDATA[$i]]></code>
+      <code><![CDATA[$i * $step]]></code>
+      <code><![CDATA[$i * $step + $step / 2]]></code>
+      <code><![CDATA[$i * $step - $step / 2]]></code>
+      <code><![CDATA[$i / ($n - 1) * 116]]></code>
+      <code><![CDATA[$i / ($n - 1) * 600]]></code>
+      <code><![CDATA[$p[0] + ($b[0] - $p[0]) * $t]]></code>
+      <code><![CDATA[$p[1] + ($b[1] - $p[1]) * $t]]></code>
+      <code><![CDATA[$p[2] + ($b[2] - $p[2]) * $t]]></code>
+      <code><![CDATA[$right - $x]]></code>
+      <code><![CDATA[$step / 2]]></code>
+      <code><![CDATA[$step / 2]]></code>
+      <code><![CDATA[$step / 2]]></code>
+      <code><![CDATA[$step / 2]]></code>
+      <code><![CDATA[$value / $max * 5]]></code>
+      <code><![CDATA[$width]]></code>
+      <code><![CDATA[($b[0] - $p[0]) * $t]]></code>
+      <code><![CDATA[($b[1] - $p[1]) * $t]]></code>
+      <code><![CDATA[($b[2] - $p[2]) * $t]]></code>
+      <code><![CDATA[($v / $max) * 26]]></code>
+      <code><![CDATA[(float)$r['value'] / $largest]]></code>
+      <code><![CDATA[(int)$p['value'] / $max * 150]]></code>
+      <code><![CDATA[(int)$p['value'] / $max * 96]]></code>
+      <code><![CDATA[100 - $h]]></code>
+      <code><![CDATA[156 - (int)$p['value'] / $max * 150]]></code>
+      <code><![CDATA[30 - ($v / $max) * 26]]></code>
+      <code><![CDATA[end($coords)[0]]]></code>
+      <code><![CDATA[min(600, $from + $step / 2) - $x]]></code>
+      <code><![CDATA[round($right - $x, 1)]]></code>
+      <code><![CDATA[round($width, 1)]]></code>
+      <code><![CDATA[round($x, 1)]]></code>
+      <code><![CDATA[round($x, 1)]]></code>
+      <code><![CDATA[round($x, 1)]]></code>
+      <code><![CDATA[round($y, 1)]]></code>
+      <code><![CDATA[round(100 - $h, 1)]]></code>
+    </InvalidOperand>
+    <PossiblyFalseArgument>
+      <code><![CDATA[end($points)]]></code>
+    </PossiblyFalseArgument>
+    <PossiblyInvalidOperand>
+      <code><![CDATA[$b[0]]]></code>
+      <code><![CDATA[$b[1]]]></code>
+      <code><![CDATA[$b[2]]]></code>
+      <code><![CDATA[$p[0]]]></code>
+      <code><![CDATA[$p[0]]]></code>
+      <code><![CDATA[$p[1]]]></code>
+      <code><![CDATA[$p[1]]]></code>
+      <code><![CDATA[$p[2]]]></code>
+      <code><![CDATA[$p[2]]]></code>
+    </PossiblyInvalidOperand>
+    <PossiblyNullArgument>
+      <code><![CDATA[$b]]></code>
+      <code><![CDATA[$b]]></code>
+      <code><![CDATA[$p]]></code>
+      <code><![CDATA[$p]]></code>
+    </PossiblyNullArgument>
+    <PossiblyNullArrayAccess>
+      <code><![CDATA[$b[0]]]></code>
+      <code><![CDATA[$b[1]]]></code>
+      <code><![CDATA[$b[2]]]></code>
+      <code><![CDATA[$p[0]]]></code>
+      <code><![CDATA[$p[1]]]></code>
+      <code><![CDATA[$p[2]]]></code>
+    </PossiblyNullArrayAccess>
+    <TypeDoesNotContainType>
+      <code><![CDATA[$max === 0]]></code>
+    </TypeDoesNotContainType>
+  </file>
+  <file src="src/Comparison.php">
+    <InvalidOperand>
+      <code><![CDATA[($current - $previous) / $previous * 100]]></code>
+    </InvalidOperand>
+  </file>
+  <file src="src/Gaps.php">
+    <InvalidReturnStatement>
+      <code><![CDATA[[$start, $end]]]></code>
+    </InvalidReturnStatement>
+    <InvalidReturnType>
+      <code><![CDATA[array{0:DateTimeImmutable,1:DateTimeImmutable}]]></code>
+    </InvalidReturnType>
+  </file>
+  <file src="src/Names.php">
+    <PossiblyNullArrayOffset>
+      <code><![CDATA[$this->sourceNames]]></code>
+    </PossiblyNullArrayOffset>
+  </file>
+  <file src="src/Options.php">
+    <UndefinedMagicMethod>
+      <code><![CDATA[title]]></code>
+    </UndefinedMagicMethod>
+  </file>
+  <file src="src/PageMethods.php">
+    <PossiblyNullArgument>
+      <code><![CDATA[$kirby->url('index')]]></code>
+    </PossiblyNullArgument>
+  </file>
+  <file src="src/Redirect.php">
+    <PossiblyNullArgument>
+      <code><![CDATA[preg_replace('/[^a-z0-9_-]/', '', strtolower($name))]]></code>
+    </PossiblyNullArgument>
+  </file>
+  <file src="src/Report.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[$gaps]]></code>
+    </ArgumentTypeCoercion>
+    <TypeDoesNotContainType>
+      <code><![CDATA[$events !== []]]></code>
+    </TypeDoesNotContainType>
+  </file>
+  <file src="src/ReportService.php">
+    <ArgumentTypeCoercion>
+      <code><![CDATA[[
+				'brand' => Options::brand($kirby),
+				'tiles' => (array)Options::get($kirby, 'tiles', array_slice($redirects, 0, 2)),
+				'tileNames' => (array)Options::get($kirby, 'tileNames', []),
+				'contactTargets' => array_values(array_intersect((array)Options::get($kirby, 'contactTargets', []), $redirects)),
+				'dwellTime' => Options::get($kirby, 'dwellTime', false) === true,
+				'events' => Events::config(Options::get($kirby, 'events', [])),
+				'gaps' => Gaps::config(Options::get($kirby, 'gaps', [])),
+				'now' => $now,
+			]]]></code>
+    </ArgumentTypeCoercion>
+    <PossiblyNullArgument>
+      <code><![CDATA[$kirby->url('index')]]></code>
+    </PossiblyNullArgument>
+    <UndefinedMagicMethod>
+      <code><![CDATA[title]]></code>
+    </UndefinedMagicMethod>
+  </file>
+  <file src="src/Routes.php">
+    <InvalidOperand>
+      <code><![CDATA[$i]]></code>
+      <code><![CDATA[$i + 1]]></code>
+    </InvalidOperand>
+    <PossiblyFalseOperand>
+      <code><![CDATA[file_get_contents($file)]]></code>
+    </PossiblyFalseOperand>
+    <PossiblyNullArgument>
+      <code><![CDATA[$kirby->url('index')]]></code>
+    </PossiblyNullArgument>
+    <UndefinedMagicMethod>
+      <code><![CDATA[title]]></code>
+    </UndefinedMagicMethod>
+  </file>
+  <file src="src/Runtime.php">
+    <InvalidReturnStatement>
+      <code><![CDATA[explode(':', $decoded, 2)]]></code>
+    </InvalidReturnStatement>
+    <InvalidReturnType>
+      <code><![CDATA[array{string|null, string|null}]]></code>
+    </InvalidReturnType>
+    <PossiblyInvalidCast>
+      <code><![CDATA[$kirby->visitor()->ip()]]></code>
+    </PossiblyInvalidCast>
+    <PossiblyNullArgument>
+      <code><![CDATA[$kirby->url('index')]]></code>
+      <code><![CDATA[$kirby->url('index')]]></code>
+    </PossiblyNullArgument>
+  </file>
+  <file src="src/Setup.php">
+    <PossiblyInvalidArgument>
+      <code><![CDATA[str_replace('\\', '/', $real)]]></code>
+    </PossiblyInvalidArgument>
+    <PossiblyUndefinedVariable>
+      <code><![CDATA[$real]]></code>
+    </PossiblyUndefinedVariable>
+  </file>
+  <file src="src/SnapshotResponse.php">
+    <InvalidPropertyAssignmentValue>
+      <code><![CDATA[$this->handle]]></code>
+    </InvalidPropertyAssignmentValue>
+  </file>
+  <file src="src/SnapshotService.php">
+    <RedundantCast>
+      <code><![CDATA[(int)(fstat($handle)['size'] ?? 0)]]></code>
+    </RedundantCast>
+  </file>
+  <file src="src/Store.php">
+    <LessSpecificReturnStatement>
+      <code><![CDATA[$this->fetch(
+			"SELECT SUM(seconds) AS total FROM kizami_events
+             WHERE type='duration' AND session <> '' AND created_at >= :since AND created_at < :until
+             GROUP BY session",
+			$days,
+			fn ($r) => (int)$r['total'],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT a.target AS target, COUNT(*) AS n FROM kizami_events a
+            WHERE a.type='redirect' AND a.created_at >= :since AND a.created_at < :until
+                AND NOT EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ') e
+                    WHERE ' . self::afterEntrySql() . ')
+            GROUP BY a.target ORDER BY n DESC, a.target',
+			$days,
+			fn ($r) => ['target' => (string)$r['target'], 'count' => (int)$r['n']],
+			$offset,
+			$this->ownReferrerBindings()
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT berlin_day(created_at) AS day, COUNT(*) AS n FROM kizami_events
+             WHERE type='page' AND action='view' AND created_at >= :since AND created_at < :until
+             GROUP BY day ORDER BY day DESC",
+			$days,
+			fn ($r) => ['day' => (string)$r['day'], 'count' => (int)$r['n']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT path, COUNT(*) AS n FROM kizami_events
+             WHERE type='notfound' AND created_at >= :since AND created_at < :until
+             GROUP BY path ORDER BY n DESC, path LIMIT 20",
+			$days,
+			fn ($r) => ['path' => (string)$r['path'], 'count' => (int)$r['n']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT path, COUNT(*) AS n FROM kizami_events
+             WHERE type='page' AND action='view' AND created_at >= :since AND created_at < :until
+             GROUP BY path ORDER BY n DESC",
+			$days,
+			fn ($r) => ['path' => (string)$r['path'], 'count' => (int)$r['n']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT path, session, SUM(seconds) AS total FROM kizami_events
+             WHERE type='duration' AND session <> '' AND path <> '' AND created_at >= :since AND created_at < :until
+             GROUP BY path, session",
+			$days,
+			fn ($r) => ['path' => (string)$r['path'], 'session' => (string)$r['session'], 'seconds' => (int)$r['total']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT source, COUNT(*) AS n FROM (
+                SELECT CASE
+                    WHEN utm_source <> '' THEN 'utm:' || utm_source
+                    WHEN " . $this->ownReferrerSql('referrer') . " THEN '" . Names::INTERNAL . "'
+                    WHEN referrer <> '' THEN referrer
+                    ELSE '" . Names::DIRECT . "'
+                END AS source
+                FROM kizami_events
+                WHERE type='page' AND action='view' AND created_at >= :since AND created_at < :until
+             ) GROUP BY source ORDER BY n DESC",
+			$days,
+			fn ($r) => ['source' => (string)$r['source'], 'count' => (int)$r['n']],
+			$offset,
+			$this->ownReferrerBindings()
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT target, COUNT(*) AS n FROM kizami_events WHERE type='redirect'
+            AND created_at >= :since AND created_at < :until GROUP BY target ORDER BY n DESC, target",
+			$days,
+			fn ($r) => ['target' => (string)$r['target'], 'count' => (int)$r['n']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT target, path, COUNT(*) AS n FROM kizami_events
+             WHERE type='redirect' AND created_at >= :since AND created_at < :until
+             GROUP BY target, path ORDER BY n DESC",
+			$days,
+			fn ($r) => [
+				'target' => (string)$r['target'],
+				'path'   => (string)$r['path'],
+				'count'  => (int)$r['n'],
+			],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT target, path, COUNT(*) AS n FROM kizami_events
+            WHERE type='image' AND created_at >= :since AND created_at < :until
+            GROUP BY target, path ORDER BY n DESC, target, path",
+			$days,
+			fn ($r) => ['image' => (string)$r['target'], 'path' => (string)$r['path'], 'count' => (int)$r['n']]
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT target, position, COUNT(*) AS n FROM kizami_events
+            WHERE type='redirect' AND created_at >= :since AND created_at < :until
+            GROUP BY target, position ORDER BY n DESC, target, position",
+			$days,
+			fn ($r) => ['target' => (string)$r['target'], 'position' => (string)$r['position'], 'count' => (int)$r['n']]
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			"SELECT utm_campaign AS campaign, COUNT(DISTINCT session) AS visits, COUNT(*) AS pageViews
+             FROM kizami_events
+             WHERE type='page' AND action='view' AND utm_campaign <> ''
+                AND created_at >= :since AND created_at < :until
+             GROUP BY utm_campaign ORDER BY visits DESC, pageViews DESC, utm_campaign",
+			$days,
+			fn ($r) => ['campaign' => (string)$r['campaign'], 'visits' => (int)$r['visits'], 'pageViews' => (int)$r['pageViews']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			'SELECT event, COUNT(*) AS n, COUNT(DISTINCT ' . self::CUSTOM_VISIT . ') AS visits
+             FROM kizami_custom_events WHERE created_at >= :since AND created_at < :until
+             GROUP BY event ORDER BY n DESC, event',
+			$days,
+			fn ($r) => ['event' => (string)$r['event'], 'count' => (int)$r['n'], 'visits' => (int)$r['visits']],
+			$offset
+		)]]></code>
+      <code><![CDATA[$this->fetch(
+			'SELECT path, COUNT(*) AS n FROM (' . $this->entriesSql() . ')
+            GROUP BY path ORDER BY n DESC, path',
+			$days,
+			fn ($r) => ['path' => (string)$r['path'], 'count' => (int)$r['n']],
+			0,
+			$this->ownReferrerBindings()
+		)]]></code>
+      <code><![CDATA[$this->perDay(
+			"SELECT berlin_day(created_at) AS day, COUNT(*) AS n FROM kizami_events
+            WHERE type='redirect' AND created_at >= :since AND created_at < :until $filter GROUP BY day",
+			$days,
+			$offset,
+			$target === null ? [] : ['target' => $target]
+		)]]></code>
+      <code><![CDATA[$this->perDay("SELECT berlin_day(created_at) AS day, COUNT(*) AS n FROM kizami_events
+            WHERE type='page' AND action='view' AND created_at >= :since AND created_at < :until GROUP BY day", $days, $offset)]]></code>
+      <code><![CDATA[$this->perDay("SELECT berlin_day(created_at) AS day, COUNT(DISTINCT session) AS n FROM kizami_events
+            WHERE session <> '' AND type='page' AND action='view'
+                AND created_at >= :since AND created_at < :until GROUP BY day", $days, $offset)]]></code>
+      <code><![CDATA[['details' => $details, 'omitted' => max(0, $all - count($details))]]]></code>
+      <code><![CDATA[['sources' => $sources, 'withoutEntry' => $without]]]></code>
+    </LessSpecificReturnStatement>
+    <MoreSpecificReturnType>
+      <code><![CDATA[array{details:list<array{detail:string,count:int,visits:int}>,omitted:int}]]></code>
+      <code><![CDATA[array{sources:list<array{source:string,visits:int,clicks:int,withContact:int}>,withoutEntry:int}]]></code>
+      <code><![CDATA[list<array{campaign:string,visits:int,pageViews:int}>]]></code>
+      <code><![CDATA[list<array{day:string,count:int}>]]></code>
+      <code><![CDATA[list<array{day:string,count:int}>]]></code>
+      <code><![CDATA[list<array{day:string,count:int}>]]></code>
+      <code><![CDATA[list<array{day:string,count:int}>]]></code>
+      <code><![CDATA[list<array{event:string,count:int,visits:int}>]]></code>
+      <code><![CDATA[list<array{image:string,path:string,count:int}>]]></code>
+      <code><![CDATA[list<array{path:string,count:int}>]]></code>
+      <code><![CDATA[list<array{path:string,count:int}>]]></code>
+      <code><![CDATA[list<array{path:string,count:int}>]]></code>
+      <code><![CDATA[list<array{path:string,session:string,seconds:int}>]]></code>
+      <code><![CDATA[list<array{source:string,count:int}>]]></code>
+      <code><![CDATA[list<array{target:string,count:int}>]]></code>
+      <code><![CDATA[list<array{target:string,count:int}>]]></code>
+      <code><![CDATA[list<array{target:string,path:string,count:int}>]]></code>
+      <code><![CDATA[list<array{target:string,position:string,count:int}>]]></code>
+      <code><![CDATA[list<int>]]></code>
+    </MoreSpecificReturnType>
+    <PossiblyInvalidCast>
+      <code><![CDATA[$backup->querySingle('PRAGMA journal_mode=DELETE')]]></code>
+    </PossiblyInvalidCast>
+    <PossiblyNullArrayOffset>
+      <code><![CDATA[$out]]></code>
+    </PossiblyNullArrayOffset>
+    <RiskyCast>
+      <code><![CDATA[$this->db->querySingle('PRAGMA freelist_count')]]></code>
+      <code><![CDATA[$this->db->querySingle('PRAGMA user_version')]]></code>
+    </RiskyCast>
+  </file>
+  <file src="views/dashboard.php">
+    <PossiblyNullArgument>
+      <code><![CDATA[$data['devicesUnknown']]]></code>
+      <code><![CDATA[$data['events']]]></code>
+      <code><![CDATA[$data['events']]]></code>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+    </PossiblyNullArgument>
+    <PossiblyNullArrayAccess>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+      <code><![CDATA[$data['longTerm']['months']]]></code>
+      <code><![CDATA[$data['technical']['notFound']]]></code>
+    </PossiblyNullArrayAccess>
+    <PossiblyNullIterator>
+      <code><![CDATA[$data['events']]]></code>
+      <code><![CDATA[$data['events']]]></code>
+    </PossiblyNullIterator>
+    <PossiblyNullReference>
+      <code><![CDATA[$data['longTerm']]]></code>
+      <code><![CDATA[$data['longTerm']]]></code>
+      <code><![CDATA[$data['longTerm']]]></code>
+      <code><![CDATA[$data['technical']]]></code>
+    </PossiblyNullReference>
+    <PossiblyUndefinedArrayOffset>
+      <code><![CDATA[$data['devicesUnknown']]]></code>
+      <code><![CDATA[$data['events']]]></code>
+      <code><![CDATA[$data['longTerm']]]></code>
+      <code><![CDATA[$data['technical']]]></code>
+    </PossiblyUndefinedArrayOffset>
+  </file>
+</files>
