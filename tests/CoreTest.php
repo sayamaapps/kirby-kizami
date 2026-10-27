@@ -1042,7 +1042,7 @@ final class CoreTest extends TestCase
 		$stW = new Store($dirW . '/' . Store::FILE);
 		$todayB = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 		$nowFix = $todayB->modify('+20 hours');
-		$stW->setNow($nowFix);
+		$stW = $stW->atTime($nowFix);
 		$utc = fn (string $when) => $todayB->modify($when)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 		$ins = function (array $row) use ($stW) {
 			$stW->write($row + ['session' => 'x']);
@@ -1124,7 +1124,7 @@ final class CoreTest extends TestCase
 			$w1Fix['until']
 		);
 		$stF1 = new Store($dirF1 . '/' . Store::FILE);
-		$stF1->setNow($nineAm);
+		$stF1 = $stF1->atTime($nineAm);
 		$utcFix = fn (string $when) => $nineAm->modify($when)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 		$stF1->write(['created_at' => $utcFix('today 08:00'), 'type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'today8']);
 		$stF1->write(['created_at' => $utcFix('-7 days 10:00'), 'type' => 'page', 'action' => 'view', 'path' => '/later', 'session' => 'minus7-10']);

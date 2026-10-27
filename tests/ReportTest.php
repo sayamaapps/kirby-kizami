@@ -281,12 +281,12 @@ final class ReportTest extends TestCase
 			// The same numbers as the store returns them (for an offset window the
 			// store is the only way to read them: the report has no previous period
 			// for campaigns). The day before has social 1 and autumn 1.
-			$campaignStore->setNow(Report::period('day', $thu)['now']);
+			$campaignStore = $campaignStore->atTime(Report::period('day', $thu)['now']);
 			self::same([
 				['campaign' => 'autumn', 'visits' => 1, 'pageViews' => 1],
 				['campaign' => 'social-tg-angst', 'visits' => 1, 'pageViews' => 1],
 			], $campaignStore->campaigns(1, 1), 'Store: offset window, same mechanics');
-			$campaignStore->setNow(null);
+			$campaignStore = $campaignStore->atTime(null);
 			$campWeek = Report::data($campaignStore, $campNames, 'week', $mon, $settings);
 			self::same([['name' => 'autumn', 'visits' => 1, 'pageViews' => 1]], $campWeek['campaigns'], 'Week: only its own days');
 			self::same(0, $campDay['campaignsOmitted'], 'Day: nothing omitted below the cap');

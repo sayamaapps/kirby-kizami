@@ -22,7 +22,7 @@ final class VisitsTest extends TestCase
 		try {
 			$store = new Sayamaapps\Kizami\Store($dir . '/k.sqlite');
 			$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
-			$store->setNow($today->setTime(12, 0));
+			$store = $store->atTime($today->setTime(12, 0));
 			$put = function (string $type, string $hash, int $minute, string $target = '', int $day = 0) use ($store, $today) {
 				$store->write(['type' => $type, 'action' => $type === 'page' ? 'view' : 'click',
 					'session' => $hash, 'target' => $target, 'path' => '/', 'device' => 'mobile',

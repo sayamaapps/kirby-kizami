@@ -60,7 +60,7 @@ final class InteractionTest extends TestCase
 			$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 			// Events lie at 10:00: reference time fixed to noon, otherwise before
 			// 10:00 they would drop out of the window as future.
-			$store->setNow($today->setTime(12, 0));
+			$store = $store->atTime($today->setTime(12, 0));
 			$time = fn ($minute, $day = 0) => $today->modify("$day days")->setTime(10, $minute)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 			$put = function ($type, $session, $minute, $extra = [], $day = 0) use ($store, $time) {
 				$store->write($extra + ['type' => $type, 'action' => $type === 'page' ? 'view' : 'click', 'session' => $session, 'created_at' => $time($minute, $day), 'path' => '/', 'device' => 'mobile']);
@@ -117,7 +117,7 @@ final class InteractionTest extends TestCase
 			$put('page', 'self-preview', 0, ['referrer' => 'preview.example']);
 			$put('page', 'self-preview', 1, ['referrer' => 'preview.example']);
 			$own = new Store("$tmp/k.sqlite", null, ['Example.de.', 'www.preview.example', '', 42, "x'y"]);
-			$own->setNow($today->setTime(12, 0));
+			$own = $own->atTime($today->setTime(12, 0));
 			$q = array_column($own->contactSources(7, ['call'])['sources'], 'visits', 'source');
 			self::same(2, $q[Names::ENTRY_UNKNOWN] ?? 0, 'Own hosts are an unrecorded entry, with or without www');
 			self::same(false, isset($q['www.example.de']) || isset($q['preview.example']), 'Own hosts are no source of their own');

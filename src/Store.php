@@ -89,6 +89,7 @@ class Store
 	/** Upper bound of `sayamaapps.kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
 	public const RETENTION_MONTHS_MAX = 600;
 
+	/** Closed by PHP when the last Store or view that holds it is destroyed, so SQLite can checkpoint and remove -wal/-shm. */
 	private SQLite3 $db;
 
 	/**
@@ -167,14 +168,6 @@ class Store
 		$this->exec(self::CUSTOM_EVENTS_TABLE);
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_event ON kizami_custom_events(event, created_at)');
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_created_at ON kizami_custom_events(created_at)');
-	}
-
-	/** Closes the connection, so SQLite can checkpoint and remove -wal/-shm. */
-	public function __destruct()
-	{
-		if (isset($this->db)) {
-			@$this->db->close();
-		}
 	}
 
 	/** @return list<array{target:string,count:int}> */
@@ -1068,10 +1061,18 @@ class Store
 		return $deleted;
 	}
 
-	/** Tests and the report only: fixes the reference time for window() in fetch()/count()/perDay(). */
-	public function setNow(\DateTimeImmutable|null $now): void
+	/**
+	 * A view of the same connection with a fixed reference time for window()
+	 * (the report, tests). The view is a new object; the connection stays with
+	 * the original, which is still the only one that exists after the view is
+	 * dropped.
+	 */
+	public function atTime(\DateTimeImmutable|null $now): self
 	{
-		$this->now = $now;
+		$view = clone $this;
+		$view->now = $now;
+
+		return $view;
 	}
 
 	/** Consistent SQLite snapshot even in WAL mode, without the secret file. */

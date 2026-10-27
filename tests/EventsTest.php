@@ -142,7 +142,7 @@ final class EventsTest extends TestCase
 			$db = new SQLite3("$tmp/k.sqlite");
 			$berlin = new DateTimeZone('Europe/Berlin');
 			$today = new DateTimeImmutable('today', $berlin);
-			$store->setNow($today->setTime(12, 0));
+			$store = $store->atTime($today->setTime(12, 0));
 			$at = fn (int $day, int $hour = 10) => $today->modify("$day days")->setTime($hour, 0)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 			$event = function (string $key, string $session, int $day = 0, string $detail = '', int $hour = 10) use ($store, $at) {
 				$store->write(['type' => 'event', 'event' => $key, 'detail' => $detail, 'path' => '/', 'session' => $session,

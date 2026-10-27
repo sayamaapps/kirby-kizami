@@ -244,7 +244,7 @@ final class MigrationTest extends TestCase
 			$db->exec("INSERT INTO kizami_events (type, action, path) VALUES ('page', 'view', '/next')");
 			self::expect(true, $db->querySingle('SELECT MAX(id) FROM kizami_events') > 16, 'new ids continue after the migrated ones');
 			$db->close();
-			$store->setNow(new DateTimeImmutable('2026-10-06 23:00:00', new DateTimeZone('Europe/Berlin')));
+			$store = $store->atTime(new DateTimeImmutable('2026-10-06 23:00:00', new DateTimeZone('Europe/Berlin')));
 			self::expect(2, $store->visits(1), 'migrated data is readable through Store (two day identifiers)');
 			self::expect(1, $store->clicks(1, 0, 'anruf'), 'migrated redirect counted for its target');
 			$store = null;

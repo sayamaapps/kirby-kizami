@@ -44,7 +44,7 @@ class Report
 	public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
 	{
 		$p = self::period($kind, $today);
-		$store->setNow($p['now']);
+		$store = $store->atTime($p['now']);
 		$days = $p['days'];
 		$offset = $p['offset'];
 
@@ -142,7 +142,6 @@ class Report
 			$known = $d['mobile'] + $d['tablet'] + $d['desktop'];
 			$data['mobileShare'] = $known > 0 ? (int)round(100 * $d['mobile'] / $known) : null;
 		}
-		$store->setNow(null);
 		$data['text'] = self::text($data, $now);
 		return $data;
 	}
@@ -184,7 +183,7 @@ class Report
 	}
 
 	/**
-	 * Reference time for Store::setNow(): the last microsecond of the report
+	 * Reference time for Store::atTime(): the last microsecond of the report
 	 * period. window() rounds a time with a fraction up to the next full
 	 * second — the exclusive end then lies exactly on midnight, the last day
 	 * is complete.
