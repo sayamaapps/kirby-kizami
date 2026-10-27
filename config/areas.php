@@ -25,6 +25,6 @@ return [
 		'icon'  => 'chart',
 		'link'  => App::instance()->url('index') . '/k/dashboard',
 		'target' => '_blank',
-		'menu'  => fn () => Runtime::option('active', false) === true,
+		'menu'  => fn () => Runtime::option(App::instance(), 'active', false) === true,
 	],
 ];

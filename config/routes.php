@@ -31,15 +31,15 @@ return function () {
 				// Only explicitly allowed image IDs and own browser requests.
 				// No file paths from the request are opened, no cookies or identifiers sent.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				if (Runtime::option('active', false) !== true || !(array)Runtime::option('images', [])) {
-					return Runtime::notFound();
+				if (Runtime::option(App::instance(), 'active', false) !== true || !(array)Runtime::option(App::instance(), 'images', [])) {
+					return Runtime::notFound(App::instance());
 				}
-				$path = Runtime::beaconPath();
+				$path = Runtime::beaconPath(App::instance());
 				$image = get('image');
-				if ($path === null || !is_string($image) || !array_key_exists($image, (array)Runtime::option('images', []))) {
+				if ($path === null || !is_string($image) || !array_key_exists($image, (array)Runtime::option(App::instance(), 'images', []))) {
 					return $done();
 				}
-				Runtime::write(fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
+				Runtime::write(App::instance(), fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
 				return $done();
 			},
 		],
@@ -51,10 +51,10 @@ return function () {
 				// script sends the same request shape as the gallery script.
 				// Always 204 — the browser never learns whether anything was written.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				if (Runtime::option('active', false) !== true || Runtime::option('dwellTime', false) !== true) {
-					return Runtime::notFound();
+				if (Runtime::option(App::instance(), 'active', false) !== true || Runtime::option(App::instance(), 'dwellTime', false) !== true) {
+					return Runtime::notFound(App::instance());
 				}
-				$path = Runtime::beaconPath();
+				$path = Runtime::beaconPath(App::instance());
 				$raw = get('seconds');
 				// Unsigned integer, no decimals: anything else is no
 				// plausible number of seconds and is discarded, not guessed.
@@ -69,7 +69,7 @@ return function () {
 				// discard but a cap — otherwise a manipulated value could
 				// distort the median of a whole page.
 				$seconds = min($seconds, 1800);
-				Runtime::write(fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
+				Runtime::write(App::instance(), fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
 				return $done();
 			},
 		],
@@ -84,21 +84,21 @@ return function () {
 				// more than 2 KB of data is discarded before any field is
 				// looked at. No rate limit of its own, like the other beacons.
 				$done = fn () => new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
-				$events = Events::config(Runtime::option('events', []));
-				if (Runtime::option('active', false) !== true || $events === []) {
-					return Runtime::notFound();
+				$events = Events::config(Runtime::option(App::instance(), 'events', []));
+				if (Runtime::option(App::instance(), 'active', false) !== true || $events === []) {
+					return Runtime::notFound(App::instance());
 				}
-				if (Capture::requestTooLarge(Runtime::requestValues(), 2048)) {
+				if (Capture::requestTooLarge(Runtime::requestValues(App::instance()), 2048)) {
 					return $done();
 				}
-				$path = Runtime::beaconPath();
+				$path = Runtime::beaconPath(App::instance());
 				$event = get('event');
 				if ($path === null || !Events::isKey($event) || !array_key_exists($event, $events)) {
 					return $done();
 				}
 				// Without 'detail' => true a detail sent along is dropped, not stored.
 				$detail = $events[$event]['detail'] ? Capture::cleanDetail(get('detail')) : '';
-				Runtime::write(fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
+				Runtime::write(App::instance(), fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
 				return $done();
 			},
 		],
@@ -117,8 +117,8 @@ return function () {
 			'pattern' => 'k/event.js',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (Runtime::option('active', false) !== true || Events::config(Runtime::option('events', [])) === []) {
-					return Runtime::notFound();
+				if (Runtime::option(App::instance(), 'active', false) !== true || Events::config(Runtime::option(App::instance(), 'events', [])) === []) {
+					return Runtime::notFound(App::instance());
 				}
 				return new Response((string)file_get_contents(dirname(__DIR__) . '/views/event.js'), 'text/javascript', 200, [
 					'Cache-Control' => 'public, max-age=86400',
@@ -130,11 +130,11 @@ return function () {
 			'pattern' => 'k/dashboard',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (Runtime::option('active', false) !== true) {
-					return Runtime::notFound();
+				if (Runtime::option(App::instance(), 'active', false) !== true) {
+					return Runtime::notFound(App::instance());
 				}
 
-				if ($refused = Runtime::dashboardRefused()) {
+				if ($refused = Runtime::dashboardRefused(App::instance())) {
 					return $refused;
 				}
 
@@ -146,33 +146,33 @@ return function () {
 				$kirby = App::instance();
 				I18n::setLanguage(Options::language($kirby));
 				try {
-					$store = Runtime::store();
+					$store = Runtime::store(App::instance());
 					$store->compact();
-					Runtime::rotateSecret();
+					Runtime::rotateSecret(App::instance());
 					$names = new Names(
-						(array)Runtime::option('targetNames', []),
-						(array)Runtime::option('sourceNames', []),
-						(array)Runtime::option('pageNames', []),
+						(array)Runtime::option(App::instance(), 'targetNames', []),
+						(array)Runtime::option(App::instance(), 'sourceNames', []),
+						(array)Runtime::option(App::instance(), 'pageNames', []),
 						// Page titles from Kirby, without Analysis knowing Kirby.
 						fn (string $path) => $kirby->site()->find(trim($path, '/'))?->title()->value()
 					);
-					$redirects = array_keys((array)Runtime::option('redirects', []));
+					$redirects = array_keys((array)Runtime::option(App::instance(), 'redirects', []));
 					$data = Analysis::data($store, $names, $days, [
 						'brand'          => Options::brand($kirby),
 						'targets'        => $redirects,
-						'tiles'          => (array)Runtime::option('tiles', array_slice($redirects, 0, 2)),
-						'contactTargets' => array_values(array_intersect((array)Runtime::option('contactTargets', []), $redirects)),
-						'positionNames'  => (array)Runtime::option('positionNames', []),
-						'images'         => (array)Runtime::option('images', []),
-						'tileNames'      => (array)Runtime::option('tileNames', []),
-						'color'          => (string)Runtime::option('color', '#2f4f2a'),
-						'dwellTime'      => Runtime::option('dwellTime', false) === true,
-						'events'         => Events::config(Runtime::option('events', [])),
-						'gaps'           => Gaps::config(Runtime::option('gaps', [])),
+						'tiles'          => (array)Runtime::option(App::instance(), 'tiles', array_slice($redirects, 0, 2)),
+						'contactTargets' => array_values(array_intersect((array)Runtime::option(App::instance(), 'contactTargets', []), $redirects)),
+						'positionNames'  => (array)Runtime::option(App::instance(), 'positionNames', []),
+						'images'         => (array)Runtime::option(App::instance(), 'images', []),
+						'tileNames'      => (array)Runtime::option(App::instance(), 'tileNames', []),
+						'color'          => (string)Runtime::option(App::instance(), 'color', '#2f4f2a'),
+						'dwellTime'      => Runtime::option(App::instance(), 'dwellTime', false) === true,
+						'events'         => Events::config(Runtime::option(App::instance(), 'events', [])),
+						'gaps'           => Gaps::config(Runtime::option(App::instance(), 'gaps', [])),
 					]);
 				} catch (\Throwable $e) {
 					error_log('Kizami: dashboard not available: ' . $e->getMessage());
-					Runtime::logError($e);
+					Runtime::logError(App::instance(), $e);
 					$data = ['days' => $days, 'error' => true, 'brand' => Options::brand($kirby)];
 					if ($e instanceof SetupError) {
 						$data['setup'] = $e->getMessage();
@@ -234,14 +234,14 @@ return function () {
 			'pattern' => 'k/dashboard.css',
 			'method'  => 'GET',
 			'action'  => function () {
-				if (Runtime::option('active', false) !== true) {
-					return Runtime::notFound();
+				if (Runtime::option(App::instance(), 'active', false) !== true) {
+					return Runtime::notFound(App::instance());
 				}
-				if ($refused = Runtime::dashboardRefused()) {
+				if ($refused = Runtime::dashboardRefused(App::instance())) {
 					return $refused;
 				}
 
-				$base = (string)Runtime::option('color', '#2f4f2a');
+				$base = (string)Runtime::option(App::instance(), 'color', '#2f4f2a');
 				$css = (string)file_get_contents(dirname(__DIR__) . '/views/dashboard.css');
 				if (preg_match('/^#[0-9a-f]{6}$/i', $base)) {
 					$css .= "\n:root { --base: $base; --up: $base;";
@@ -252,14 +252,14 @@ return function () {
 				}
 				// Fonts from the configuration (src/Fonts.php) — the usual
 				// reason for extra CSS, now without a file of its own.
-				$fonts = Fonts::css(Runtime::option('fonts'));
+				$fonts = Fonts::css(Runtime::option(App::instance(), 'fonts'));
 				foreach ($fonts['errors'] as $message) {
 					error_log('Kizami: ' . $message);
 				}
 				$css .= $fonts['css'] === '' ? '' : "\n" . $fonts['css'];
 				// Project extras (fine-tuning): a file relative to the project root, loaded last — so it wins,
 				// for example 'site/config/kizami-extra.css'. Fonts are better set via sayamaapps.kizami.fonts.
-				$extra = Runtime::option('extraCss');
+				$extra = Runtime::option(App::instance(), 'extraCss');
 				if (is_string($extra) && $extra !== '' && !str_contains($extra, '..') && str_ends_with($extra, '.css')) {
 					$file = App::instance()->root('base') . '/' . ltrim($extra, '/');
 					if (is_file($file)) {
@@ -280,11 +280,11 @@ return function () {
 	 *
 	 * So the split is: the redirect is a function of the SITE and depends
 	 * only on a configured target. Counting is optional and depends on
-	 * `active` (checked in Runtime::write()). "Without configuration
+	 * `active` (checked in Runtime::write(App::instance())). "Without configuration
 	 * nothing happens" still holds: without `redirects` no route is
 	 * registered here.
 	 */
-	foreach (Runtime::option('redirects', []) as $rawName => $entry) {
+	foreach (Runtime::option(App::instance(), 'redirects', []) as $rawName => $entry) {
 		$name = Redirect::cleanName((string)$rawName);
 		if ($name === '') {
 			continue;
@@ -300,18 +300,18 @@ return function () {
 				// that a module sits here.
 				if (!Redirect::targetAllowed($target)) {
 					error_log('Kizami: redirect "' . $name . '" has no allowed target');
-					return Runtime::notFound();
+					return Runtime::notFound(App::instance());
 				}
 
-				// Count, then redirect. Runtime::write() never throws — so
+				// Count, then redirect. Runtime::write(App::instance()) never throws — so
 				// the order is harmless. The other way round it wouldn't
 				// be: after a redirect no code runs.
-				Runtime::write(fn () => [
+				Runtime::write(App::instance(), fn () => [
 					'type'     => 'redirect',
 					'action'   => 'click',
 					'path'     => Capture::cleanPath(get('from')),
 					'target'   => $name,
-					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)Runtime::option('positionNames', [])) ? get('position') : '',
+					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)Runtime::option(App::instance(), 'positionNames', [])) ? get('position') : '',
 				], fn (Store $store, string $session, \DateTimeImmutable $now) => Capture::countsLinkClick(
 					App::instance()->request()->header('Sec-Fetch-User') === '?1',
 					fn () => $store->hasPageView($session, $now)

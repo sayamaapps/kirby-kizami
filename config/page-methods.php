@@ -22,7 +22,7 @@ return [
 	 * The core doesn't know what a phone call is.
 	 */
 	'kizamiRedirectLink' => function (string $name, string $fallback = '#', string $position = '') {
-		$targets = (array)Runtime::option('redirects', []);
+		$targets = (array)Runtime::option(App::instance(), 'redirects', []);
 		$name = Redirect::cleanName($name);
 
 		if ($name === '' || !array_key_exists($name, $targets)) {
@@ -42,7 +42,7 @@ return [
 		$base = rtrim((string)parse_url(App::instance()->url('index'), PHP_URL_PATH), '/');
 
 		return $base . '/' . $name . '?from=' . rawurlencode($origin)
-			. (array_key_exists($position, (array)Runtime::option('positionNames', [])) ? '&position=' . rawurlencode($position) : '');
+			. (array_key_exists($position, (array)Runtime::option(App::instance(), 'positionNames', [])) ? '&position=' . rawurlencode($position) : '');
 	},
 	/**
 	 * Complete link with rel="nofollow" — for new templates. Link
@@ -85,7 +85,7 @@ return [
 	},
 	/**
 	 * Counts a configured action (sayamaapps.kizami.events) on this page from PHP
-	 * (since 1.4.0), see Runtime::event(). Returns the page, so a route
+	 * (since 1.4.0), see Runtime::event(App::instance()). Returns the page, so a route
 	 * can count and answer in one line:
 	 *
 	 *     'action' => fn () => page('books/kizami')?->kizamiEvent('shortcode_access')
@@ -94,7 +94,7 @@ return [
 	 * the action was counted or not.
 	 */
 	'kizamiEvent' => function (mixed $key, mixed $detail = null) {
-		Runtime::event($key, $this, $detail);
+		Runtime::event(App::instance(), $key, $this, $detail);
 		return $this;
 	},
 ];

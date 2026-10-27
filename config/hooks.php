@@ -8,7 +8,7 @@ return [
 	/**
 	 * After every resolved route. Only real, rendered pages count as
 	 * 'page' — not assets, not the Panel. A real 404 counts separately as
-	 * 'notfound'. Capturing must NEVER damage the page: Runtime::write()
+	 * 'notfound'. Capturing must NEVER damage the page: Runtime::write(App::instance())
 	 * doesn't throw.
 	 *
 	 * A real 404 has NO page object HERE yet: the page route
@@ -26,7 +26,7 @@ return [
 			}
 			// 404: the page route returns nothing, io() builds the error page later.
 			if ($final && empty($result)) {
-				Runtime::write(fn () => [
+				Runtime::write(App::instance(), fn () => [
 					'type'   => 'notfound',
 					'action' => 'view',
 					'path'   => Capture::cleanPath('/' . ltrim((string)$path, '/')),
@@ -36,14 +36,14 @@ return [
 			if (!($result instanceof \Kirby\Cms\Page) || $result->isErrorPage()) {
 				return;
 			}
-			Runtime::write(fn () => [
+			Runtime::write(App::instance(), fn () => [
 				'type'         => 'page',
 				'action'       => 'view',
 				'path'         => Capture::cleanPath('/' . ltrim((string)$path, '/')),
-				'referrer'     => Capture::cleanReferrer(App::instance()->request()->header('Referer'), Runtime::ownHosts()),
+				'referrer'     => Capture::cleanReferrer(App::instance()->request()->header('Referer'), Runtime::ownHosts(App::instance())),
 				'utm_source'   => Capture::cleanId(get('utm_source')),
 				'utm_medium'   => Capture::cleanId(get('utm_medium')),
-				'utm_campaign' => Runtime::campaign(),
+				'utm_campaign' => Runtime::campaign(App::instance()),
 			]);
 		} catch (\Throwable $e) {
 			error_log('Kizami: ' . $e->getMessage());

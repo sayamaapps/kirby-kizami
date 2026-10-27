@@ -34,39 +34,38 @@ class Runtime
 	 * (src/Lockout.php). Only submitted credentials that turn out wrong count;
 	 * a request without credentials (the browser's first visit) does not.
 	 */
-	public static function accessDenied(): Response|null
+	public static function accessDenied(App $kirby): Response|null
 	{
 		try {
-			$preview = Options::previewCredentials(App::instance());
-			if ($preview === null && App::instance()->user()) {
+			$preview = Options::previewCredentials($kirby);
+			if ($preview === null && $kirby->user()) {
 				return null;
 			}
-			$file = Options::accessFile(App::instance());
+			$file = Options::accessFile($kirby);
 			$credentials = $preview ?? (file_exists($file) ? require $file : null);
 		} catch (Throwable $e) {
 			error_log('Kizami: access configuration unusable');
-			return self::deny();
+			return self::deny($kirby);
 		}
 
-		[$user, $password] = self::basicCredentials((string)App::instance()->request()->header('Authorization', ''));
+		[$user, $password] = self::basicCredentials((string)$kirby->request()->header('Authorization', ''));
 		if ($user === null || $password === null) {
-			return self::deny();
+			return self::deny($kirby);
 		}
 
 		// Kirby's own limit would only fit Kirby accounts (see src/Lockout.php),
 		// but its two options stay the one place to configure it.
-		$kirby = App::instance();
 		$ip = (string)$kirby->visitor()->ip();
 		try {
-			$directory = self::directory();
+			$directory = self::directory($kirby);
 		} catch (SetupError $e) {
 			// No usable storage, so no counters and no login: deny without
 			// checking the password.
 			error_log($e->getMessage());
-			return self::loginUnavailable('Kizami: setup error, see the error log.');
+			return self::loginUnavailable($kirby, 'Kizami: setup error, see the error log.');
 		} catch (Throwable $e) {
 			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-			return self::loginUnavailable('Kizami: login limit unavailable, see the error log.');
+			return self::loginUnavailable($kirby, 'Kizami: login limit unavailable, see the error log.');
 		}
 		try {
 			$lockout = new Lockout(
@@ -79,12 +78,12 @@ class Runtime
 			$wait = $lockout->retryAfter($ip, $user);
 		} catch (Throwable $e) {
 			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-			return self::loginUnavailable('Kizami: login limit unavailable, see the error log.');
+			return self::loginUnavailable($kirby, 'Kizami: login limit unavailable, see the error log.');
 		}
 		if ($wait > 0) {
 			// Where the module hides behind Kirby's 404 (preview, no access file),
 			// a 429 would give it away.
-			$denial = self::deny();
+			$denial = self::deny($kirby);
 			if ($denial->code() !== 401) {
 				return $denial;
 			}
@@ -103,7 +102,7 @@ class Runtime
 		} catch (Throwable $e) {
 			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
 		}
-		return self::deny();
+		return self::deny($kirby);
 	}
 
 	/**
@@ -126,9 +125,8 @@ class Runtime
 	}
 
 	/** Origin check for the beacons /k/image, /k/duration and /k/event, and the page they report. */
-	public static function beaconPath(): string|null
+	public static function beaconPath(App $kirby): string|null
 	{
-		$kirby = App::instance();
 		$url = parse_url($kirby->url('index'));
 		$origin = ($url['scheme'] ?? '') . '://' . ($url['host'] ?? '') . (isset($url['port']) ? ':' . $url['port'] : '');
 		$fetchSite = $kirby->request()->header('Sec-Fetch-Site');
@@ -137,7 +135,7 @@ class Runtime
 			return null;
 		}
 		$path = get('path');
-		return self::findPage($path) !== null ? $path : null;
+		return self::findPage($kirby, $path) !== null ? $path : null;
 	}
 
 	/**
@@ -145,13 +143,13 @@ class Runtime
 	 * cleaning, the parameter named in sayamaapps.kizami.campaignParam (for example `cam`)
 	 * is used. Not set, or not a non-empty string: no fallback.
 	 */
-	public static function campaign(): string
+	public static function campaign(App $kirby): string
 	{
 		$campaign = Capture::cleanId(get('utm_campaign'));
 		if ($campaign !== '') {
 			return $campaign;
 		}
-		$param = self::option('campaignParam');
+		$param = self::option($kirby, 'campaignParam');
 		if (!is_string($param) || $param === '') {
 			return '';
 		}
@@ -171,11 +169,10 @@ class Runtime
 	 * anyway (preview, no access file), that 404 stays: a 403 would give away
 	 * that the module runs here.
 	 */
-	public static function dashboardRefused(): Response|null
+	public static function dashboardRefused(App $kirby): Response|null
 	{
-		$kirby = App::instance();
-		if ($kirby->request()->ssl() === false && self::option('reportWithoutHttps', false) !== true) {
-			$denial = self::deny();
+		if ($kirby->request()->ssl() === false && self::option($kirby, 'reportWithoutHttps', false) !== true) {
+			$denial = self::deny($kirby);
 			if ($denial->code() !== 401) {
 				return $denial;
 			}
@@ -184,7 +181,7 @@ class Runtime
 				'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
 			]);
 		}
-		return self::accessDenied();
+		return self::accessDenied($kirby);
 	}
 
 	/**
@@ -199,11 +196,11 @@ class Runtime
 	 * Otherwise (preview, no own access set up, broken file): Kirby's real 404.
 	 * The preview asks for its credentials itself.
 	 */
-	public static function deny(): Response
+	public static function deny(App $kirby): Response
 	{
-		$access = Options::accessFile(App::instance());
+		$access = Options::accessFile($kirby);
 		try {
-			$preview = Options::previewCredentials(App::instance());
+			$preview = Options::previewCredentials($kirby);
 		} catch (Throwable) {
 			$preview = [];
 		}
@@ -221,7 +218,7 @@ class Runtime
 				]);
 			}
 		}
-		return self::notFound();
+		return self::notFound($kirby);
 	}
 
 	/**
@@ -230,9 +227,8 @@ class Runtime
 	 * (src/Setup.php). Moves the pre-1.0 directory storage/kennzahlen/ on first
 	 * use (src/Migration.php).
 	 */
-	public static function directory(): string
+	public static function directory(App $kirby): string
 	{
-		$kirby = App::instance();
 		return Migration::storage(Setup::storageRoot($kirby->root('storage'), $kirby->root('index')));
 	}
 
@@ -252,20 +248,20 @@ class Runtime
 	 *
 	 * Never throws: errors end up in the error log, the page goes on.
 	 */
-	public static function event(mixed $key, mixed $page, mixed $detail = null): void
+	public static function event(App $kirby, mixed $key, mixed $page, mixed $detail = null): void
 	{
 		try {
 			// sayamaapps.kizami.active, DNT/GPC and bots: self::write().
-			if (App::instance()->request()->method() === 'HEAD') {
+			if ($kirby->request()->method() === 'HEAD') {
 				return;
 			}
-			$events = Events::config(self::option('events', []));
+			$events = Events::config(self::option($kirby, 'events', []));
 			$path = self::pagePath($page);
 			if (!Events::isKey($key) || !array_key_exists($key, $events) || $path === null) {
 				return;
 			}
 			$detail = $events[$key]['detail'] ? Capture::cleanDetail($detail) : '';
-			self::write(fn () => ['type' => 'event', 'event' => $key, 'detail' => $detail, 'path' => $path]);
+			self::write($kirby, fn () => ['type' => 'event', 'event' => $key, 'detail' => $detail, 'path' => $path]);
 		} catch (Throwable $e) {
 			error_log('Kizami: ' . $e->getMessage());
 		}
@@ -276,13 +272,13 @@ class Runtime
 	 * page. '/' is the home page, everything else goes through site()->find(),
 	 * which takes the page ID in every language.
 	 */
-	public static function findPage(mixed $path): Page|null
+	public static function findPage(App $kirby, mixed $path): Page|null
 	{
 		if (!is_string($path) || strlen($path) > 255 || $path !== Capture::cleanPath($path) ||
 			!str_starts_with($path, '/') || str_starts_with($path, '//')) {
 			return null;
 		}
-		$page = $path === '/' ? App::instance()->site()->homePage() : App::instance()->site()->find(trim($path, '/'));
+		$page = $path === '/' ? $kirby->site()->homePage() : $kirby->site()->find(trim($path, '/'));
 		return $page instanceof Page && !$page->isErrorPage() ? $page : null;
 	}
 
@@ -294,10 +290,10 @@ class Runtime
 	 * public/, contains only the exception text and location, no visitor data,
 	 * and starts over at 64 KB.
 	 */
-	public static function logError(Throwable $e): void
+	public static function logError(App $kirby, Throwable $e): void
 	{
 		try {
-			$file = self::directory() . '/errors.log';
+			$file = self::directory($kirby) . '/errors.log';
 			$mode = is_file($file) && filesize($file) > 65536 ? 0 : FILE_APPEND;
 			$line = date('c') . ' ' . $e::class . ': ' . $e->getMessage()
 				. ' @ ' . basename($e->getFile()) . ':' . $e->getLine();
@@ -320,9 +316,9 @@ class Runtime
 	 * Where the module hides behind Kirby's 404 anyway (preview, no access
 	 * file), that 404 stays.
 	 */
-	public static function loginUnavailable(string $text): Response
+	public static function loginUnavailable(App $kirby, string $text): Response
 	{
-		$denial = self::deny();
+		$denial = self::deny($kirby);
 		if ($denial->code() !== 401) {
 			return $denial;
 		}
@@ -330,23 +326,23 @@ class Runtime
 	}
 
 	/** Kirby's real 404 — no format of its own that would reveal the module. */
-	public static function notFound(): Response
+	public static function notFound(App $kirby): Response
 	{
 		// Without content/error/, errorPage() returns null; then an empty 404 instead of a 500.
-		$page = App::instance()->site()->errorPage();
+		$page = $kirby->site()->errorPage();
 		return new Response($page?->render() ?? '', 'text/html', 404);
 	}
 
 	/** Reads `sayamaapps.kizami.<key>`, falling back to `kizami.<key>`. Also meant for site snippets (for example the dwell-time snippet). */
-	public static function option(string $key, mixed $default = null): mixed
+	public static function option(App $kirby, string $key, mixed $default = null): mixed
 	{
-		return Options::get(App::instance(), $key, $default);
+		return Options::get($kirby, $key, $default);
 	}
 
 	/** The site's own hosts (index URL plus `sayamaapps.kizami.ownHosts`): referrers from them are internal, not a source. */
-	public static function ownHosts(): array
+	public static function ownHosts(App $kirby): array
 	{
-		return [parse_url(App::instance()->url('index'), PHP_URL_HOST), ...(array)self::option('ownHosts', [])];
+		return [parse_url($kirby->url('index'), PHP_URL_HOST), ...(array)self::option($kirby, 'ownHosts', [])];
 	}
 
 	/**
@@ -372,9 +368,8 @@ class Runtime
 	 *
 	 * @return array<string,string|null>
 	 */
-	public static function requestValues(): array
+	public static function requestValues(App $kirby): array
 	{
-		$kirby = App::instance();
 		$request = $kirby->request();
 
 		return [
@@ -392,11 +387,11 @@ class Runtime
 	 * snapshot after authentication). The Berlin day as in self::write(); never
 	 * throws, a failure only reaches the error log.
 	 */
-	public static function rotateSecret(): void
+	public static function rotateSecret(App $kirby): void
 	{
 		try {
 			$day = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin')))->format('Y-m-d');
-			if (!Secret::rotate(self::directory(), $day)) {
+			if (!Secret::rotate(self::directory($kirby), $day)) {
 				error_log('Kizami: stale daily key could not be replaced');
 			}
 		} catch (Throwable $e) {
@@ -405,9 +400,9 @@ class Runtime
 	}
 
 	/** Opens the site's database with the configured journal mode (`sayamaapps.kizami.journal`). */
-	public static function store(): Store
+	public static function store(App $kirby): Store
 	{
-		return new Store(self::directory() . '/' . Store::FILE, Store::journal(self::option('journal')), self::ownHosts(), Options::retentionMonths(App::instance()));
+		return new Store(self::directory($kirby) . '/' . Store::FILE, Store::journal(self::option($kirby, 'journal')), self::ownHosts($kirby), Options::retentionMonths($kirby));
 	}
 
 	/**
@@ -418,20 +413,20 @@ class Runtime
 	 * the redirect keeps redirecting. That is why this helper catches \Throwable
 	 * and returns nothing a caller could evaluate — there is nothing to decide.
 	 */
-	public static function write(array|callable $row, callable|null $counts = null): void
+	public static function write(App $kirby, array|callable $row, callable|null $counts = null): void
 	{
 		try {
-			if (self::option('active', false) !== true) {
+			if (self::option($kirby, 'active', false) !== true) {
 				return;
 			}
 
 			$now = new \DateTimeImmutable('now', new \DateTimeZone('Europe/Berlin'));
-			$directory = self::directory();
+			$directory = self::directory($kirby);
 
 			// A filtered request is still a request: yesterday's key must not
 			// outlive the day because nobody was counted. Removed, not replaced:
 			// no key is needed here.
-			$server = self::requestValues();
+			$server = self::requestValues($kirby);
 			if (Capture::optedOut($server)) {
 				Secret::expire($directory, $now->format('Y-m-d'));
 				return;
@@ -452,7 +447,7 @@ class Runtime
 				return; // no secret, no capture
 			}
 
-			$store = new Store($directory . '/' . Store::FILE, Store::journal(self::option('journal')), [], Options::retentionMonths(App::instance()));
+			$store = new Store($directory . '/' . Store::FILE, Store::journal(self::option($kirby, 'journal')), [], Options::retentionMonths($kirby));
 			$session = Capture::sessionHash(
 				$server['REMOTE_ADDR'] ?? '0.0.0.0',
 				$ua,

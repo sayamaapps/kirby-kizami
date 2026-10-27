@@ -29,7 +29,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_option') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::option($key, $default);
+		return Sayamaapps\Kizami\Runtime::option(Kirby\Cms\App::instance(), $key, $default);
 	}
 }
 
@@ -41,7 +41,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_store') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::store();
+		return Sayamaapps\Kizami\Runtime::store(Kirby\Cms\App::instance());
 	}
 }
 
@@ -53,7 +53,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_own_hosts') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::ownHosts();
+		return Sayamaapps\Kizami\Runtime::ownHosts(Kirby\Cms\App::instance());
 	}
 }
 
@@ -65,7 +65,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_directory') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::directory();
+		return Sayamaapps\Kizami\Runtime::directory(Kirby\Cms\App::instance());
 	}
 }
 
@@ -77,7 +77,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_rotate_secret') === false) {
 			'kizami-function'
 		);
 
-		Sayamaapps\Kizami\Runtime::rotateSecret();
+		Sayamaapps\Kizami\Runtime::rotateSecret(Kirby\Cms\App::instance());
 	}
 }
 
@@ -89,7 +89,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_log_error') === false) {
 			'kizami-function'
 		);
 
-		Sayamaapps\Kizami\Runtime::logError($e);
+		Sayamaapps\Kizami\Runtime::logError(Kirby\Cms\App::instance(), $e);
 	}
 }
 
@@ -101,7 +101,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_write') === false) {
 			'kizami-function'
 		);
 
-		Sayamaapps\Kizami\Runtime::write($row, $counts);
+		Sayamaapps\Kizami\Runtime::write(Kirby\Cms\App::instance(), $row, $counts);
 	}
 }
 
@@ -113,7 +113,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_campaign') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::campaign();
+		return Sayamaapps\Kizami\Runtime::campaign(Kirby\Cms\App::instance());
 	}
 }
 
@@ -125,7 +125,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_beacon_path') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::beaconPath();
+		return Sayamaapps\Kizami\Runtime::beaconPath(Kirby\Cms\App::instance());
 	}
 }
 
@@ -137,7 +137,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_find_page') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::findPage($path);
+		return Sayamaapps\Kizami\Runtime::findPage(Kirby\Cms\App::instance(), $path);
 	}
 }
 
@@ -161,7 +161,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_event') === false) {
 			'kizami-function'
 		);
 
-		Sayamaapps\Kizami\Runtime::event($key, $page, $detail);
+		Sayamaapps\Kizami\Runtime::event(Kirby\Cms\App::instance(), $key, $page, $detail);
 	}
 }
 
@@ -173,7 +173,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_dashboard_refused') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::dashboardRefused();
+		return Sayamaapps\Kizami\Runtime::dashboardRefused(Kirby\Cms\App::instance());
 	}
 }
 
@@ -185,7 +185,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_access_denied') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::accessDenied();
+		return Sayamaapps\Kizami\Runtime::accessDenied(Kirby\Cms\App::instance());
 	}
 }
 
@@ -197,7 +197,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_login_unavailable') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::loginUnavailable($text);
+		return Sayamaapps\Kizami\Runtime::loginUnavailable(Kirby\Cms\App::instance(), $text);
 	}
 }
 
@@ -209,7 +209,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_deny') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::deny();
+		return Sayamaapps\Kizami\Runtime::deny(Kirby\Cms\App::instance());
 	}
 }
 
@@ -221,6 +221,6 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_not_found') === false) {
 			'kizami-function'
 		);
 
-		return Sayamaapps\Kizami\Runtime::notFound();
+		return Sayamaapps\Kizami\Runtime::notFound(Kirby\Cms\App::instance());
 	}
 }

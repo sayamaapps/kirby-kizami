@@ -75,7 +75,7 @@ final class PagePathTest extends TestCase
 			]);
 
 			// The path of a page: '/' or '/' and its ID, the same in every language,
-			// and \Sayamaapps\Kizami\Runtime::findPage() — the lookup of /k/event — finds it again.
+			// and \Sayamaapps\Kizami\Runtime::findPage(\Kirby\Cms\App::instance(), ) — the lookup of /k/event — finds it again.
 			$kirby = $app();
 			foreach (['de', 'en'] as $current) {
 				$kirby->setCurrentLanguage($current);
@@ -84,7 +84,7 @@ final class PagePathTest extends TestCase
 					self::expect($path, \Sayamaapps\Kizami\Runtime::pagePath($page), "path of {$page->id()} ($current)");
 					foreach (['de', 'en'] as $lookup) {
 						$kirby->setCurrentLanguage($lookup);
-						self::expect($page->id(), \Sayamaapps\Kizami\Runtime::findPage($path)?->id(), "$path found again ($current → $lookup)");
+						self::expect($page->id(), \Sayamaapps\Kizami\Runtime::findPage(\Kirby\Cms\App::instance(), $path)?->id(), "$path found again ($current → $lookup)");
 					}
 					$kirby->setCurrentLanguage($current);
 				}
@@ -93,7 +93,7 @@ final class PagePathTest extends TestCase
 			// for the attribute (multi-language addresses, short codes).
 			$kirby->setCurrentLanguage('de');
 			foreach (['/en/library/the-book', '/en', '/EEAQ77', '/de/books'] as $address) {
-				self::expect(null, \Sayamaapps\Kizami\Runtime::findPage($address), "address $address is no page for /k/event");
+				self::expect(null, \Sayamaapps\Kizami\Runtime::findPage(\Kirby\Cms\App::instance(), $address), "address $address is no page for /k/event");
 			}
 			self::expect(null, \Sayamaapps\Kizami\Runtime::pagePath($kirby->site()->errorPage()), 'no path for the error page');
 			self::expect(null, \Sayamaapps\Kizami\Runtime::pagePath(null), 'no path without a page');
@@ -144,7 +144,7 @@ final class PagePathTest extends TestCase
 				'invalid key' => fn () => $book->kizamiEvent("shortcode_access\n"),
 				'key no string' => fn () => $book->kizamiEvent(['shortcode_access']),
 				'error page' => fn () => $kirby->site()->errorPage()->kizamiEvent('shortcode_access'),
-				'no page' => fn () => \Sayamaapps\Kizami\Runtime::event('shortcode_access', null),
+				'no page' => fn () => \Sayamaapps\Kizami\Runtime::event(\Kirby\Cms\App::instance(), 'shortcode_access', null),
 			] as $what => $call) {
 				$call();
 				self::expect($count, count($rows()), "not counted: $what");

@@ -15,9 +15,9 @@ use Sayamaapps\Kizami\SnapshotService;
  * process, though: several App instances in one test see the roles as
  * the first one created them. On a server that is one request.
  */
-return (Runtime::option('report', false) === true
+return (Runtime::option(App::instance(), 'report', false) === true
 		? ['users/' . ReportService::ROLE => dirname(__DIR__) . '/blueprints/kizami-report.yml']
 		: [])
-	+ (Runtime::option('snapshot', false) === true
+	+ (Runtime::option(App::instance(), 'snapshot', false) === true
 		? ['users/' . SnapshotService::ROLE => dirname(__DIR__) . '/blueprints/kizami-snapshot.yml']
 		: []);
