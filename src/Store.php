@@ -202,6 +202,20 @@ class Store
 	}
 
 	/**
+	 * A view of the same connection with a fixed reference time for window()
+	 * (the report, tests). The view is a new object; the connection stays with
+	 * the original, which is still the only one that exists after the view is
+	 * dropped.
+	 */
+	public function atTime(\DateTimeImmutable|null $now): self
+	{
+		$view = clone $this;
+		$view->now = $now;
+
+		return $view;
+	}
+
+	/**
 	 * Campaign tags of the page views: utm_campaign, or the parameter named
 	 * in kizami.campaignParam (stored in the same column). Every page view
 	 * with a tag counts, not only entry pages. A visit with two campaigns
@@ -927,18 +941,6 @@ class Store
 	}
 
 	/**
-	 * SQL condition: the referrer is an own page. Capture stores `(internal)`
-	 * for the hosts it knows; rows from before a host was listed, from a
-	 * preview host or with `www.` still carry the bare host — those count as
-	 * internal here as well, so the own site never shows up as a source.
-	 */
-	private function ownReferrerSql(string $column): string
-	{
-		$placeholders = array_map(fn (string $name) => ':' . $name, array_keys($this->ownReferrerBindings()));
-		return "$column = '(internal)'" . ($placeholders === [] ? '' : " OR $column IN (" . implode(',', $placeholders) . ')');
-	}
-
-	/**
 	 * Bound values for the own-host placeholders of ownReferrerSql(). Every
 	 * query that contains that SQL must pass them along.
 	 *
@@ -952,6 +954,18 @@ class Store
 			$bindings['ownwww' . $i] = 'www.' . $host;
 		}
 		return $bindings;
+	}
+
+	/**
+	 * SQL condition: the referrer is an own page. Capture stores `(internal)`
+	 * for the hosts it knows; rows from before a host was listed, from a
+	 * preview host or with `www.` still carry the bare host — those count as
+	 * internal here as well, so the own site never shows up as a source.
+	 */
+	private function ownReferrerSql(string $column): string
+	{
+		$placeholders = array_map(fn (string $name) => ':' . $name, array_keys($this->ownReferrerBindings()));
+		return "$column = '(internal)'" . ($placeholders === [] ? '' : " OR $column IN (" . implode(',', $placeholders) . ')');
 	}
 
 	public function pageViews(int $days, int $offset = 0): int
@@ -1059,20 +1073,6 @@ class Store
 			$this->db->exec('PRAGMA user_version = 0');
 		}
 		return $deleted;
-	}
-
-	/**
-	 * A view of the same connection with a fixed reference time for window()
-	 * (the report, tests). The view is a new object; the connection stays with
-	 * the original, which is still the only one that exists after the view is
-	 * dropped.
-	 */
-	public function atTime(\DateTimeImmutable|null $now): self
-	{
-		$view = clone $this;
-		$view->now = $now;
-
-		return $view;
 	}
 
 	/** Consistent SQLite snapshot even in WAL mode, without the secret file. */

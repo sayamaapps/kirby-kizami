@@ -75,93 +75,6 @@ class Routes
 		return $routes;
 	}
 
-	/** Only explicitly allowed image IDs and own browser requests; no file paths, cookies or identifiers. */
-	public static function imageClick(App $kirby): Response
-	{
-		if (Runtime::option($kirby, 'active', false) !== true || !(array)Runtime::option($kirby, 'images', [])) {
-			return Runtime::notFound($kirby);
-		}
-		$path = Runtime::beaconPath($kirby);
-		$image = $kirby->request()->get('image');
-		if ($path === null || !is_string($image) || !array_key_exists($image, (array)Runtime::option($kirby, 'images', []))) {
-			return self::noContent();
-		}
-		Runtime::write($kirby, fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
-
-		return self::noContent();
-	}
-
-	/**
-	 * The same origin and path check as k/image; the dwell-time script sends the
-	 * same request shape as the gallery script. Always 204 — the browser never
-	 * learns whether anything was written.
-	 */
-	public static function durationClick(App $kirby): Response
-	{
-		if (Runtime::option($kirby, 'active', false) !== true || Runtime::option($kirby, 'dwellTime', false) !== true) {
-			return Runtime::notFound($kirby);
-		}
-		$path = Runtime::beaconPath($kirby);
-		$raw = $kirby->request()->get('seconds');
-		// Unsigned integer, no decimals: anything else is no plausible number of
-		// seconds and is discarded, not guessed.
-		if ($path === null || !is_string($raw) || !preg_match('/^\d+$/', $raw)) {
-			return self::noContent();
-		}
-		$seconds = (int)$raw;
-		if ($seconds < 1) {
-			return self::noContent();
-		}
-		// Over 30 minutes on one page is a cap, not a measurement error to
-		// discard: otherwise a manipulated value could distort the median of a
-		// whole page.
-		$seconds = min($seconds, 1800);
-		Runtime::write($kirby, fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
-
-		return self::noContent();
-	}
-
-	/**
-	 * Reported actions (sayamaapps.kizami.events, since 1.4.0): the same origin,
-	 * path and opt-out rules as k/image, only listed keys, always 204. The detail
-	 * is the only free text any Kizami route accepts, hence the size cap: a
-	 * request with more than 2 KB of data is discarded before any field is looked
-	 * at. No rate limit of its own, like the other beacons.
-	 */
-	public static function eventClick(App $kirby): Response
-	{
-		$events = Events::config(Runtime::option($kirby, 'events', []));
-		if (Runtime::option($kirby, 'active', false) !== true || $events === []) {
-			return Runtime::notFound($kirby);
-		}
-		if (Capture::requestTooLarge(Runtime::requestValues($kirby), 2048)) {
-			return self::noContent();
-		}
-		$path = Runtime::beaconPath($kirby);
-		$event = $kirby->request()->get('event');
-		if ($path === null || !Events::isKey($event) || !array_key_exists($event, $events)) {
-			return self::noContent();
-		}
-		// Without 'detail' => true a detail sent along is dropped, not stored.
-		$detail = $events[$event]['detail'] ? Capture::cleanDetail($kirby->request()->get('detail')) : '';
-		Runtime::write($kirby, fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
-
-		return self::noContent();
-	}
-
-	/** The action script, only while actions are configured; otherwise Kirby's real 404. */
-	public static function eventScript(App $kirby): Response
-	{
-		if (Runtime::option($kirby, 'active', false) !== true || Events::config(Runtime::option($kirby, 'events', [])) === []) {
-			return Runtime::notFound($kirby);
-		}
-
-		return new Response((string)file_get_contents(dirname(__DIR__) . '/views/event.js'), 'text/javascript', 200, [
-			'Cache-Control' => 'public, max-age=86400',
-			'X-Content-Type-Options' => 'nosniff',
-		]);
-	}
-
 	/**
 	 * The dashboard. Under a subdirectory install /k/ lives below the index URL;
 	 * the stylesheet link is a path, not the full URL, so the browser keeps the
@@ -278,6 +191,99 @@ class Routes
 	}
 
 	/**
+	 * The same origin and path check as k/image; the dwell-time script sends the
+	 * same request shape as the gallery script. Always 204 — the browser never
+	 * learns whether anything was written.
+	 */
+	public static function durationClick(App $kirby): Response
+	{
+		if (Runtime::option($kirby, 'active', false) !== true || Runtime::option($kirby, 'dwellTime', false) !== true) {
+			return Runtime::notFound($kirby);
+		}
+		$path = Runtime::beaconPath($kirby);
+		$raw = $kirby->request()->get('seconds');
+		// Unsigned integer, no decimals: anything else is no plausible number of
+		// seconds and is discarded, not guessed.
+		if ($path === null || !is_string($raw) || !preg_match('/^\d+$/', $raw)) {
+			return self::noContent();
+		}
+		$seconds = (int)$raw;
+		if ($seconds < 1) {
+			return self::noContent();
+		}
+		// Over 30 minutes on one page is a cap, not a measurement error to
+		// discard: otherwise a manipulated value could distort the median of a
+		// whole page.
+		$seconds = min($seconds, 1800);
+		Runtime::write($kirby, fn () => ['type' => 'duration', 'action' => 'visible', 'path' => $path, 'seconds' => $seconds]);
+
+		return self::noContent();
+	}
+
+	/**
+	 * Reported actions (sayamaapps.kizami.events, since 1.4.0): the same origin,
+	 * path and opt-out rules as k/image, only listed keys, always 204. The detail
+	 * is the only free text any Kizami route accepts, hence the size cap: a
+	 * request with more than 2 KB of data is discarded before any field is looked
+	 * at. No rate limit of its own, like the other beacons.
+	 */
+	public static function eventClick(App $kirby): Response
+	{
+		$events = Events::config(Runtime::option($kirby, 'events', []));
+		if (Runtime::option($kirby, 'active', false) !== true || $events === []) {
+			return Runtime::notFound($kirby);
+		}
+		if (Capture::requestTooLarge(Runtime::requestValues($kirby), 2048)) {
+			return self::noContent();
+		}
+		$path = Runtime::beaconPath($kirby);
+		$event = $kirby->request()->get('event');
+		if ($path === null || !Events::isKey($event) || !array_key_exists($event, $events)) {
+			return self::noContent();
+		}
+		// Without 'detail' => true a detail sent along is dropped, not stored.
+		$detail = $events[$event]['detail'] ? Capture::cleanDetail($kirby->request()->get('detail')) : '';
+		Runtime::write($kirby, fn () => ['type' => 'event', 'event' => $event, 'detail' => $detail, 'path' => $path]);
+
+		return self::noContent();
+	}
+
+	/** The action script, only while actions are configured; otherwise Kirby's real 404. */
+	public static function eventScript(App $kirby): Response
+	{
+		if (Runtime::option($kirby, 'active', false) !== true || Events::config(Runtime::option($kirby, 'events', [])) === []) {
+			return Runtime::notFound($kirby);
+		}
+
+		return new Response((string)file_get_contents(dirname(__DIR__) . '/views/event.js'), 'text/javascript', 200, [
+			'Cache-Control' => 'public, max-age=86400',
+			'X-Content-Type-Options' => 'nosniff',
+		]);
+	}
+
+	/** Only explicitly allowed image IDs and own browser requests; no file paths, cookies or identifiers. */
+	public static function imageClick(App $kirby): Response
+	{
+		if (Runtime::option($kirby, 'active', false) !== true || !(array)Runtime::option($kirby, 'images', [])) {
+			return Runtime::notFound($kirby);
+		}
+		$path = Runtime::beaconPath($kirby);
+		$image = $kirby->request()->get('image');
+		if ($path === null || !is_string($image) || !array_key_exists($image, (array)Runtime::option($kirby, 'images', []))) {
+			return self::noContent();
+		}
+		Runtime::write($kirby, fn () => ['type' => 'image', 'action' => 'click', 'target' => $image, 'path' => $path]);
+
+		return self::noContent();
+	}
+
+	/** 204 without a body: the browser never learns whether anything was written. */
+	private static function noContent(): Response
+	{
+		return new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
+	}
+
+	/**
 	 * One configured redirect: count the hit, then send the visitor on.
 	 *
 	 * Unknown or disallowed target: Kirby's real 404, no hint that a module sits
@@ -313,11 +319,5 @@ class Routes
 		));
 
 		return new Response('', 'text/plain', 302, ['Location' => $target, 'X-Robots-Tag' => 'noindex, nofollow']);
-	}
-
-	/** 204 without a body: the browser never learns whether anything was written. */
-	private static function noContent(): Response
-	{
-		return new Response('', 'text/plain', 204, ['Cache-Control' => 'no-store']);
 	}
 }

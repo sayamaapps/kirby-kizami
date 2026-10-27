@@ -250,7 +250,9 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
     <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count']) ?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
-    <?php if (!$ev['detail'] || $ev['count'] === 0) { continue; } ?>
+    <?php if (!$ev['detail'] || $ev['count'] === 0) {
+    continue;
+    } ?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
   <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>

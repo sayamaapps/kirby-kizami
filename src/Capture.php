@@ -124,6 +124,40 @@ class Capture
 	}
 
 	/**
+	 * Does this redirect hit count as a human click? (since Kizami 1.0.0)
+	 *
+	 * Reason: many contact-redirect hits had no page view with the same day
+	 * identifier. They came from a link follower with a browser-like user
+	 * agent and rotating IP addresses that isBot() does not recognise.
+	 *
+	 * Rules:
+	 *  1. `Sec-Fetch-User: ?1` (the browser confirms a user action) → counts.
+	 *  2. Otherwise the hit only counts if the same day identifier has
+	 *     already viewed a page today ($hasPageView, only evaluated here).
+	 *
+	 * Deliberately NOT "Sec-Fetch-* present but no Sec-Fetch-User → discard":
+	 * Safari/WebKit sends Sec-Fetch-Site/-Mode/-Dest but no Sec-Fetch-User
+	 * (WebKit bug 247697, open since 2022). That rule would discard every
+	 * click from an iPhone. Chromium and Firefox omit the header entirely
+	 * without a user action, so "missing" looks the same in every engine and
+	 * decides nothing.
+	 *
+	 * Known undercount: a visitor without Sec-Fetch-User (Safari, older
+	 * browsers, some in-app browsers) whose IP address or user agent changes
+	 * between page view and click is not counted.
+	 *
+	 * Strict variant (also discards every Safari click without a page-view
+	 * match): return false here when the request has a Sec-Fetch-Mode header.
+	 */
+	public static function countsLinkClick(bool $userActivated, callable $hasPageView): bool
+	{
+		if ($userActivated === true) {
+			return true;
+		}
+		return $hasPageView() === true;
+	}
+
+	/**
 	 * Rough device class from the user agent. Only three values, blurry on
 	 * purpose: the question is "do people read the menu on their phone?",
 	 * not device models. The user agent itself is not stored.
@@ -157,40 +191,6 @@ class Capture
 			}
 		}
 		return false;
-	}
-
-	/**
-	 * Does this redirect hit count as a human click? (since Kizami 1.0.0)
-	 *
-	 * Reason: many contact-redirect hits had no page view with the same day
-	 * identifier. They came from a link follower with a browser-like user
-	 * agent and rotating IP addresses that isBot() does not recognise.
-	 *
-	 * Rules:
-	 *  1. `Sec-Fetch-User: ?1` (the browser confirms a user action) → counts.
-	 *  2. Otherwise the hit only counts if the same day identifier has
-	 *     already viewed a page today ($hasPageView, only evaluated here).
-	 *
-	 * Deliberately NOT "Sec-Fetch-* present but no Sec-Fetch-User → discard":
-	 * Safari/WebKit sends Sec-Fetch-Site/-Mode/-Dest but no Sec-Fetch-User
-	 * (WebKit bug 247697, open since 2022). That rule would discard every
-	 * click from an iPhone. Chromium and Firefox omit the header entirely
-	 * without a user action, so "missing" looks the same in every engine and
-	 * decides nothing.
-	 *
-	 * Known undercount: a visitor without Sec-Fetch-User (Safari, older
-	 * browsers, some in-app browsers) whose IP address or user agent changes
-	 * between page view and click is not counted.
-	 *
-	 * Strict variant (also discards every Safari click without a page-view
-	 * match): return false here when the request has a Sec-Fetch-Mode header.
-	 */
-	public static function countsLinkClick(bool $userActivated, callable $hasPageView): bool
-	{
-		if ($userActivated === true) {
-			return true;
-		}
-		return $hasPageView() === true;
 	}
 
 	/**
