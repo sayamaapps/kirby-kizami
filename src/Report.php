@@ -121,20 +121,7 @@ class Report
 		// so both are checked; `gaps` lists every gap that touches either.
 		$gaps = (array)($settings['gaps'] ?? []);
 		$now = $settings['now'] ?? new \DateTimeImmutable('now');
-		$periodStart = $from;
-		$periodEnd = $from->modify('+' . $days . ' days');
-		$previousStart = $periodStart->modify('-7 days');
-		$previousEnd = $periodEnd->modify('-7 days');
-		$data['gaps'] = [];
-		foreach ($gaps as $gap) {
-			$current = Gaps::overlapping([$gap], $periodStart, $periodEnd, $now) !== [];
-			$previous = Gaps::overlapping([$gap], $previousStart, $previousEnd, $now) !== [];
-			if ($current || $previous) {
-				$data['gaps'][] = $gap + ['current' => $current, 'previous' => $previous];
-			}
-		}
-		$data['gap'] = in_array(true, array_column($data['gaps'], 'current'), true);
-		$data['gapPrevious'] = in_array(true, array_column($data['gaps'], 'previous'), true);
+		$data += self::gapFields($gaps, $from, $days, $now);
 		if ($kind === 'week') {
 			$data['perDay'] = array_map(fn ($d) => ['day' => $d['day'], 'visits' => $d['count'],
 				'gap' => Gaps::onDay($gaps, $d['day'], $now) !== []], $store->visitsPerDay($days));
@@ -158,6 +145,35 @@ class Report
 		return $seconds < 60
 			? I18n::t('duration.seconds', ['s' => $seconds])
 			: I18n::t('duration.minutes', ['m' => intdiv($seconds, 60), 's' => $seconds % 60]);
+	}
+
+	/**
+	 * The gaps that touch the period or the period one week earlier, with the
+	 * flags the report text reads (`gap`, `gapPrevious`).
+	 *
+	 * @param list<array<string, mixed>> $gaps
+	 * @return array{gaps: list<array<string, mixed>>, gap: bool, gapPrevious: bool}
+	 */
+	private static function gapFields(array $gaps, \DateTimeImmutable $from, int $days, mixed $now): array
+	{
+		$periodStart = $from;
+		$periodEnd = $from->modify('+' . $days . ' days');
+		$previousStart = $periodStart->modify('-7 days');
+		$previousEnd = $periodEnd->modify('-7 days');
+		$found = [];
+		foreach ($gaps as $gap) {
+			$current = Gaps::overlapping([$gap], $periodStart, $periodEnd, $now) !== [];
+			$previous = Gaps::overlapping([$gap], $previousStart, $previousEnd, $now) !== [];
+			if ($current || $previous) {
+				$found[] = $gap + ['current' => $current, 'previous' => $previous];
+			}
+		}
+
+		return [
+			'gaps' => $found,
+			'gap' => in_array(true, array_column($found, 'current'), true),
+			'gapPrevious' => in_array(true, array_column($found, 'previous'), true),
+		];
 	}
 
 	/** @param list<array{name:string,value:int}>|array<string,int> $entries */
