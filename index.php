@@ -1,6 +1,7 @@
 <?php
 
 use Kirby\Filesystem\F;
+use Sayamaapps\Kizami\Migration;
 
 F::loadClasses(require __DIR__ . '/autoload.php', __DIR__);
 require_once __DIR__ . '/legacy.php';
@@ -13,15 +14,8 @@ require_once __DIR__ . '/legacy.php';
  * sayamaapps.kizami.active otherwise).
  */
 
-/*
- * Old copy still there? If site/plugins/kennzahlen/ (the pre-1.0 copy of
- * this plugin) sits next to the package, Kirby loads both (alphabetically:
- * kennzahlen before kizami). Every request would count twice and the routes
- * would exist twice. In that case the package steps back and says so in the
- * error log — the old copy keeps running as before until someone deletes it.
- */
-if (class_exists('Kennzahlen\\Erfassung', false)) {
-	error_log('Kizami: site/plugins/kennzahlen/ still exists — the package stays inactive until the old copy is deleted.');
+// Old copy still there? See Migration::oldPluginLoaded().
+if (Migration::oldPluginLoaded() === true) {
 	return;
 }
 

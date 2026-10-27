@@ -34,6 +34,23 @@ class Migration
 	];
 	public const LEGACY_DIRECTORY = 'kennzahlen';
 
+	/**
+	 * The pre-1.0 copy of the plugin (site/plugins/kennzahlen/) still loaded
+	 * next to the package? Kirby loads both (alphabetically kennzahlen comes
+	 * first), so every request would count twice and the routes would exist
+	 * twice. The package then steps back and logs why; the old copy keeps
+	 * running until someone deletes it. Removed with the next major version.
+	 */
+	public static function oldPluginLoaded(): bool
+	{
+		if (class_exists('Kennzahlen\\Erfassung', false) === false) {
+			return false;
+		}
+		error_log('Kizami: site/plugins/kennzahlen/ still exists — the package stays inactive until the old copy is deleted.');
+
+		return true;
+	}
+
 	/** Returns the data directory, after moving the legacy one if needed. */
 	public static function storage(string $storageRoot): string
 	{
