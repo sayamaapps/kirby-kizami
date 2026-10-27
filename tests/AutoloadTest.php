@@ -1,6 +1,7 @@
 <?php
 
 use PHPUnit\Framework\Attributes\CoversNothing;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -31,14 +32,48 @@ final class AutoloadTest extends TestCase
 				continue;
 			}
 			$short = substr($class, strlen('sayamaapps\\kizami\\'));
-			if ($short === 'runtime') {
-				// Added with the function wrappers; it has no 1.x class name.
+			if (in_array($short, ['hooks', 'pagemethods', 'routes', 'runtime'], true)) {
+				// Added after the 1.x API; no 1.x class name to alias.
 				continue;
 			}
 			$this->assertSame(
 				strtolower('Sayamaapps\\Kizami\\' . $short),
 				strtolower((new ReflectionClass('Kizami\\' . ucfirst($short)))->getName()),
 				'Kizami\\' . $short . ' is an alias of the new class'
+			);
+		}
+	}
+
+	/**
+	 * Fresh process: nothing has used a 1.x name yet. instanceof and catch do not
+	 * autoload, so every alias must already exist once legacy.php is loaded.
+	 */
+	#[RunInSeparateProcess]
+	public function testLegacyNamesMatchWithoutPriorUse(): void
+	{
+		require dirname(__DIR__) . '/legacy.php';
+
+		$store = (new ReflectionClass(\Sayamaapps\Kizami\Store::class))->newInstanceWithoutConstructor();
+		$this->assertTrue($store instanceof \Kizami\Store);
+
+		try {
+			throw new \Kizami\SetupError('test');
+		} catch (\Kizami\SetupError $e) {
+			$this->assertInstanceOf(\Kizami\SetupError::class, $e);
+		}
+
+		foreach (require dirname(__DIR__) . '/autoload.php' as $class => $path) {
+			if (str_starts_with($class, 'sayamaapps\\kizami\\') === false) {
+				continue;
+			}
+			$short = substr($class, strlen('sayamaapps\\kizami\\'));
+			if (in_array($short, ['hooks', 'pagemethods', 'routes', 'runtime'], true)) {
+				// Added after the 1.x API; no 1.x name to keep.
+				continue;
+			}
+			$this->assertTrue(
+				class_exists('Kizami\\' . ucfirst($short), false),
+				'Kizami\\' . ucfirst($short) . ' is registered without prior use'
 			);
 		}
 	}
