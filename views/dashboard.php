@@ -251,8 +251,8 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
     <?php if (!$ev['detail'] || $ev['count'] === 0) {
-    continue;
-    } ?>
+	continue;
+	} ?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
   <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
