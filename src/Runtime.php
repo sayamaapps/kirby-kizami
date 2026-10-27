@@ -48,7 +48,7 @@ class Runtime
 			return self::deny($kirby);
 		}
 
-		[$user, $password] = self::basicCredentials((string)$kirby->request()->header('Authorization', ''));
+		[$user, $password] = self::basicCredentials($kirby);
 		if ($user === null || $password === null) {
 			return self::deny($kirby);
 		}
@@ -106,13 +106,23 @@ class Runtime
 	}
 
 	/**
-	 * Basic Auth credentials from the Authorization header of the Kirby request
-	 * (also set by FastCGI as REDIRECT_HTTP_AUTHORIZATION, which Kirby reads too).
+	 * Basic Auth credentials of the request. PHP_AUTH_USER and PHP_AUTH_PW come
+	 * first (mod_php, as in 1.x). Without PHP_AUTH_USER the Authorization header
+	 * counts (FastCGI; Kirby's header() also reads REDIRECT_HTTP_AUTHORIZATION).
 	 *
 	 * @return array{string|null, string|null} username and password, or nulls
 	 */
-	private static function basicCredentials(string $header): array
+	private static function basicCredentials(App $kirby): array
 	{
+		$environment = $kirby->environment();
+		$user = $environment->get('PHP_AUTH_USER');
+		if ($user !== null) {
+			$password = $environment->get('PHP_AUTH_PW');
+
+			return [(string)$user, $password === null ? null : (string)$password];
+		}
+
+		$header = (string)$kirby->request()->header('Authorization', '');
 		if (stripos($header, 'basic ') !== 0) {
 			return [null, null];
 		}
