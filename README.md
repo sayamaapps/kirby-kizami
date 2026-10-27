@@ -144,7 +144,7 @@ Kizami renames the public names below. The 1.x names keep working in this releas
 |---|---|
 | Option `kizami.<name>` | `sayamaapps.kizami.<name>` (same name, same values) |
 | Global functions `kizami_*()` | Static methods of `Sayamaapps\Kizami\Runtime`, for example `Runtime::option($app, $key, $default)` |
-| Classes `Kizami\<Name>` | `Sayamaapps\Kizami\<Name>` |
+| Classes `Kizami\<Name>` | `Sayamaapps\Kizami\<Name>`. `SetupError` and `ReportError` keep their names `Kizami\SetupError` and `Kizami\ReportError`. |
 | Page methods `$page->redirectLink()`, `$page->redirectAnchor()` | `$page->kizamiRedirectLink()`, `$page->kizamiRedirectAnchor()` |
 | Method `Store::setNow()` | `Store::atTime()`, which returns a view and leaves the store unchanged |
 | Method `Store::__destruct()` | Nothing to call: it does nothing now. The connection closes when the last `Store` or view is destroyed |
@@ -158,6 +158,7 @@ The 1.x public test helpers and the 1.x read methods of `Store` are kept as `@de
 The following changes break existing code, so they wait for the next major version:
 
 - Removal of all names in the table above.
+- Moving `SetupError` and `ReportError` into `Sayamaapps\Kizami\`.
 - Debug-mode deprecation notices for the 1.x names.
 - Errors of the plugin as Kirby exception classes (`Kirby\Exception\…`) instead of `\RuntimeException`, `\InvalidArgumentException` and the plugin's `SetupError` and `ReportError` (which extend `\RuntimeException`). A `catch` in 1.x code would stop matching.
 - `extraCss`: a stylesheet reached through a symbolic link that points outside the project root is ignored. 1.x reads it, as does this release.

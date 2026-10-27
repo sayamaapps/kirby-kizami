@@ -28,6 +28,10 @@ Deprecations in the README. Removals and other breaking changes are planned for
 - Global `kizami_*()` functions are wrappers around `Sayamaapps\Kizami\Runtime`.
   Marked `@deprecated`; no notice at run time.
 - Classes live in `Sayamaapps\Kizami\`; the 1.x names `Kizami\*` are class aliases.
+  `SetupError` and `ReportError` keep their 1.x names (`Kizami\SetupError`,
+  `Kizami\ReportError`), so `get_class()` and error logs show the same names as
+  in 1.x. `get_class()` and Reflection report the new names of the other classes;
+  `catch`, `instanceof` and type declarations accept both.
 - Dashboard login reads `PHP_AUTH_USER` and `PHP_AUTH_PW` first, as in 1.x. The
   `Authorization` header is a fallback for FastCGI setups.
 - Page methods are prefixed `kizami…()`. `redirectLink()` and `redirectAnchor()`
@@ -38,6 +42,8 @@ Deprecations in the README. Removals and other breaking changes are planned for
 ### Fixed
 
 - Own referrer hosts are bound as SQL parameters instead of inline literals.
+- The retention error message names the option spelling in use (`kizami.` or
+  `sayamaapps.kizami.`).
 - The report reference time is a view on the store (`Store::atTime()`), not a
   setter that stayed set. `Store::setNow()` remains as a deprecated method.
 
