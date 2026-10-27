@@ -60,7 +60,11 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
 <?php endif; ?>
 
 <?php if (empty($data['error'])): ?>
-<p class="subtitle"><?= $t('dashboard.subtitle', ['from' => I18n::date(new \DateTimeImmutable($data['from'])), 'to' => I18n::date(new \DateTimeImmutable($data['to'])), 'days' => $days]) ?></p>
+<p class="subtitle"><?= $t('dashboard.subtitle', [
+	'from' => I18n::date(new \DateTimeImmutable($data['from'])),
+	'to' => I18n::date(new \DateTimeImmutable($data['to'])),
+	'days' => $days,
+]) ?></p>
 
 <section class="tiles" aria-label="<?= $t('dashboard.keyFigures') ?>">
   <?php foreach ($data['tiles'] as $tile): ?>
@@ -148,10 +152,19 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <h2 id="trend-title"><?= $t('trend.title') ?></h2>
   <?php $sum = fn (array $series) => array_sum(array_column($series, 'value')); ?>
   <h3><?= $t('trend.visits') ?></h3>
-  <?= $sum($data['trend']['visits']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty() : Chart::area($data['trend']['visits'], I18n::t('trend.visits'), $data['trend']['gapMarks']) ?>
+  <?= $sum($data['trend']['visits']) === 0 && $data['trend']['gapMarks'] === []
+	? Chart::empty()
+	: Chart::area($data['trend']['visits'], I18n::t('trend.visits'), $data['trend']['gapMarks']) ?>
   <h3 class="small"><?= $t('trend.actions') ?></h3>
-  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 && $data['trend']['gapMarks'] === [] ? Chart::empty(I18n::t('trend.noActions')) : Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
-  <div class="axis"><?php foreach (array_unique([0, (int)round(($days - 1) / 3), (int)round(2 * ($days - 1) / 3), $days - 1]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
+  <div class="area-small"><?= $sum($data['trend']['actions']) === 0 && $data['trend']['gapMarks'] === []
+	? Chart::empty(I18n::t('trend.noActions'))
+	: Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
+  <div class="axis"><?php foreach (array_unique([
+	0,
+	(int)round(($days - 1) / 3),
+	(int)round(2 * ($days - 1) / 3),
+	$days - 1,
+]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
   <?php if ($data['gaps'] !== []): ?>
   <div class="gaps">
     <h3><?= $t('gap.title') ?></h3>
@@ -175,7 +188,11 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
     <?php if ($gridSum === 0): ?>
       <?= Chart::empty() ?>
     <?php else: ?>
-    <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><?= Chart::grid($data['weekGrid']['values'], $data['weekGrid']['rows'], $data['weekGrid']['columns']) ?></div>
+    <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><?= Chart::grid(
+	$data['weekGrid']['values'],
+	$data['weekGrid']['rows'],
+	$data['weekGrid']['columns']
+) ?></div>
     <p class="grid-legend" aria-label="<?= $t('when.legend') ?>"><?= $t('when.few') ?> <span class="shade-1"></span><span class="shade-2"></span><span class="shade-3"></span><span class="shade-4"></span><span class="shade-5"></span> <?= $t('when.many') ?></p>
     <p class="hint scroll-hint"><?= $t('when.swipe') ?></p>
     <details class="as-table"><summary><?= $t('table.summary') ?></summary>
@@ -250,9 +267,11 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
     <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count']) ?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
-    <?php if (!$ev['detail'] || $ev['count'] === 0) {
-	continue;
-	} ?>
+    <?php
+    if (!$ev['detail'] || $ev['count'] === 0) {
+        continue;
+    }
+    ?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
   <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
