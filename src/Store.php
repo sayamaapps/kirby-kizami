@@ -313,6 +313,7 @@ class Store
 			$extra['target' . $i] = (string)$target;
 		}
 		$in = implode(',', array_map(fn ($k) => ':' . $k, array_keys($extra)));
+		$extra += $this->ownReferrerBindings();
 		$entries = '(' . $this->entriesSql() . ')';
 		$contacts = "(SELECT * FROM kizami_events WHERE type='redirect' AND target IN ($in)
                 AND created_at >= :since AND created_at < :until)";
@@ -458,7 +459,8 @@ class Store
             GROUP BY class',
 			$days,
 			fn ($r) => [(string)$r['class'], (int)$r['n']],
-			$offset
+			$offset,
+			$this->ownReferrerBindings()
 		) as [$class, $n]) {
 			$classes[$class] = $n;
 		}
@@ -480,7 +482,8 @@ class Store
             GROUP BY a.target ORDER BY n DESC, a.target',
 			$days,
 			fn ($r) => ['target' => (string)$r['target'], 'count' => (int)$r['n']],
-			$offset
+			$offset,
+			$this->ownReferrerBindings()
 		);
 	}
 
@@ -592,7 +595,9 @@ class Store
 			'SELECT path, COUNT(*) AS n FROM (' . $this->entriesSql() . ')
             GROUP BY path ORDER BY n DESC, path',
 			$days,
-			fn ($r) => ['path' => (string)$r['path'], 'count' => (int)$r['n']]
+			fn ($r) => ['path' => (string)$r['path'], 'count' => (int)$r['n']],
+			0,
+			$this->ownReferrerBindings()
 		);
 	}
 
@@ -895,9 +900,8 @@ class Store
 
 	/**
 	 * Own hosts the way referrers are stored: lower case, without trailing
-	 * dot and `www.`, only characters a host name may carry — so they can be
-	 * written into the shared SQL fragments as literals (bound parameters
-	 * would have to be threaded through every query using entriesSql()).
+	 * dot and `www.`, only characters a host name may carry. They reach the
+	 * SQL only as bound parameters (ownReferrerBindings()).
 	 * @return list<string>
 	 */
 	private static function normaliseHosts(array $hosts): array
@@ -937,12 +941,24 @@ class Store
 	 */
 	private function ownReferrerSql(string $column): string
 	{
-		$literals = [];
-		foreach ($this->ownHosts as $host) {
-			$literals[] = "'$host'";
-			$literals[] = "'www.$host'";
+		$placeholders = array_map(fn (string $name) => ':' . $name, array_keys($this->ownReferrerBindings()));
+		return "$column = '(internal)'" . ($placeholders === [] ? '' : " OR $column IN (" . implode(',', $placeholders) . ')');
+	}
+
+	/**
+	 * Bound values for the own-host placeholders of ownReferrerSql(). Every
+	 * query that contains that SQL must pass them along.
+	 *
+	 * @return array<string, string>
+	 */
+	private function ownReferrerBindings(): array
+	{
+		$bindings = [];
+		foreach ($this->ownHosts as $i => $host) {
+			$bindings['own' . $i] = $host;
+			$bindings['ownwww' . $i] = 'www.' . $host;
 		}
-		return "$column = '(internal)'" . ($literals === [] ? '' : " OR $column IN (" . implode(',', $literals) . ')');
+		return $bindings;
 	}
 
 	public function pageViews(int $days, int $offset = 0): int
@@ -1111,7 +1127,8 @@ class Store
              ) GROUP BY source ORDER BY n DESC",
 			$days,
 			fn ($r) => ['source' => (string)$r['source'], 'count' => (int)$r['n']],
-			$offset
+			$offset,
+			$this->ownReferrerBindings()
 		);
 	}
 
@@ -1200,7 +1217,7 @@ class Store
                 AND a.created_at >= :since AND a.created_at < :until
                 AND EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ') e
                     WHERE ' . self::afterEntrySql() . ')
-            GROUP BY berlin_day(a.created_at), a.session)', $days, $offset);
+            GROUP BY berlin_day(a.created_at), a.session)', $days, $offset, $this->ownReferrerBindings());
 	}
 
 	/** @return array<int, array<int,int>> [weekday 0=Mon][hour 0..23] */
