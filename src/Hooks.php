@@ -26,6 +26,10 @@ class Hooks
 	 * pass) and an empty `$result`, instead of `$result->isErrorPage()`, which
 	 * would only catch someone calling the content page configured as error page
 	 * by its real path.
+	 *
+	 * Kirby passes the route first; the parameter stays although the hook ignores it.
+	 *
+	 * @SuppressWarnings(PHPMD.UnusedFormalParameter)
 	 */
 	public static function routeAfter(App $kirby, mixed $route, mixed $path, mixed $method, mixed $result, mixed $final): void
 	{
