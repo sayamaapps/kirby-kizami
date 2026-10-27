@@ -185,12 +185,24 @@ class Capture
 	 * Strict variant (also discards every Safari click without a page-view
 	 * match): return false here when the request has a Sec-Fetch-Mode header.
 	 */
-	public static function linkClickCounts(bool $userActivated, callable $hasPageView): bool
+	public static function countsLinkClick(bool $userActivated, callable $hasPageView): bool
 	{
 		if ($userActivated === true) {
 			return true;
 		}
 		return $hasPageView() === true;
+	}
+
+	/**
+	 * The 1.x signature: takes the server array instead of the flag. Kept for
+	 * callers of the class alias Kizami\Capture; the redirect route uses
+	 * countsLinkClick().
+	 *
+	 * @param array<string, mixed> $server
+	 */
+	public static function linkClickCounts(array $server, callable $hasPageView): bool
+	{
+		return self::countsLinkClick(($server['HTTP_SEC_FETCH_USER'] ?? null) === '?1', $hasPageView);
 	}
 
 	/**

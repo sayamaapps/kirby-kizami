@@ -312,7 +312,7 @@ return function () {
 					'path'     => Capture::cleanPath(get('from')),
 					'target'   => $name,
 					'position' => is_string(get('position')) && array_key_exists(get('position'), (array)Runtime::option('positionNames', [])) ? get('position') : '',
-				], fn (Store $store, string $session, \DateTimeImmutable $now) => Capture::linkClickCounts(
+				], fn (Store $store, string $session, \DateTimeImmutable $now) => Capture::countsLinkClick(
 					App::instance()->request()->header('Sec-Fetch-User') === '?1',
 					fn () => $store->hasPageView($session, $now)
 				));
