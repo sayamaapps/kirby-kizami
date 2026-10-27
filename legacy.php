@@ -21,6 +21,12 @@ spl_autoload_register(static function (string $class): void {
 	}
 });
 
+// The exception classes are aliased at once: a catch block does not run the
+// autoloader, so a lazy alias would never match in 1.x code that catches
+// Kizami\SetupError or Kizami\ReportError.
+class_alias(Sayamaapps\Kizami\SetupError::class, 'Kizami\\SetupError');
+class_alias(Sayamaapps\Kizami\ReportError::class, 'Kizami\\ReportError');
+
 if (Kirby\Cms\Helpers::hasOverride('kizami_option') === false) {
 	function kizami_option(string $key, mixed $default = null): mixed
 	{
