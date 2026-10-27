@@ -145,12 +145,12 @@ class Analysis
 		// the template lean — it does not show the section at all then.
 		$dwellTime = !empty($settings['dwellTime']) ? self::dwellTime($store, $names, $days, $berlin) : null;
 
-		// Reported actions (kizami.events): null without configuration, so
+		// Reported actions (sayamaapps.kizami.events): null without configuration, so
 		// the template leaves the section out, like dwell time.
 		$events = (array)($settings['events'] ?? []);
 		$events = $events === [] ? null : Events::summary($store, $events, $days, I18n::language());
 
-		// Measurement gaps (kizami.gaps, since 1.5.0): every shown day they
+		// Measurement gaps (sayamaapps.kizami.gaps, since 1.5.0): every shown day they
 		// touch is marked in both trend charts, and the gaps of the shown
 		// range are listed under the charts. The template only prints this.
 		$gaps = (array)($settings['gaps'] ?? []);

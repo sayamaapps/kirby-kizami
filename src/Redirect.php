@@ -10,7 +10,7 @@ use Closure;
  * Kirby-free and deliberately dumb — the core knows no project terms. What a
  * name means is defined only in the project's config.php:
  *
- *     'kizami.redirects' => ['call' => 'tel:+4980317'],
+ *     'sayamaapps.kizami.redirects' => ['call' => 'tel:+4980317'],
  *
  * NO OPEN REDIRECT: the target always comes from the configuration, never
  * from the URL. The URL only supplies the NAME, and an unknown name ends in

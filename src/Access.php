@@ -8,7 +8,7 @@ namespace Sayamaapps\Kizami;
  * - checkFile() is Kirby-free (bcrypt against site/config/kizami.php) and
  *   tested here.
  * - The Panel branch (kirby()->user()) and the preview detection live in
- *   index.php, because they need Kirby.
+ *   config/routes.php, because they need Kirby.
  *
  * IMPORTANT: if the configuration is missing or empty, access is DENIED
  * (false), not granted. Open statistics on the web would be worse than an

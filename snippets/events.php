@@ -3,7 +3,7 @@
 use Sayamaapps\Kizami\Runtime;
 
 /**
- * Script tag for the actions (kizami.events, since 1.4.0):
+ * Script tag for the actions (sayamaapps.kizami.events, since 1.4.0):
  *
  *     <?php snippet('kizami/events') ?>
  *

@@ -6,12 +6,12 @@ use DateTimeImmutable;
 use DateTimeZone;
 
 /**
- * Measurement gaps (`kizami.gaps`, since 1.5.0): periods in which counting
+ * Measurement gaps (`sayamaapps.kizami.gaps`, since 1.5.0): periods in which counting
  * was interrupted, for example an outage. The days they touch get a marker
  * in the dashboard and a flag in the report, so a dip is explained and an
  * automated comparison can skip it.
  *
- *     'kizami.gaps' => [
+ *     'sayamaapps.kizami.gaps' => [
  *         ['from' => '2026-10-13 00:21', 'to' => '2026-10-13 15:40', 'reason' => 'Server outage'],
  *         ['from' => '2026-10-20 08:00', 'reason' => 'Migration, still running'], // no 'to': open until now
  *     ]
@@ -38,14 +38,14 @@ class Gaps
 			return [];
 		}
 		if (!is_array($option) || !array_is_list($option)) {
-			self::invalid('kizami.gaps must be a list of gaps; all of them are ignored');
+			self::invalid('sayamaapps.kizami.gaps must be a list of gaps; all of them are ignored');
 			return [];
 		}
 		$gaps = [];
 		foreach ($option as $index => $entry) {
 			$gap = self::entry($entry);
 			if (is_string($gap)) {
-				self::invalid("kizami.gaps[$index] ignored: $gap");
+				self::invalid("sayamaapps.kizami.gaps[$index] ignored: $gap");
 				continue;
 			}
 			$gaps[] = $gap;

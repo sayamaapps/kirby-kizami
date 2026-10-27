@@ -124,7 +124,7 @@ class Options
 	}
 
 	/**
-	 * `kizami.retentionMonths`: how long single events and reported actions
+	 * `sayamaapps.kizami.retentionMonths`: how long single events and reported actions
 	 * are kept. Not set means the default; an invalid value is logged and the
 	 * default is used (see Store::validRetentionMonths()).
 	 */
@@ -136,7 +136,7 @@ class Options
 		}
 		$months = Store::validRetentionMonths($value);
 		if ($months === null) {
-			error_log('Kizami: kizami.retentionMonths must be a whole number from 1 to '
+			error_log('Kizami: sayamaapps.kizami.retentionMonths must be a whole number from 1 to '
 				. Store::RETENTION_MONTHS_MAX . '; ' . Store::RETENTION_MONTHS . ' months are used.');
 			return Store::RETENTION_MONTHS;
 		}

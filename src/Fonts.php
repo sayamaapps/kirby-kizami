@@ -3,10 +3,10 @@
 namespace Sayamaapps\Kizami;
 
 /**
- * Dashboard fonts from the configuration (`kizami.fonts`), so no site has to
+ * Dashboard fonts from the configuration (`sayamaapps.kizami.fonts`), so no site has to
  * change package files for them. Kirby-free.
  *
- *     'kizami.fonts' => [
+ *     'sayamaapps.kizami.fonts' => [
  *         'serif' => ['name' => 'Source Serif 4', 'file' => '/assets/fonts/source-serif-4-latin.woff2'],
  *         'sans'  => ['name' => 'Source Sans 3',  'file' => '/assets/fonts/source-sans-3-latin.woff2'],
  *     ],

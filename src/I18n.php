@@ -6,12 +6,12 @@ namespace Sayamaapps\Kizami;
  * Strings of the dashboard and the report text, Kirby-free.
  *
  * The tables live in translations/<language>.php and are also registered as
- * Kirby plugin translations under `kizami.<key>` (index.php), so site
+ * Kirby plugin translations under `kizami.<key>` (config/translations.php), so site
  * templates can use t('kizami.visits'). Kizami itself reads its own tables:
  * a missing Kirby translation must never silently turn a German dashboard
  * English.
  *
- * The language is set once per request (index.php, from Options::language())
+ * The language is set once per request (config/routes.php, from Options::language())
  * and defaults to English. Missing keys fall back to English, then to the key.
  */
 class I18n

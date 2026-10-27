@@ -30,7 +30,7 @@ class Runtime
 	 *   site/config/kizami.php OR Panel login.
 	 *
 	 * Returns null when access is granted, otherwise the response to send: the
-	 * usual denial (kizami_deny), or 429 once the failed-login limit is reached
+	 * usual denial (Runtime::deny()), or 429 once the failed-login limit is reached
 	 * (src/Lockout.php). Only submitted credentials that turn out wrong count;
 	 * a request without credentials (the browser's first visit) does not.
 	 */

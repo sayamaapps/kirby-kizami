@@ -20,7 +20,7 @@ use SQLite3;
 class Store
 {
 	/**
-	 * Actions reported by the site's script (`kizami.events`, /k/event,
+	 * Actions reported by the site's script (`sayamaapps.kizami.events`, /k/event,
 	 * since 1.4.0). A table of its own instead of a new type in
 	 * kizami_events: its CHECK constraint only changes by copying the whole
 	 * table, on every site at once, on the first request after the update —
@@ -49,7 +49,7 @@ class Store
         devices INTEGER NOT NULL
     )';
 
-	// Discarded redirect hits (link filter in index.php) per Berlin day.
+	// Discarded redirect hits (redirect route in config/routes.php) per Berlin day.
 	// Deliberately only date and count — no identifier, no target, no page.
 	private const DISCARDED_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_discarded (day TEXT PRIMARY KEY NOT NULL, hits INTEGER NOT NULL)';
 
@@ -81,12 +81,12 @@ class Store
 	private const RESIDUE_PURGED = 1;
 
 	/**
-	 * Months single events and reported actions are kept (`kizami.retentionMonths`).
+	 * Months single events and reported actions are kept (`sayamaapps.kizami.retentionMonths`).
 	 * Events are then rolled up into daily totals, actions deleted.
 	 */
 	public const RETENTION_MONTHS = 13;
 
-	/** Upper bound of `kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
+	/** Upper bound of `sayamaapps.kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
 	public const RETENTION_MONTHS_MAX = 600;
 
 	private SQLite3 $db;
@@ -250,7 +250,7 @@ class Store
 	 * Roll old complete days up into daily totals, then delete the single
 	 * events. One shared transaction prevents loss and double totals on abort
 	 * or parallel maintenance. Single events and actions are kept for
-	 * `kizami.retentionMonths` (13 months by default).
+	 * `sayamaapps.kizami.retentionMonths` (13 months by default).
 	 *
 	 * The rebuild that follows (purgeResidue) is best effort: the roll-up is
 	 * already committed, so a failing VACUUM (no room for the temporary copy,
@@ -1129,7 +1129,7 @@ class Store
 	}
 
 	/**
-	 * A valid `kizami.retentionMonths`: an int or a string of digits from 1
+	 * A valid `sayamaapps.kizami.retentionMonths`: an int or a string of digits from 1
 	 * to RETENTION_MONTHS_MAX, otherwise null. Floats, signs, spaces and
 	 * other strings are refused.
 	 */

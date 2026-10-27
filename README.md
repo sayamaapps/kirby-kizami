@@ -18,20 +18,20 @@ Kizami counts page views, contact clicks and optional actions on a Kirby site an
 ## Requirements
 
 - Kirby 5 (`getkirby/cms` 5.0 or newer).
-- PHP 8.2, 8.3, 8.4 or 8.5 with the `sqlite3` and `ctype` extensions.
+- PHP 8.2, 8.3, 8.4 or 8.5 with the `sqlite3`, `ctype` and `mbstring` extensions.
 - A Kirby `storage` root outside the web root. Without it, nothing is counted.
 
 ## Installation
 
 Pick one of three ways. The plugin always ends up in `site/plugins/kizami/`.
 
-**Composer** (the plugin goes to `vendor/` and is linked into `site/plugins/`):
+**Composer** (the installer puts the plugin directly into `site/plugins/kizami/`; `vendor/` is not used for it):
 
 ```sh
 composer require sayamaapps/kirby-kizami
 ```
 
-Add `/site/plugins/kizami` to `.gitignore` and deploy it like `vendor/`.
+Add `/site/plugins/kizami` to `.gitignore` and let the server run `composer install --no-dev`.
 
 **Git submodule** (no Composer on the server):
 

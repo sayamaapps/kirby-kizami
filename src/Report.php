@@ -111,12 +111,12 @@ class Report
 			'campaigns' => array_slice($campaigns, 0, self::CAMPAIGNS_MAX),
 			'campaignsOmitted' => max(0, count($campaigns) - self::CAMPAIGNS_MAX),
 			'dwellTime' => !empty($settings['dwellTime']) ? self::median($store->dwellTimePerVisit($days)) : null,
-			// Reported actions (kizami.events, since 1.4.0): every configured
+			// Reported actions (sayamaapps.kizami.events, since 1.4.0): every configured
 			// action with total, visits and its top details. An empty list
 			// without configuration. New field, format stays 2.
 			'events' => Events::summary($store, (array)($settings['events'] ?? []), $days, I18n::language()),
 		];
-		// Measurement gaps (kizami.gaps, since 1.5.0). The period is compared
+		// Measurement gaps (sayamaapps.kizami.gaps, since 1.5.0). The period is compared
 		// with the period one week earlier (same weekday, or the week before),
 		// so both are checked; `gaps` lists every gap that touches either.
 		$gaps = (array)($settings['gaps'] ?? []);
@@ -282,7 +282,7 @@ class Report
 		if ($d['directLinkHits'] > 0) {
 			$lines[] = I18n::t('report.direct', ['n' => $d['directLinkHits']]);
 		}
-		// Only actions that were reported, so a site without kizami.events
+		// Only actions that were reported, so a site without sayamaapps.kizami.events
 		// (or a quiet day) gets the same text as before 1.4.0.
 		$events = array_filter($d['events'] ?? [], fn ($e) => $e['count'] > 0);
 		if ($events !== []) {

@@ -3,10 +3,10 @@
 namespace Sayamaapps\Kizami;
 
 /**
- * The allow list of `kizami.events` (since 1.4.0): actions the site's own
+ * The allow list of `sayamaapps.kizami.events` (since 1.4.0): actions the site's own
  * script reports to /k/event, for example a download or a video play.
  *
- *     'kizami.events' => [
+ *     'sayamaapps.kizami.events' => [
  *         'download' => ['label' => ['de' => 'Download', 'en' => 'Download'], 'detail' => true],
  *         'video_play' => ['label' => ['de' => 'Video gestartet', 'en' => 'Video played']],
  *     ]
