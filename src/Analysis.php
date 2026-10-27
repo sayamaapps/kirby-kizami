@@ -116,7 +116,12 @@ class Analysis
 				'page' => $names->page($i['path']), 'value' => $i['count']], $store->images($days)),
 			'imagesActive' => !empty($settings['images']),
 			'entries' => array_map(fn ($p) => ['name' => $names->page($p['path']), 'value' => $p['count']], $store->entryPages($days)),
-			'actionRate' => ['value' => $rate, 'previous' => $ratePrevious, 'text' => self::rateText($withAction, $withActionPrevious, $visits, $visitsPrevious, $contact), 'contact' => $contact],
+			'actionRate' => [
+				'value' => $rate,
+				'previous' => $ratePrevious,
+				'text' => self::rateText($withAction, $withActionPrevious, $visits, $visitsPrevious, $contact),
+				'contact' => $contact,
+			],
 			'trend' => [
 				'visits' => array_map(fn ($t) => ['name' => $t['day'], 'value' => $t['count']], $visitsPerDay),
 				'actions' => array_map(fn ($t) => ['name' => $t['day'], 'value' => $t['count']], $actionsPerDay),

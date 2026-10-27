@@ -117,7 +117,8 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <?php endif; ?>
   <?php $rate = $data['actionRate']; ?>
   <p class="rate"><strong><?= $e($rate['text']) ?>.</strong>
-    <?= $t($rate['contact'] ? 'rate.contactLabel' : 'rate.label') ?>: <?= Chart::number($rate['value'], 1) ?> %<?php if ($rate['previous'] > 0): ?> (<?= $t('rate.before') ?> <?= Chart::number($rate['previous'], 1) ?> %)<?php endif; ?>.</p>
+    <?= $t($rate['contact'] ? 'rate.contactLabel' : 'rate.label') ?>: <?= Chart::number($rate['value'], 1) ?> %<?php if ($rate['previous'] > 0):
+	?> (<?= $t('rate.before') ?> <?= Chart::number($rate['previous'], 1) ?> %)<?php endif; ?>.</p>
   <p class="hint"><?= $t($rate['contact'] ? 'rate.contactHint' : 'rate.hint') ?></p>
 </section>
 
@@ -136,9 +137,13 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <p class="hint"><?= $t('contact.hint', ['targets' => implode(', ', $data['contact']['targets'])]) ?></p>
   <?php if ($data['contact']['sources'] === []): ?><?= Chart::empty() ?><?php else: ?>
   <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('contact.region') ?>"><table class="contact-table">
-    <thead><tr><th scope="col"><?= $t('contact.source') ?></th><th scope="col" class="num"><?= $t('tile.visits') ?></th><th scope="col" class="num"><?= $t('contact.clicks') ?></th><th scope="col" class="num"><?= $t('contact.withContact') ?></th><th scope="col" class="num"><?= $t('contact.rate') ?></th></tr></thead>
+    <thead><tr><th scope="col"><?= $t('contact.source') ?></th><th scope="col" class="num"><?= $t('tile.visits')
+	?></th><th scope="col" class="num"><?= $t('contact.clicks') ?></th><th scope="col" class="num"><?= $t('contact.withContact')
+	?></th><th scope="col" class="num"><?= $t('contact.rate') ?></th></tr></thead>
     <tbody><?php foreach ($data['contact']['sources'] as $s): ?><tr>
-      <th scope="row"><?= $e($s['name']) ?></th><td class="num"><?= Chart::number($s['visits']) ?></td><td class="num"><?= Chart::number($s['clicks']) ?></td><td class="num"><?= Chart::number($s['withContact']) ?></td><td class="num"><?= $s['rate'] === null ? '–' : Chart::number($s['rate']) . ' %' ?></td>
+      <th scope="row"><?= $e($s['name']) ?></th><td class="num"><?= Chart::number($s['visits']) ?></td><td class="num"><?= Chart::number($s['clicks'])
+	  ?></td><td class="num"><?= Chart::number($s['withContact']) ?></td><td class="num"><?= $s['rate'] === null ? '–' : Chart::number($s['rate']) . ' %'
+	  ?></td>
     </tr><?php endforeach; ?></tbody>
   </table></div>
   <p class="hint scroll-hint"><?= $t('contact.swipe') ?></p>
@@ -193,7 +198,9 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
 	$data['weekGrid']['rows'],
 	$data['weekGrid']['columns']
 ) ?></div>
-    <p class="grid-legend" aria-label="<?= $t('when.legend') ?>"><?= $t('when.few') ?> <span class="shade-1"></span><span class="shade-2"></span><span class="shade-3"></span><span class="shade-4"></span><span class="shade-5"></span> <?= $t('when.many') ?></p>
+    <p class="grid-legend" aria-label="<?= $t('when.legend') ?>"><?= $t('when.few') ?> <?php for ($shade = 1; $shade <= 5; $shade++):
+	?><span class="shade-<?= $shade ?>"></span><?php endfor; ?> <?= $t('when.many')
+	?></p>
     <p class="hint scroll-hint"><?= $t('when.swipe') ?></p>
     <details class="as-table"><summary><?= $t('table.summary') ?></summary>
       <div class="scroll" tabindex="0" role="region" aria-label="<?= $t('when.region') ?>"><table class="grid-table"><thead><tr><th scope="col"><?= $t('trend.day') ?></th>
@@ -248,8 +255,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <?= $table($data['dwellTime']['buckets'], I18n::t('dwell.column'), I18n::t('tile.visits')) ?>
   <h3><?= $t('dwell.perPage') ?></h3>
   <?php if ($data['dwellTime']['pages'] === []): ?><?= Chart::empty() ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('dwell.medianColumn') ?></th><th scope="col" class="num"><?= $t('dwell.measurements') ?></th></tr></thead><tbody>
-    <?php foreach ($data['dwellTime']['pages'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td class="num"><?= $e(Chart::duration($p['median'])) ?></td><td class="num"><?= Chart::number($p['measurements']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('dwell.medianColumn')
+  ?></th><th scope="col" class="num"><?= $t('dwell.measurements') ?></th></tr></thead><tbody>
+    <?php foreach ($data['dwellTime']['pages'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td class="num"><?= $e(Chart::duration($p['median']))
+	?></td><td class="num"><?= Chart::number($p['measurements']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
   <p class="hint"><?= $t('dwell.hint', ['date' => I18n::date(new \DateTimeImmutable($data['dwellTime']['firstMeasurement']))]) ?></p>
@@ -263,8 +272,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <p class="hint"><?= $t('events.hint') ?></p>
   <?php if (array_sum(array_column($data['events'], 'count')) === 0): ?><?= Chart::empty(I18n::t('events.none')) ?><?php else: ?>
   <?= Chart::bars(array_map(fn ($ev) => ['name' => $ev['name'], 'value' => $ev['count']], $data['events'])) ?>
-  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.column') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
-    <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count']) ?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.column') ?></th><th scope="col" class="num"><?= $t('events.count')
+  ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+    <?php foreach ($data['events'] as $ev): ?><tr><td><?= $e($ev['name']) ?></td><td class="num"><?= Chart::number($ev['count'])
+	?></td><td class="num"><?= Chart::number($ev['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
     <?php
@@ -274,8 +285,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
 	?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
-  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
-      <?php foreach ($ev['details'] as $d): ?><tr><td><?= $e($d['name']) ?></td><td class="num"><?= Chart::number($d['count']) ?></td><td class="num"><?= Chart::number($d['visits']) ?></td></tr><?php endforeach; ?>
+  <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count')
+  ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
+      <?php foreach ($ev['details'] as $d): ?><tr><td><?= $e($d['name']) ?></td><td class="num"><?= Chart::number($d['count'])
+	  ?></td><td class="num"><?= Chart::number($d['visits']) ?></td></tr><?php endforeach; ?>
   </tbody></table>
       <?php if ($ev['detailsOmitted'] > 0): ?><p class="hint"><?= $t('events.more', ['n' => Chart::number($ev['detailsOmitted'])]) ?></p><?php endif; ?>
     <?php endif; ?>
@@ -288,8 +301,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <summary><?= $t('positions.title') ?></summary>
   <p class="hint"><?= $t('positions.hint') ?></p>
   <?php if ($data['positions'] === []): ?><?= Chart::empty() ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('actions.column') ?></th><th scope="col"><?= $t('positions.column') ?></th><th scope="col" class="num"><?= $t('positions.clicks') ?></th></tr></thead><tbody>
-    <?php foreach ($data['positions'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td><?= $e($p['position']) ?></td><td class="num"><?= Chart::number($p['value']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('actions.column') ?></th><th scope="col"><?= $t('positions.column')
+  ?></th><th scope="col" class="num"><?= $t('positions.clicks') ?></th></tr></thead><tbody>
+    <?php foreach ($data['positions'] as $p): ?><tr><td><?= $e($p['name']) ?></td><td><?= $e($p['position']) ?></td><td class="num"><?= Chart::number($p['value'])
+	?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
 </details>
@@ -299,8 +314,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   <h2 id="images-title"><?= $t('images.title') ?></h2>
   <p class="hint"><?= $t('images.hint') ?></p>
   <?php if ($data['images'] === []): ?><?= Chart::empty(I18n::t('images.none')) ?><?php else: ?>
-  <table><thead><tr><th scope="col"><?= $t('images.column') ?></th><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('images.opened') ?></th></tr></thead><tbody>
-    <?php foreach ($data['images'] as $i): ?><tr><td><?= $e($i['name']) ?></td><td><?= $e($i['page']) ?></td><td class="num"><?= Chart::number($i['value']) ?></td></tr><?php endforeach; ?>
+  <table><thead><tr><th scope="col"><?= $t('images.column') ?></th><th scope="col"><?= $t('pages.column') ?></th><th scope="col" class="num"><?= $t('images.opened')
+  ?></th></tr></thead><tbody>
+    <?php foreach ($data['images'] as $i): ?><tr><td><?= $e($i['name']) ?></td><td><?= $e($i['page']) ?></td><td class="num"><?= Chart::number($i['value'])
+	?></td></tr><?php endforeach; ?>
   </tbody></table>
   <?php endif; ?>
 </section>
