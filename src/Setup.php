@@ -10,9 +10,6 @@ namespace Sayamaapps\Kizami;
  */
 class Setup
 {
-	/** @var array<string, string> */
-	private static array $checked = [];
-
 	/**
 	 * Absolute path with symlinks resolved as far as it exists. The storage
 	 * directory may not exist yet: resolve the nearest existing ancestor and
@@ -47,13 +44,6 @@ class Setup
 			throw new SetupError('Kizami: Kirby root "storage" is not set. Define it in index.php outside the web root (see README, Installation).');
 		}
 
-		// Runs on every counted request: remember the verdict per input pair
-		// (tests and multi-site setups use several roots in one process).
-		$key = $storage . "\0" . ($index ?? '');
-		if (isset(self::$checked[$key])) {
-			return self::$checked[$key];
-		}
-
 		if ($index !== null && trim($index) !== '') {
 			$s = self::normalise($storage);
 			$i = self::normalise($index);
@@ -77,6 +67,6 @@ class Setup
 			}
 		}
 
-		return self::$checked[$key] = $storage;
+		return $storage;
 	}
 }
