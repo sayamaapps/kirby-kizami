@@ -17,18 +17,14 @@ final class I18nTest extends TestCase
 {
 	private static function expect($expected, $actual, string $what): void
 	{
-		global $n;
 		if ($expected !== $actual) {
 			Assert::fail($what . ': ' . var_export($actual, true));
 		}
-		$n++;
 		Assert::assertTrue(true);
 	}
 
 	public function testSuite(): void
 	{
-		global $n;
-		$n = 0;
 		$placeholders = function (string $text): array {
 			preg_match_all('/\{(\w+)\}/', $text, $m);
 			$names = array_unique($m[1]);

@@ -13,26 +13,15 @@ use Sayamaapps\Kizami\Fonts;
 #[RunTestsInSeparateProcesses]
 final class FontsTest extends TestCase
 {
-	private static function holds(bool $ok, string $what): void
-	{
-		global $n;
-		if (!$ok) {
-			throw $e;
-		} $n++;
-		Assert::assertTrue(true);
-	}
-
 	public function testSuite(): void
 	{
-		global $n;
-		$n = 0;
 		$r = Fonts::css(null);
-		self::holds($r === ['css' => '', 'errors' => []], 'nothing without configuration');
+		Assert::assertTrue($r === ['css' => '', 'errors' => []], 'nothing without configuration');
 		$r = Fonts::css(['serif' => ['name' => 'Source Serif 4', 'file' => '/assets/fonts/source-serif-4-latin.woff2'], 'sans' => ['name' => 'Source Sans 3', 'file' => '/assets/fonts/source-sans-3-latin.woff2']]);
-		self::holds(substr_count($r['css'], '@font-face') === 2 && str_contains($r['css'], 'format("woff2")'), 'two fonts, two @font-face');
-		self::holds(str_contains($r['css'], '--serif: "Source Serif 4", Georgia') && str_contains($r['css'], '--sans: "Source Sans 3", -apple-system'), 'variables with fallback');
+		Assert::assertTrue(substr_count($r['css'], '@font-face') === 2 && str_contains($r['css'], 'format("woff2")'), 'two fonts, two @font-face');
+		Assert::assertTrue(str_contains($r['css'], '--serif: "Source Serif 4", Georgia') && str_contains($r['css'], '--sans: "Source Sans 3", -apple-system'), 'variables with fallback');
 		$r = Fonts::css(['serif' => ['name' => 'Source Sans 3'], 'sans' => ['name' => 'Source Sans 3', 'file' => '/assets/fonts/source-sans-3-latin.woff2']]);
-		self::holds(substr_count($r['css'], '@font-face') === 1 && str_contains($r['css'], '--serif: "Source Sans 3"'), 'serif without file uses the loaded sans');
+		Assert::assertTrue(substr_count($r['css'], '@font-face') === 1 && str_contains($r['css'], '--serif: "Source Sans 3"'), 'serif without file uses the loaded sans');
 		foreach ([
 			['name' => 'X"; } body { display:none', 'file' => '/a.woff2'],
 			['name' => 'Good', 'file' => 'https://foreign.example/a.woff2'],
@@ -42,9 +31,9 @@ final class FontsTest extends TestCase
 			'Just a string',
 		] as $bad) {
 			$r = Fonts::css(['sans' => $bad]);
-			self::holds($r['css'] === '' && count($r['errors']) === 1, 'rejected: ' . json_encode($bad));
+			Assert::assertTrue($r['css'] === '' && count($r['errors']) === 1, 'rejected: ' . json_encode($bad));
 		}
 		$r = Fonts::css(['sans' => ['name' => 'Karla', 'file' => '/assets/fonts/karla.woff'], 'mono' => ['name' => 'Whatever']]);
-		self::holds(str_contains($r['css'], 'format("woff")') && !str_contains($r['css'], 'Whatever'), 'woff allowed, unknown role ignored');
+		Assert::assertTrue(str_contains($r['css'], 'format("woff")') && !str_contains($r['css'], 'Whatever'), 'woff allowed, unknown role ignored');
 	}
 }

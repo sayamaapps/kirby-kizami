@@ -49,19 +49,8 @@ final class ReportTest extends TestCase
 		rmdir($path);
 	}
 
-	private static function same($expected, $actual, string $what): void
-	{
-		global $n;
-		if ($expected !== $actual) {
-			Assert::fail($what . ': ' . var_export($actual, true));
-		}
-		$n++;
-		Assert::assertTrue(true);
-	}
-
 	public function testSuite(): void
 	{
-		global $n;
 		$base = dirname(__DIR__);
 		require $base . '/vendor/autoload.php';
 		require_once $base . '/src/I18n.php';
@@ -73,7 +62,6 @@ final class ReportTest extends TestCase
 		$logFile = sys_get_temp_dir() . '/kizami-report-log-' . bin2hex(random_bytes(6)) . '.txt';
 		ini_set('error_log', $logFile);
 		register_shutdown_function(fn () => @unlink($logFile));
-		$n = 0;
 		$berlin = new DateTimeZone('Europe/Berlin');
 		$utc = fn (string $time) => (new DateTimeImmutable($time, $berlin))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 		$thu = new DateTimeImmutable('2026-10-01 09:00', $berlin);
@@ -84,28 +72,24 @@ final class ReportTest extends TestCase
 		try {
 			// Period: Thursday 01.10. → day = Wed 30.09., week = Mon 21.–Sun 27.09.
 			$f = fn ($p) => Store::window($p['days'], 0, $p['now']);
-			self::same(['since' => $utc('2026-09-30 00:00:00'), 'until' => $utc('2026-10-01 00:00:00')], $f(Report::period('day', $thu)), 'Previous day is exactly one whole day');
-			self::same(['since' => $utc('2026-09-21 00:00:00'), 'until' => $utc('2026-09-28 00:00:00')], $f(Report::period('week', $mon)), 'On Mondays the previous week');
-			self::same($f(Report::period('week', $mon)), $f(Report::period('week', $thu)), 'During the week the same last full week');
+			Assert::assertSame(['since' => $utc('2026-09-30 00:00:00'), 'until' => $utc('2026-10-01 00:00:00')], $f(Report::period('day', $thu)), 'Previous day is exactly one whole day');
+			Assert::assertSame(['since' => $utc('2026-09-21 00:00:00'), 'until' => $utc('2026-09-28 00:00:00')], $f(Report::period('week', $mon)), 'On Mondays the previous week');
+			Assert::assertSame($f(Report::period('week', $mon)), $f(Report::period('week', $thu)), 'During the week the same last full week');
 			$p = Report::period('day', $thu);
-			self::same(['since' => $utc('2026-09-23 00:00:00'), 'until' => $utc('2026-09-24 00:00:00')], Store::window(1, $p['offset'], $p['now']), 'Day comparison: same weekday one week earlier');
+			Assert::assertSame(['since' => $utc('2026-09-23 00:00:00'), 'until' => $utc('2026-09-24 00:00:00')], Store::window(1, $p['offset'], $p['now']), 'Day comparison: same weekday one week earlier');
 			// DST change (25.10.): the week still ends at midnight Berlin time.
 			$p = Report::period('week', new DateTimeImmutable('2026-10-26 09:00', $berlin));
-			self::same(['since' => $utc('2026-10-19 00:00:00'), 'until' => $utc('2026-10-26 00:00:00')], $f($p), 'Week across the DST change');
+			Assert::assertSame(['since' => $utc('2026-10-19 00:00:00'), 'until' => $utc('2026-10-26 00:00:00')], $f($p), 'Week across the DST change');
 
 			// Explicit day: reference day = the day after, or the Monday after the week.
 			$refDay = fn (string|null $date, string $kind = 'day') => Report::referenceDay($kind, $date, $thu)->format('Y-m-d H:i');
-			self::same('2026-10-01 00:00', $refDay(null), 'Without date: today → previous day as before');
-			self::same('2026-10-01 00:00', $refDay(''), 'Empty date like none');
-			self::same('2026-09-28 00:00', $refDay('2026-09-27'), 'Date: reference is the day after');
-			self::same('2026-09-28 00:00', $refDay('2026-09-21', 'week'), 'Week from Monday');
-			self::same('2026-09-28 00:00', $refDay('2026-09-27', 'week'), 'Week from Sunday: the same week');
-			self::same($f(Report::period('day', $thu)), $f(Report::period('day', Report::referenceDay('day', '2026-09-30', $thu))), 'Yesterday explicitly = previous day');
-			self::same(
-				['since' => $utc('2026-10-25 00:00:00'), 'until' => $utc('2026-10-26 00:00:00')],
-				$f(Report::period('day', Report::referenceDay('day', '2026-10-25', new DateTimeImmutable('2026-11-02 09:00', $berlin)))),
-				'Day of the DST change has 25 hours'
-			);
+			Assert::assertSame('2026-10-01 00:00', $refDay(null), 'Without date: today → previous day as before');
+			Assert::assertSame('2026-10-01 00:00', $refDay(''), 'Empty date like none');
+			Assert::assertSame('2026-09-28 00:00', $refDay('2026-09-27'), 'Date: reference is the day after');
+			Assert::assertSame('2026-09-28 00:00', $refDay('2026-09-21', 'week'), 'Week from Monday');
+			Assert::assertSame('2026-09-28 00:00', $refDay('2026-09-27', 'week'), 'Week from Sunday: the same week');
+			Assert::assertSame($f(Report::period('day', $thu)), $f(Report::period('day', Report::referenceDay('day', '2026-09-30', $thu))), 'Yesterday explicitly = previous day');
+			Assert::assertSame(['since' => $utc('2026-10-25 00:00:00'), 'until' => $utc('2026-10-26 00:00:00')], $f(Report::period('day', Report::referenceDay('day', '2026-10-25', new DateTimeImmutable('2026-11-02 09:00', $berlin)))), 'Day of the DST change has 25 hours');
 			self::throws(fn () => Report::referenceDay('day', '2026-10-01', $thu), 'not over yet', 'Today is not over');
 			self::throws(fn () => Report::referenceDay('day', '2026-12-24', $thu), 'not over yet', 'Future rejected');
 			self::throws(fn () => Report::referenceDay('week', '2026-09-28', $thu), 'not over yet', 'Current week rejected');
@@ -114,9 +98,9 @@ final class ReportTest extends TestCase
 			self::throws(fn () => Report::referenceDay('day', '2026-9-30', $thu), 'YYYY-MM-DD', 'Without leading zero rejected');
 			// Retention: single events from today minus 13 months (01.09.2025).
 			// The day report also needs the weekday one week before.
-			self::same('2025-09-09 00:00', $refDay('2025-09-08'), 'Comparison day lies exactly on the limit');
+			Assert::assertSame('2025-09-09 00:00', $refDay('2025-09-08'), 'Comparison day lies exactly on the limit');
 			self::throws(fn () => Report::referenceDay('day', '2025-09-07', $thu), '13 months', 'Comparison day before the limit');
-			self::same('2025-09-22 00:00', $refDay('2025-09-15', 'week'), 'Comparison week starts after the limit');
+			Assert::assertSame('2025-09-22 00:00', $refDay('2025-09-15', 'week'), 'Comparison week starts after the limit');
 			self::throws(fn () => Report::referenceDay('week', '2025-09-01', $thu), '13 months', 'Comparison week before the limit');
 
 			$store = new Store("$tmp/k.sqlite");
@@ -153,14 +137,14 @@ final class ReportTest extends TestCase
 
 			I18n::setLanguage('en');
 			$day = Report::data($store, $names, 'day', $thu, $settings);
-			self::same(['2026-09-30', '2026-09-30'], [$day['from'], $day['to']], 'Day: date');
-			self::same([3, 1], [$day['visits'], $day['visitsPrevious']], 'Day: visits incl. first and last second');
-			self::same([4, 1], [$day['pageViews'], $day['pageViewsPrevious']], 'Day: page views');
-			self::same([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0], ['name' => 'Instagram', 'value' => 1]], $day['actions'], 'Day: tiles always, other targets only with a click');
-			self::same(['Direct' => 1, 'Google' => 1, 'QR code' => 1], $day['sources'], 'Day: source per visit, not per page view');
-			self::same(['Home' => 3, 'Menu' => 1], $day['pages'], 'Day: most viewed pages');
-			self::same(30, $day['dwellTime'], 'Day: median time on site');
-			self::same(<<<TXT
+			Assert::assertSame(['2026-09-30', '2026-09-30'], [$day['from'], $day['to']], 'Day: date');
+			Assert::assertSame([3, 1], [$day['visits'], $day['visitsPrevious']], 'Day: visits incl. first and last second');
+			Assert::assertSame([4, 1], [$day['pageViews'], $day['pageViewsPrevious']], 'Day: page views');
+			Assert::assertSame([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0], ['name' => 'Instagram', 'value' => 1]], $day['actions'], 'Day: tiles always, other targets only with a click');
+			Assert::assertSame(['Direct' => 1, 'Google' => 1, 'QR code' => 1], $day['sources'], 'Day: source per visit, not per page view');
+			Assert::assertSame(['Home' => 3, 'Menu' => 1], $day['pages'], 'Day: most viewed pages');
+			Assert::assertSame(30, $day['dwellTime'], 'Day: median time on site');
+			Assert::assertSame(<<<TXT
     Sample Inn · Wed 30 Sep
 
     Visits: 3 (previous Wed: 1)
@@ -171,13 +155,13 @@ final class ReportTest extends TestCase
     Time on site (median): 30 s
     TXT, $day['text'], 'Day: text (English)');
 			$earlier = Report::data($store, $names, 'day', Report::referenceDay('day', '2026-09-27', $thu), $settings);
-			self::same(['2026-09-27', 1, 1], [$earlier['from'], $earlier['visits'], $earlier['visitsPrevious']], 'Earlier day via date: own numbers, compared with Sun 20.09.');
+			Assert::assertSame(['2026-09-27', 1, 1], [$earlier['from'], $earlier['visits'], $earlier['visitsPrevious']], 'Earlier day via date: own numbers, compared with Sun 20.09.');
 
 			$week = Report::data($store, $names, 'week', $mon, $settings);
-			self::same(['2026-09-21', '2026-09-27', 3, 1], [$week['from'], $week['to'], $week['visits'], $week['visitsPrevious']], 'Week: period and visits');
-			self::same(67, $week['mobileShare'], 'Week: phone share');
-			self::same(null, $week['dwellTime'], 'Week: no invented duration without a measurement');
-			self::same(<<<TXT
+			Assert::assertSame(['2026-09-21', '2026-09-27', 3, 1], [$week['from'], $week['to'], $week['visits'], $week['visitsPrevious']], 'Week: period and visits');
+			Assert::assertSame(67, $week['mobileShare'], 'Week: phone share');
+			Assert::assertSame(null, $week['dwellTime'], 'Week: no invented duration without a measurement');
+			Assert::assertSame(<<<TXT
     Sample Inn · Week 21 Sep–27 Sep
 
     Visits: 3 (previous week: 1)
@@ -192,7 +176,7 @@ final class ReportTest extends TestCase
 			// The same reports in German: only Kizami's own strings change, the
 			// configured names (tiles, sources, brand) stay as configured.
 			I18n::setLanguage('de');
-			self::same(<<<TXT
+			Assert::assertSame(<<<TXT
     Sample Inn · Mi 30.09.
 
     Besuche: 3 (Vorwoche Mi: 1)
@@ -202,7 +186,7 @@ final class ReportTest extends TestCase
     Meistgesehen: Startseite 3 · Menu 1
     Verweildauer (Median): 30 s
     TXT, Report::data($store, $names, 'day', $thu, $settings)['text'], 'Day: text (German)');
-			self::same(<<<TXT
+			Assert::assertSame(<<<TXT
     Sample Inn · Woche 21.09.–27.09.
 
     Besuche: 3 (Vorwoche: 1)
@@ -215,26 +199,26 @@ final class ReportTest extends TestCase
     TXT, Report::data($store, $names, 'week', $mon, $settings)['text'], 'Week: text (German)');
 
 			$empty = Report::data($store, $names, 'day', new DateTimeImmutable('2026-09-23 08:00', $berlin), $settings);
-			self::same("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).", $empty['text'], 'Empty day: short message (German)');
+			Assert::assertSame("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).", $empty['text'], 'Empty day: short message (German)');
 			I18n::setLanguage('en');
-			self::same("Sample Inn · Tue 22 Sep\nNo visits recorded (previous Tue: 0).", Report::data($store, $names, 'day', new DateTimeImmutable('2026-09-23 08:00', $berlin), $settings)['text'], 'Empty day: short message (English)');
+			Assert::assertSame("Sample Inn · Tue 22 Sep\nNo visits recorded (previous Tue: 0).", Report::data($store, $names, 'day', new DateTimeImmutable('2026-09-23 08:00', $berlin), $settings)['text'], 'Empty day: short message (English)');
 			for ($i = 0; $i < 3; $i++) {
 				$put('2026-09-30 11:00:00', 'scanner-' . $i, ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
 			}
 			I18n::setLanguage('de');
 			$scan = Report::data($store, $names, 'day', $thu, $settings);
-			self::same([3, 1, 5, 3], [$scan['visits'], $scan['visitsPrevious'], $scan['clicks'], $scan['directLinkHits']], 'Link scanners stay separate from visits and the previous-week comparison in the report');
-			self::same(true, str_contains($scan['text'], 'Davon ohne vorherigen Seitenbesuch: 3'), 'Direct hits listed separately in the bot text');
+			Assert::assertSame([3, 1, 5, 3], [$scan['visits'], $scan['visitsPrevious'], $scan['clicks'], $scan['directLinkHits']], 'Link scanners stay separate from visits and the previous-week comparison in the report');
+			Assert::assertSame(true, str_contains($scan['text'], 'Davon ohne vorherigen Seitenbesuch: 3'), 'Direct hits listed separately in the bot text');
 			$put('2026-09-22 11:00:00', 'scanner-only', ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
 			$scanEmpty = Report::data($store, $names, 'day', new DateTimeImmutable('2026-09-23 08:00', $berlin), $settings);
-			self::same("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).\nDirekte Linkaufrufe ohne Seitenbesuch: 1", $scanEmpty['text'], 'Pure link checks create no visits even in the empty day report');
+			Assert::assertSame("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).\nDirekte Linkaufrufe ohne Seitenbesuch: 1", $scanEmpty['text'], 'Pure link checks create no visits even in the empty day report');
 			I18n::setLanguage('en');
-			self::same(true, str_contains(Report::data($store, $names, 'day', $thu, $settings)['text'], 'Of these without a previous page visit: 3'), 'Direct hits in the English text');
+			Assert::assertSame(true, str_contains(Report::data($store, $names, 'day', $thu, $settings)['text'], 'Of these without a previous page visit: 3'), 'Direct hits in the English text');
 
 			// Campaigns (utm_campaign, or kizami.campaignParam): own store, so the
 			// fixtures above and their texts stay as they are.
-			self::same([], $day['campaigns'], 'Without tags: no campaigns');
-			self::same(false, str_contains($day['text'], 'Campaigns:'), 'Without tags: no campaigns line');
+			Assert::assertSame([], $day['campaigns'], 'Without tags: no campaigns');
+			Assert::assertSame(false, str_contains($day['text'], 'Campaigns:'), 'Without tags: no campaigns line');
 			$campaignStore = new Store("$tmp/campaigns.sqlite");
 			$tagged = function (string $time, string $session, string $campaign, string $path = '/', string $type = 'page') use ($campaignStore, $utc) {
 				$campaignStore->write(['type' => $type, 'action' => $type === 'page' ? 'view' : 'click', 'session' => $session,
@@ -258,7 +242,7 @@ final class ReportTest extends TestCase
 			// Names translate display labels only; the campaign key stays as it is.
 			$campNames = new Names(['social-tg-angst' => 'Telegram'], ['autumn' => 'Herbst'], []);
 			$campDay = Report::data($campaignStore, $campNames, 'day', $thu, $settings);
-			self::same([
+			Assert::assertSame([
 				['name' => 'social-tg-angst', 'visits' => 3, 'pageViews' => 4],
 				['name' => 'autumn', 'visits' => 3, 'pageViews' => 3],
 				['name' => 'alpha', 'visits' => 1, 'pageViews' => 1],
@@ -266,30 +250,22 @@ final class ReportTest extends TestCase
 			], $campDay['campaigns'], 'Day: visits and page views per campaign, by visits, page views, name');
 			$campLines = explode("\n", $campDay['text']);
 			$at = array_search('Campaigns: social-tg-angst 3 · autumn 3 · alpha 1 · zeta 1', $campLines, true);
-			self::same(
-				true,
-				$at !== false && str_starts_with($campLines[$at - 1], 'Sources: ') && str_starts_with($campLines[$at + 1] ?? '', 'Most viewed: '),
-				'Day: campaigns line between sources and most viewed'
-			);
+			Assert::assertSame(true, $at !== false && str_starts_with($campLines[$at - 1], 'Sources: ') && str_starts_with($campLines[$at + 1] ?? '', 'Most viewed: '), 'Day: campaigns line between sources and most viewed');
 			I18n::setLanguage('de');
-			self::same(
-				true,
-				in_array('Kampagnen: social-tg-angst 3 · autumn 3 · alpha 1 · zeta 1', explode("\n", Report::data($campaignStore, $campNames, 'day', $thu, $settings)['text']), true),
-				'Day: campaigns line in German'
-			);
+			Assert::assertSame(true, in_array('Kampagnen: social-tg-angst 3 · autumn 3 · alpha 1 · zeta 1', explode("\n", Report::data($campaignStore, $campNames, 'day', $thu, $settings)['text']), true), 'Day: campaigns line in German');
 			I18n::setLanguage('en');
 			// The same numbers as the store returns them (for an offset window the
 			// store is the only way to read them: the report has no previous period
 			// for campaigns). The day before has social 1 and autumn 1.
 			$campaignStore = $campaignStore->atTime(Report::period('day', $thu)['now']);
-			self::same([
+			Assert::assertSame([
 				['campaign' => 'autumn', 'visits' => 1, 'pageViews' => 1],
 				['campaign' => 'social-tg-angst', 'visits' => 1, 'pageViews' => 1],
 			], $campaignStore->campaigns(1, 1), 'Store: offset window, same mechanics');
 			$campaignStore = $campaignStore->atTime(null);
 			$campWeek = Report::data($campaignStore, $campNames, 'week', $mon, $settings);
-			self::same([['name' => 'autumn', 'visits' => 1, 'pageViews' => 1]], $campWeek['campaigns'], 'Week: only its own days');
-			self::same(0, $campDay['campaignsOmitted'], 'Day: nothing omitted below the cap');
+			Assert::assertSame([['name' => 'autumn', 'visits' => 1, 'pageViews' => 1]], $campWeek['campaigns'], 'Week: only its own days');
+			Assert::assertSame(0, $campDay['campaignsOmitted'], 'Day: nothing omitted below the cap');
 			// Flood: 30 one-off tags on one day. The list is capped, the rest counted,
 			// the text shows the top five and a count.
 			$floodStore = new Store("$tmp/flood.sqlite");
@@ -302,12 +278,12 @@ final class ReportTest extends TestCase
 					'utm_campaign' => 'real', 'created_at' => $utc('2026-09-30 11:00:00'), 'device' => 'mobile']);
 			}
 			$flood = Report::data($floodStore, $campNames, 'day', $thu, $settings);
-			self::same(Report::CAMPAIGNS_MAX, count($flood['campaigns']), 'Flood: list capped');
-			self::same('real', $flood['campaigns'][0]['name'], 'Flood: the real campaign stays on top');
-			self::same(31 - Report::CAMPAIGNS_MAX, $flood['campaignsOmitted'], 'Flood: the rest is counted');
-			self::same(true, in_array('Campaigns: real 2 · junk-01 1 · junk-02 1 · junk-03 1 · junk-04 1 · +26 more', explode("\n", $flood['text']), true), 'Flood: text shows the top five and a count');
+			Assert::assertSame(Report::CAMPAIGNS_MAX, count($flood['campaigns']), 'Flood: list capped');
+			Assert::assertSame('real', $flood['campaigns'][0]['name'], 'Flood: the real campaign stays on top');
+			Assert::assertSame(31 - Report::CAMPAIGNS_MAX, $flood['campaignsOmitted'], 'Flood: the rest is counted');
+			Assert::assertSame(true, in_array('Campaigns: real 2 · junk-01 1 · junk-02 1 · junk-03 1 · junk-04 1 · +26 more', explode("\n", $flood['text']), true), 'Flood: text shows the top five and a count');
 			I18n::setLanguage('de');
-			self::same(true, str_contains(Report::data($floodStore, $campNames, 'day', $thu, $settings)['text'], ' · +26 weitere'), 'Flood: German count');
+			Assert::assertSame(true, str_contains(Report::data($floodStore, $campNames, 'day', $thu, $settings)['text'], ' · +26 weitere'), 'Flood: German count');
 			I18n::setLanguage('en');
 		} catch (Throwable $e) {
 			throw $e;
@@ -348,7 +324,7 @@ final class ReportTest extends TestCase
 			$kirby->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
 			$kirby->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
 			$kirby->users()->create(['email' => 'snapshot@example.invalid', 'role' => 'kizami-snapshot', 'password' => 'report-password-very-long-123']);
-			self::same(['kizami-report', false], [$kirby->user('report@example.invalid')->role()->name(), $kirby->user('report@example.invalid')->role()->permissions()->for('access', 'panel')], 'Role created, without Panel');
+			Assert::assertSame(['kizami-report', false], [$kirby->user('report@example.invalid')->role()->name(), $kirby->user('report@example.invalid')->role()->permissions()->for('access', 'panel')], 'Role created, without Panel');
 
 			$store = new Store($tmp . '/storage/kizami/' . Store::FILE);
 			$store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'x', 'created_at' => $utc('2026-09-30 12:00:00'), 'device' => 'mobile', 'referrer' => 'www.google.com']);
@@ -370,36 +346,36 @@ final class ReportTest extends TestCase
 
 			// Switches: both required, otherwise Kirby's real 404 (no JSON that would reveal the module).
 			[$code, , , $body] = $request($url, options: ['kizami.report' => false]);
-			self::same([404, 'Fixture 404'], [$code, $body], 'Report off: real 404');
-			self::same(404, $request($url, options: ['kizami.active' => false])[0], 'Kizami off: real 404 despite report on');
-			self::same(404, $request($url, options: ['kizami.report' => 'yes'])[0], 'Only true switches on');
+			Assert::assertSame([404, 'Fixture 404'], [$code, $body], 'Report off: real 404');
+			Assert::assertSame(404, $request($url, options: ['kizami.active' => false])[0], 'Kizami off: real 404 despite report on');
+			Assert::assertSame(404, $request($url, options: ['kizami.report' => 'yes'])[0], 'Only true switches on');
 
 			// Login
 			[$code, $json, $headers] = $request($url, null);
-			self::same([401, false, true], [$code, $json['ok'], isset($headers['WWW-Authenticate'])], 'Without login, with login prompt');
-			self::same(true, str_contains($headers['WWW-Authenticate'] ?? '', 'realm="Kizami"'), 'Realm is Kizami');
-			self::same(401, $request($url, 'report@example.invalid', 'wrong')[0], 'Wrong password');
-			self::same(401, $request($url, 'nobody@example.invalid', 'whatever-whatever')[0], 'Unknown account');
-			self::same(true, str_contains((string)@file_get_contents($logFile), 'nobody@example.invalid'), 'Failed attempt logged');
+			Assert::assertSame([401, false, true], [$code, $json['ok'], isset($headers['WWW-Authenticate'])], 'Without login, with login prompt');
+			Assert::assertSame(true, str_contains($headers['WWW-Authenticate'] ?? '', 'realm="Kizami"'), 'Realm is Kizami');
+			Assert::assertSame(401, $request($url, 'report@example.invalid', 'wrong')[0], 'Wrong password');
+			Assert::assertSame(401, $request($url, 'nobody@example.invalid', 'whatever-whatever')[0], 'Unknown account');
+			Assert::assertSame(true, str_contains((string)@file_get_contents($logFile), 'nobody@example.invalid'), 'Failed attempt logged');
 			[$code, $json] = $request($url, 'admin@example.invalid', 'admin-password-very-long-123');
-			self::same([403, 'This account may not use this route.'], [$code, $json['error']], 'Admin does not get through');
-			self::same(200, $request($url, 'admin@example.invalid', 'admin-password-very-long-123', ['kizami.reportRoles' => ['admin']])[0], 'Roles via configuration (counter-check to 403)');
-			self::same(403, $request($url, options: ['kizami.reportRoles' => ['other-role']])[0], 'Own role not allowed when reconfigured');
+			Assert::assertSame([403, 'This account may not use this route.'], [$code, $json['error']], 'Admin does not get through');
+			Assert::assertSame(200, $request($url, 'admin@example.invalid', 'admin-password-very-long-123', ['kizami.reportRoles' => ['admin']])[0], 'Roles via configuration (counter-check to 403)');
+			Assert::assertSame(403, $request($url, options: ['kizami.reportRoles' => ['other-role']])[0], 'Own role not allowed when reconfigured');
 			[$code, $json] = $request($url, options: ['kizami.reportWithoutHttps' => false]);
-			self::same([403, 'HTTPS only.'], [$code, $json['error']], 'Rejected without HTTPS');
-			self::same(200, $request('https://example.invalid/k/report', options: ['kizami.reportWithoutHttps' => false])[0], 'Accepted over HTTPS');
+			Assert::assertSame([403, 'HTTPS only.'], [$code, $json['error']], 'Rejected without HTTPS');
+			Assert::assertSame(200, $request('https://example.invalid/k/report', options: ['kizami.reportWithoutHttps' => false])[0], 'Accepted over HTTPS');
 
 			// Parameters
-			self::same(422, $request($url . '?kind=year')[0], 'Unknown kind');
+			Assert::assertSame(422, $request($url . '?kind=year')[0], 'Unknown kind');
 			[$code, $json] = $request($url . '?date=2026-10-01');
-			self::same([422, '2026-10-01 is not over yet.'], [$code, $json['error']], 'Today rejected');
-			self::same(422, $request($url . '?date=yesterday')[0], 'Not a date');
-			self::same(422, $request($url . '?date[]=2026-09-30')[0], 'Date as a list');
+			Assert::assertSame([422, '2026-10-01 is not over yet.'], [$code, $json['error']], 'Today rejected');
+			Assert::assertSame(422, $request($url . '?date=yesterday')[0], 'Not a date');
+			Assert::assertSame(422, $request($url . '?date[]=2026-09-30')[0], 'Date as a list');
 
 			// Success: format, identifier, fields (reader scripts rely on them).
 			[$code, $json, $headers] = $request($url);
-			self::same([200, true, 2, 'example.invalid', 'day', '2026-09-30', '2026-09-30'], [$code, $json['ok'], $json['format'], $json['site'], $json['kind'], $json['from'], $json['to']], 'Previous day without date');
-			self::same(['no-store', 'noindex, nofollow, noarchive'], [$headers['Cache-Control'] ?? null, $headers['X-Robots-Tag'] ?? null], 'Not cached, not indexed');
+			Assert::assertSame([200, true, 2, 'example.invalid', 'day', '2026-09-30', '2026-09-30'], [$code, $json['ok'], $json['format'], $json['site'], $json['kind'], $json['from'], $json['to']], 'Previous day without date');
+			Assert::assertSame(['no-store', 'noindex, nofollow, noarchive'], [$headers['Cache-Control'] ?? null, $headers['X-Robots-Tag'] ?? null], 'Not cached, not indexed');
 			// Maintenance in the report is best effort: a database the process cannot
 			// write (as root, permissions do not bite) still gives the report.
 			if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
@@ -412,61 +388,61 @@ final class ReportTest extends TestCase
 				foreach ($dbFiles as $f) {
 					chmod($f, 0644);
 				}
-				self::same([200, true], [$code, $json['ok'] ?? null], 'Report on a read-only database file: still 200');
+				Assert::assertSame([200, true], [$code, $json['ok'] ?? null], 'Report on a read-only database file: still 200');
 				// The skip is logged only when compact() actually tries to write.
 				// Writes that touch no rows succeed on some SQLite builds, so the
 				// log line is not asserted here.
 			}
 			// respond() sets the language itself — a site may call it from a route
 			// of its own (alias), and a German site must still get German text.
-			self::same(true, str_starts_with((string)$request($url, options: ['locale' => 'de_DE.utf8'])[1]['text'], 'Sample Inn · Mi 30.09.'), 'German locale: German report text via respond()');
-			self::same(true, str_starts_with((string)$request($url, options: ['locale' => 'de_DE.utf8', 'kizami.language' => 'en'])[1]['text'], 'Sample Inn · Wed 30 Sep'), 'kizami.language wins over the locale');
+			Assert::assertSame(true, str_starts_with((string)$request($url, options: ['locale' => 'de_DE.utf8'])[1]['text'], 'Sample Inn · Mi 30.09.'), 'German locale: German report text via respond()');
+			Assert::assertSame(true, str_starts_with((string)$request($url, options: ['locale' => 'de_DE.utf8', 'kizami.language' => 'en'])[1]['text'], 'Sample Inn · Wed 30 Sep'), 'kizami.language wins over the locale');
 			foreach (['generatedAt', 'brand', 'visits', 'visitsPrevious', 'pageViews', 'pageViewsPrevious', 'clicks', 'clicksPrevious', 'directLinkHits', 'actions', 'sources', 'pages', 'dwellTime', 'discardedLinkHits', 'discardedLinkHitsPrevious', 'campaigns', 'campaignsOmitted', 'text'] as $field) {
-				self::same(true, array_key_exists($field, $json), 'Field ' . $field);
+				Assert::assertSame(true, array_key_exists($field, $json), 'Field ' . $field);
 			}
-			self::same([], $json['campaigns'], 'Campaigns: empty list without tags');
+			Assert::assertSame([], $json['campaigns'], 'Campaigns: empty list without tags');
 			// Actions (1.4.0): a new field, everything else as before — format stays 2.
-			self::same([], $json['events'], 'Actions: empty list without kizami.events, even with stored actions');
-			self::same(false, str_contains($json['text'], 'Actions:'), 'Actions: no text line without kizami.events');
+			Assert::assertSame([], $json['events'], 'Actions: empty list without kizami.events, even with stored actions');
+			Assert::assertSame(false, str_contains($json['text'], 'Actions:'), 'Actions: no text line without kizami.events');
 			$events = ['kizami.events' => ['download' => ['label' => ['en' => 'Downloads', 'de' => 'Downloads'], 'detail' => true], 'video_play' => ['label' => 'Video']]];
 			[$code, $withEvents, , $eventsBody] = $request($url, options: $events);
-			self::same([200, 2], [$code, $withEvents['format']], 'Actions: format stays 2');
-			self::same([
+			Assert::assertSame([200, 2], [$code, $withEvents['format']], 'Actions: format stays 2');
+			Assert::assertSame([
 				['key' => 'download', 'name' => 'Downloads', 'count' => 1, 'visits' => 1, 'detail' => true, 'details' => [['name' => 'menu.pdf', 'count' => 1, 'visits' => 1]], 'detailsOmitted' => 0],
 				['key' => 'video_play', 'name' => 'Video', 'count' => 0, 'visits' => 0, 'detail' => false, 'details' => [], 'detailsOmitted' => 0],
 			], $withEvents['events'], 'Actions: field events with total, visits and details');
-			self::same(true, str_contains($eventsBody, '"details": []'), 'Actions: an empty detail list stays a JSON list');
+			Assert::assertSame(true, str_contains($eventsBody, '"details": []'), 'Actions: an empty detail list stays a JSON list');
 			$unchanged = $withEvents;
 			unset($unchanged['events'], $unchanged['text'], $unchanged['generatedAt']);
 			$plain = $json;
 			unset($plain['events'], $plain['text'], $plain['generatedAt']);
-			self::same($plain, $unchanged, 'Actions: every other field unchanged');
+			Assert::assertSame($plain, $unchanged, 'Actions: every other field unchanged');
 			$lines = explode("\n", $withEvents['text']);
-			self::same(true, in_array('Actions: Downloads 1', $lines, true), 'Actions: text line with the reported action');
-			self::same($json['text'], implode("\n", array_filter($lines, fn ($line) => $line !== 'Actions: Downloads 1')), 'Actions: the text gains only that line');
-			self::same(true, str_contains($request($url)[3], '"campaigns": []'), 'Campaigns: JSON list [] rather than {}');
-			self::same([1, 1, 1, 0], [$json['visits'], $json['visitsPrevious'], $json['pageViews'], $json['clicks'] - 1], 'Numbers of the previous day and the previous week');
-			self::same([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0]], $json['actions'], 'Tiles from the configuration');
-			self::same(['google.com' => 1], $json['sources'], 'Sources without sourceNames: host without www');
-			self::same(true, str_starts_with($json['text'], 'Sample Inn · Wed 30 Sep'), 'Text with brand from the site title');
-			self::same(null, $json['dwellTime'], 'Time on site off: null, not 0');
-			self::same([0, 0], [$json['discardedLinkHits'], $json['discardedLinkHitsPrevious']], 'Discarded link hits: 0 without entries');
+			Assert::assertSame(true, in_array('Actions: Downloads 1', $lines, true), 'Actions: text line with the reported action');
+			Assert::assertSame($json['text'], implode("\n", array_filter($lines, fn ($line) => $line !== 'Actions: Downloads 1')), 'Actions: the text gains only that line');
+			Assert::assertSame(true, str_contains($request($url)[3], '"campaigns": []'), 'Campaigns: JSON list [] rather than {}');
+			Assert::assertSame([1, 1, 1, 0], [$json['visits'], $json['visitsPrevious'], $json['pageViews'], $json['clicks'] - 1], 'Numbers of the previous day and the previous week');
+			Assert::assertSame([['name' => 'Calls', 'value' => 1], ['name' => 'Routes', 'value' => 0]], $json['actions'], 'Tiles from the configuration');
+			Assert::assertSame(['google.com' => 1], $json['sources'], 'Sources without sourceNames: host without www');
+			Assert::assertSame(true, str_starts_with($json['text'], 'Sample Inn · Wed 30 Sep'), 'Text with brand from the site title');
+			Assert::assertSame(null, $json['dwellTime'], 'Time on site off: null, not 0');
+			Assert::assertSame([0, 0], [$json['discardedLinkHits'], $json['discardedLinkHitsPrevious']], 'Discarded link hits: 0 without entries');
 			$store->discard('2026-09-30');
 			$store->discard('2026-09-30');
 			$store->discard('2026-09-23');
 			$store->discard('2026-10-01');
 			[$code, $json2] = $request($url);
-			self::same([2, 1], [$json2['discardedLinkHits'], $json2['discardedLinkHitsPrevious']], 'Discarded link hits: only the report day and its comparison day');
-			self::same($json['text'], $json2['text'], 'Discarded link hits do not change the text');
-			self::same(true, str_starts_with($request($url, options: ['kizami.brand' => 'Other Brand'])[1]['text'], 'Other Brand · Wed 30 Sep'), 'Brand from kizami.brand');
+			Assert::assertSame([2, 1], [$json2['discardedLinkHits'], $json2['discardedLinkHitsPrevious']], 'Discarded link hits: only the report day and its comparison day');
+			Assert::assertSame($json['text'], $json2['text'], 'Discarded link hits do not change the text');
+			Assert::assertSame(true, str_starts_with($request($url, options: ['kizami.brand' => 'Other Brand'])[1]['text'], 'Other Brand · Wed 30 Sep'), 'Brand from kizami.brand');
 
 			[$code, $json, , $body] = $request($url . '?date=2026-09-27');
-			self::same([200, '2026-09-27', 0], [$code, $json['from'], $json['visits']], 'Earlier day via date');
-			self::same(true, str_contains($body, '"sources": {}') && str_contains($body, '"pages": {}'), 'Empty lists as {} instead of []');
+			Assert::assertSame([200, '2026-09-27', 0], [$code, $json['from'], $json['visits']], 'Earlier day via date');
+			Assert::assertSame(true, str_contains($body, '"sources": {}') && str_contains($body, '"pages": {}'), 'Empty lists as {} instead of []');
 			[$code, $json] = $request($url . '?kind=week&date=2026-09-23', options: ['kizami.siteId' => 'sample-inn']);
-			self::same([200, 'week', '2026-09-21', '2026-09-27', 'sample-inn', 1], [$code, $json['kind'], $json['from'], $json['to'], $json['site'], $json['visits']], 'Week via date, identifier from the configuration');
-			self::same(7, count($json['perDay']), 'Week: seven days');
-			self::same(true, array_key_exists('mobileShare', $json), 'Week: field mobileShare');
+			Assert::assertSame([200, 'week', '2026-09-21', '2026-09-27', 'sample-inn', 1], [$code, $json['kind'], $json['from'], $json['to'], $json['site'], $json['visits']], 'Week via date, identifier from the configuration');
+			Assert::assertSame(7, count($json['perDay']), 'Week: seven days');
+			Assert::assertSame(true, array_key_exists('mobileShare', $json), 'Week: field mobileShare');
 
 			// ReportService::json() encodes the body itself. Kirby's
 			// Response::json() turns a failed json_encode() into an empty body and
@@ -479,33 +455,33 @@ final class ReportTest extends TestCase
 				return json_last_error() === JSON_ERROR_NONE;
 			};
 			$badBytes = ReportService::json(['ok' => true, 'sources' => ["foo\xFF.example" => 1]], 200);
-			self::same([200, true], [$badBytes->code(), $validJson($badBytes->body())], 'Invalid UTF-8 in the data: 200 and valid JSON');
-			self::same(["foo\u{FFFD}.example" => 1], json_decode($badBytes->body(), true)['sources'], 'Invalid UTF-8 in the data: substituted by U+FFFD');
-			self::same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$badBytes->type(), $badBytes->headers()['Cache-Control'] ?? null, $badBytes->headers()['X-Robots-Tag'] ?? null], 'Invalid UTF-8: content type and headers kept');
+			Assert::assertSame([200, true], [$badBytes->code(), $validJson($badBytes->body())], 'Invalid UTF-8 in the data: 200 and valid JSON');
+			Assert::assertSame(["foo\u{FFFD}.example" => 1], json_decode($badBytes->body(), true)['sources'], 'Invalid UTF-8 in the data: substituted by U+FFFD');
+			Assert::assertSame(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$badBytes->type(), $badBytes->headers()['Cache-Control'] ?? null, $badBytes->headers()['X-Robots-Tag'] ?? null], 'Invalid UTF-8: content type and headers kept');
 			$logBefore = (string)@file_get_contents($logFile);
 			$notEncodable = ReportService::json(['ok' => true, 'x' => NAN], 200);
-			self::same([500, '{"ok":false,"error":"Internal error."}', true], [$notEncodable->code(), $notEncodable->body(), $validJson($notEncodable->body())], 'Data that cannot be encoded: 500 and a fixed JSON body, never 200 without JSON');
-			self::same(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$notEncodable->type(), $notEncodable->headers()['Cache-Control'] ?? null, $notEncodable->headers()['X-Robots-Tag'] ?? null], 'Fallback 500: content type and headers kept');
+			Assert::assertSame([500, '{"ok":false,"error":"Internal error."}', true], [$notEncodable->code(), $notEncodable->body(), $validJson($notEncodable->body())], 'Data that cannot be encoded: 500 and a fixed JSON body, never 200 without JSON');
+			Assert::assertSame(['application/json', 'no-store', 'noindex, nofollow, noarchive'], [$notEncodable->type(), $notEncodable->headers()['Cache-Control'] ?? null, $notEncodable->headers()['X-Robots-Tag'] ?? null], 'Fallback 500: content type and headers kept');
 			$logNew = substr((string)file_get_contents($logFile), strlen($logBefore));
-			self::same(true, str_contains($logNew, 'Kizami: ') && str_contains($logNew, 'Inf and NaN'), 'Data that cannot be encoded: logged with the json error');
+			Assert::assertSame(true, str_contains($logNew, 'Kizami: ') && str_contains($logNew, 'Inf and NaN'), 'Data that cannot be encoded: logged with the json error');
 			$plainData = ['ok' => true, 'format' => 2, 'url' => 'a/b/c', 'list' => [], 'object' => new stdClass(), 'nested' => ['n' => 1.5, 'text' => "\u{E4}\u{20AC}"]];
-			self::same(json_encode($plainData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), ReportService::json($plainData, 200)->body(), 'Valid data: body byte for byte as before');
+			Assert::assertSame(json_encode($plainData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES), ReportService::json($plainData, 200)->body(), 'Valid data: body byte for byte as before');
 			$unauthorized = ReportService::json(['ok' => false, 'error' => 'Authentication required.'], 401);
-			self::same([401, 'Basic realm="Kizami", charset="UTF-8"'], [$unauthorized->code(), $unauthorized->headers()['WWW-Authenticate'] ?? null], 'Status and login prompt of a 401 unchanged');
+			Assert::assertSame([401, 'Basic realm="Kizami", charset="UTF-8"'], [$unauthorized->code(), $unauthorized->headers()['WWW-Authenticate'] ?? null], 'Status and login prompt of a 401 unchanged');
 
 			// Measurement gaps (kizami.gaps, since 1.5.0) through the route: flags, list, text line.
 			$plainDay = $request($url)[1];
 			[$code, $withGap, , $gapBody] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage']]]);
-			self::same([200, true, false], [$code, $withGap['gap'], $withGap['gapPrevious']], 'Gaps: the report day is flagged, its comparison is not');
-			self::same([['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage', 'current' => true, 'previous' => false]], $withGap['gaps'], 'Gaps: field gaps');
-			self::same('Measurement gap 30 Sep 2026 00:21–15:40: Server outage', explode("\n", $withGap['text'])[1], 'Gaps: text line after the heading');
-			self::same(true, str_contains($gapBody, '"gap": true') && str_contains($gapBody, '"gaps": [') && str_contains($gapBody, '"current": true'), 'Gaps: JSON keys written');
-			self::same($plainDay['text'], implode("\n", array_filter(explode("\n", $withGap['text']), fn ($line) => !str_starts_with($line, 'Measurement gap'))), 'Gaps: the text gains only the gap line');
-			self::same([false, []], [$plainDay['gap'], $plainDay['gaps']], 'Gaps: flag false and empty list without kizami.gaps');
+			Assert::assertSame([200, true, false], [$code, $withGap['gap'], $withGap['gapPrevious']], 'Gaps: the report day is flagged, its comparison is not');
+			Assert::assertSame([['from' => '2026-09-30 00:21', 'to' => '2026-09-30 15:40', 'reason' => 'Server outage', 'current' => true, 'previous' => false]], $withGap['gaps'], 'Gaps: field gaps');
+			Assert::assertSame('Measurement gap 30 Sep 2026 00:21–15:40: Server outage', explode("\n", $withGap['text'])[1], 'Gaps: text line after the heading');
+			Assert::assertSame(true, str_contains($gapBody, '"gap": true') && str_contains($gapBody, '"gaps": [') && str_contains($gapBody, '"current": true'), 'Gaps: JSON keys written');
+			Assert::assertSame($plainDay['text'], implode("\n", array_filter(explode("\n", $withGap['text']), fn ($line) => !str_starts_with($line, 'Measurement gap'))), 'Gaps: the text gains only the gap line');
+			Assert::assertSame([false, []], [$plainDay['gap'], $plainDay['gaps']], 'Gaps: flag false and empty list without kizami.gaps');
 			[, $open] = $request($url, options: ['kizami.gaps' => [['from' => '2026-09-29 12:00', 'reason' => 'Still open']]]);
-			self::same([true, null, 'Measurement gap since 29 Sep 2026 12:00: Still open'], [$open['gap'], $open['gaps'][0]['to'], explode("\n", $open['text'])[1]], 'Gaps: an open gap runs until the report time');
+			Assert::assertSame([true, null, 'Measurement gap since 29 Sep 2026 12:00: Still open'], [$open['gap'], $open['gaps'][0]['to'], explode("\n", $open['text'])[1]], 'Gaps: an open gap runs until the report time');
 
-			self::same(true, in_array('k/report', array_column($app()->extensions('routes'), 'pattern'), true), 'Route registered');
+			Assert::assertSame(true, in_array('k/report', array_column($app()->extensions('routes'), 'pattern'), true), 'Route registered');
 
 			// /k/snapshot: consistent copy for backup jobs without a shell.
 			$snapshot = function (string|null $who = 'snapshot@example.invalid', string $pw = 'report-password-very-long-123', array $options = [], string $url = 'http://example.invalid/k/snapshot') use ($app) {
@@ -516,15 +492,15 @@ final class ReportTest extends TestCase
 				$response = Sayamaapps\Kizami\SnapshotService::respond($app($request, $options));
 				return [$response->code(), $response->body(), $response->headers() + ['Content-Type' => $response->type()]];
 			};
-			self::same([404, 'Fixture 404'], array_slice($snapshot(options: ['kizami.snapshot' => false]), 0, 2), 'Snapshot off by default: real 404');
-			self::same(404, $snapshot(options: ['kizami.snapshot' => true, 'kizami.active' => false])[0], 'Snapshot without active: real 404');
+			Assert::assertSame([404, 'Fixture 404'], array_slice($snapshot(options: ['kizami.snapshot' => false]), 0, 2), 'Snapshot off by default: real 404');
+			Assert::assertSame(404, $snapshot(options: ['kizami.snapshot' => true, 'kizami.active' => false])[0], 'Snapshot without active: real 404');
 			$on = ['kizami.snapshot' => true];
-			self::same(401, $snapshot(null, options: $on)[0], 'Snapshot without login');
-			self::same(403, $snapshot('admin@example.invalid', 'admin-password-very-long-123', $on)[0], 'Snapshot: admin does not get through');
-			self::same(403, $snapshot('report@example.invalid', 'report-password-very-long-123', $on)[0], 'Snapshot: report account does not get through (own role)');
-			self::same(['kizami-snapshot', false], [$kirby->user('snapshot@example.invalid')->role()->name(), $kirby->user('snapshot@example.invalid')->role()->permissions()->for('access', 'panel')], 'Snapshot role created, without Panel');
-			self::same(403, $snapshot(options: $on + ['kizami.reportWithoutHttps' => false])[0], 'Snapshot over HTTPS only');
-			self::same(403, $snapshot(options: $on + ['kizami.snapshotRoles' => ['admin']])[0], 'Snapshot: own role list');
+			Assert::assertSame(401, $snapshot(null, options: $on)[0], 'Snapshot without login');
+			Assert::assertSame(403, $snapshot('admin@example.invalid', 'admin-password-very-long-123', $on)[0], 'Snapshot: admin does not get through');
+			Assert::assertSame(403, $snapshot('report@example.invalid', 'report-password-very-long-123', $on)[0], 'Snapshot: report account does not get through (own role)');
+			Assert::assertSame(['kizami-snapshot', false], [$kirby->user('snapshot@example.invalid')->role()->name(), $kirby->user('snapshot@example.invalid')->role()->permissions()->for('access', 'panel')], 'Snapshot role created, without Panel');
+			Assert::assertSame(403, $snapshot(options: $on + ['kizami.reportWithoutHttps' => false])[0], 'Snapshot over HTTPS only');
+			Assert::assertSame(403, $snapshot(options: $on + ['kizami.snapshotRoles' => ['admin']])[0], 'Snapshot: own role list');
 			// The report route runs maintenance like the dashboard: free pages with
 			// leftovers of deleted events are rebuilt away, once authenticated.
 			$dbFile = $tmp . '/storage/kizami/' . Store::FILE;
@@ -551,14 +527,14 @@ final class ReportTest extends TestCase
 			};
 			$leave();
 			[$freeBefore, $markerBefore] = $probe();
-			self::same([true, true], [$freeBefore[0] > 0, $markerBefore], 'Report maintenance: counter-check, free pages and leftovers present');
+			Assert::assertSame([true, true], [$freeBefore[0] > 0, $markerBefore], 'Report maintenance: counter-check, free pages and leftovers present');
 			$request($url, null);
 			$request($url, 'report@example.invalid', 'wrong-password-very-long-123');
-			self::same([$freeBefore, $markerBefore], $probe(), 'Anonymous /k/report leaves the database file alone');
+			Assert::assertSame([$freeBefore, $markerBefore], $probe(), 'Anonymous /k/report leaves the database file alone');
 			$request($url);
 			$after = $probe();
-			self::same([0, 1], $after[0], 'Authenticated /k/report rebuilds the file once (no free pages, marked)');
-			self::same(false, $after[1], 'Authenticated /k/report: leftovers of deleted events gone from the file');
+			Assert::assertSame([0, 1], $after[0], 'Authenticated /k/report rebuilds the file once (no free pages, marked)');
+			Assert::assertSame(false, $after[1], 'Authenticated /k/report: leftovers of deleted events gone from the file');
 
 			// The daily key also rotates through the authenticated operator routes,
 			// never through anonymous requests.
@@ -571,33 +547,33 @@ final class ReportTest extends TestCase
 			$request($url, null);
 			$snapshot('report@example.invalid', 'report-password-very-long-123', $on);
 			$request($url, 'report@example.invalid', 'wrong-password-very-long-123');
-			self::same($stale, file_get_contents($keyFile), 'Unauthenticated, forbidden and failed logins leave the key alone');
+			Assert::assertSame($stale, file_get_contents($keyFile), 'Unauthenticated, forbidden and failed logins leave the key alone');
 			$request($url);
-			self::same(true, $keyIsFresh(), 'Authenticated /k/report replaces a stale key');
+			Assert::assertSame(true, $keyIsFresh(), 'Authenticated /k/report replaces a stale key');
 			file_put_contents($keyFile, $stale);
 			$snapshot(options: $on);
-			self::same(true, $keyIsFresh(), 'Authenticated /k/snapshot replaces a stale key');
+			Assert::assertSame(true, $keyIsFresh(), 'Authenticated /k/snapshot replaces a stale key');
 			$currentKey = (string)file_get_contents($keyFile);
 			$snapshot(options: $on);
 			$request($url);
-			self::same($currentKey, file_get_contents($keyFile), 'A current key is not touched again');
+			Assert::assertSame($currentKey, file_get_contents($keyFile), 'A current key is not touched again');
 			unlink($keyFile);
 			$request($url);
 			$snapshot(options: $on);
-			self::same(false, is_file($keyFile), 'The routes create no key on an installation that never counted');
+			Assert::assertSame(false, is_file($keyFile), 'The routes create no key on an installation that never counted');
 			file_put_contents($tmp . '/storage/kizami/secret.txt', "2026-10-01\nSECRET-MARKER");
 			[$code, $body, $headers] = $snapshot(options: $on);
-			self::same([200, 'application/vnd.sqlite3', hash('sha256', $body)], [$code, $headers['Content-Type'] ?? null, $headers['X-Kizami-Sha256'] ?? null], 'Snapshot delivered, with checksum');
-			self::same(true, str_contains($headers['Content-Disposition'] ?? '', 'filename="kizami-'), 'Snapshot file name kizami-YYYY-MM-DD.sqlite');
-			self::same(false, str_contains($body, 'SECRET-MARKER'), 'Snapshot without the daily secret');
+			Assert::assertSame([200, 'application/vnd.sqlite3', hash('sha256', $body)], [$code, $headers['Content-Type'] ?? null, $headers['X-Kizami-Sha256'] ?? null], 'Snapshot delivered, with checksum');
+			Assert::assertSame(true, str_contains($headers['Content-Disposition'] ?? '', 'filename="kizami-'), 'Snapshot file name kizami-YYYY-MM-DD.sqlite');
+			Assert::assertSame(false, str_contains($body, 'SECRET-MARKER'), 'Snapshot without the daily secret');
 			// Header byte 18: 1 = rollback journal (one file), 2 = WAL (would need -wal/-shm).
-			self::same(1, ord($body[18] ?? "\0"), 'Snapshot is a single file, not WAL');
+			Assert::assertSame(1, ord($body[18] ?? "\0"), 'Snapshot is a single file, not WAL');
 			file_put_contents($tmp . '/copy.sqlite', $body);
 			$copy = new SQLite3($tmp . '/copy.sqlite');
-			self::same(['ok', 3, 4], [$copy->querySingle('PRAGMA integrity_check'), $copy->querySingle('SELECT COUNT(*) FROM kizami_events'), $copy->querySingle('SELECT SUM(hits) FROM kizami_discarded')], 'Snapshot complete and intact');
-			self::same('download|menu.pdf', $copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events"), 'Snapshot includes the reported actions');
+			Assert::assertSame(['ok', 3, 4], [$copy->querySingle('PRAGMA integrity_check'), $copy->querySingle('SELECT COUNT(*) FROM kizami_events'), $copy->querySingle('SELECT SUM(hits) FROM kizami_discarded')], 'Snapshot complete and intact');
+			Assert::assertSame('download|menu.pdf', $copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events"), 'Snapshot includes the reported actions');
 			$copy->close();
-			self::same([], glob($tmp . '/storage/kizami/.snapshot-*'), 'Intermediate file deleted');
+			Assert::assertSame([], glob($tmp . '/storage/kizami/.snapshot-*'), 'Intermediate file deleted');
 
 			// The answer is streamed (SnapshotResponse), not held as a string.
 			$storageDir = $tmp . '/storage/kizami';
@@ -619,20 +595,20 @@ final class ReportTest extends TestCase
 				return [$returned, $bytes, hash_final($context)];
 			};
 			$streamed = $respond();
-			self::same(true, $streamed instanceof Sayamaapps\Kizami\SnapshotResponse, 'Snapshot: streamed response class');
-			self::same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: the copy is already unlinked while the answer is not yet sent');
+			Assert::assertSame(true, $streamed instanceof Sayamaapps\Kizami\SnapshotResponse, 'Snapshot: streamed response class');
+			Assert::assertSame([], glob($storageDir . '/.snapshot-*'), 'Snapshot: the copy is already unlinked while the answer is not yet sent');
 			$announced = $streamed->headers();
 			[$returned, $bytes, $streamedHash] = $stream($streamed);
-			self::same('', $returned, 'Snapshot: send() has already written the body, returns nothing');
-			self::same(true, $bytes > 0 && $bytes === (int)($announced['Content-Length'] ?? -1), 'Snapshot: streamed bytes = Content-Length');
-			self::same($announced['X-Kizami-Sha256'] ?? null, $streamedHash, 'Snapshot: streamed bytes hash to X-Kizami-Sha256');
-			self::same(hash('sha256', $respond()->body()), $streamedHash, 'Snapshot: streaming and body() deliver the same copy');
-			self::same([], glob($storageDir . '/.snapshot-*'), 'Snapshot: no file left after send()');
+			Assert::assertSame('', $returned, 'Snapshot: send() has already written the body, returns nothing');
+			Assert::assertSame(true, $bytes > 0 && $bytes === (int)($announced['Content-Length'] ?? -1), 'Snapshot: streamed bytes = Content-Length');
+			Assert::assertSame($announced['X-Kizami-Sha256'] ?? null, $streamedHash, 'Snapshot: streamed bytes hash to X-Kizami-Sha256');
+			Assert::assertSame(hash('sha256', $respond()->body()), $streamedHash, 'Snapshot: streaming and body() deliver the same copy');
+			Assert::assertSame([], glob($storageDir . '/.snapshot-*'), 'Snapshot: no file left after send()');
 			$reread = $respond();
 			$inMemory = $reread->body();
-			self::same(strlen($inMemory), (int)($reread->headers()['Content-Length'] ?? -1), 'Snapshot: Content-Length = length of the copy');
-			self::same($inMemory, $reread->body(), 'Snapshot: body() can be read twice');
-			self::same([true, hash('sha256', $inMemory)], [$stream($reread)[1] === strlen($inMemory), $stream($respond())[2]], 'Snapshot: send() still works after body()');
+			Assert::assertSame(strlen($inMemory), (int)($reread->headers()['Content-Length'] ?? -1), 'Snapshot: Content-Length = length of the copy');
+			Assert::assertSame($inMemory, $reread->body(), 'Snapshot: body() can be read twice');
+			Assert::assertSame([true, hash('sha256', $inMemory)], [$stream($reread)[1] === strlen($inMemory), $stream($respond())[2]], 'Snapshot: send() still works after body()');
 			unset($streamed, $reread);
 
 			// Leftovers of aborted downloads: removed after an hour, younger ones stay (a parallel download may run).
@@ -644,10 +620,10 @@ final class ReportTest extends TestCase
 			$leave('.snapshot-stale.sqlite-wal', 7200);
 			$leave('.snapshot-fresh.sqlite', 0);
 			$snapshot(null, options: $on);
-			self::same([true, true, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: no clean-up without a login');
+			Assert::assertSame([true, true, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: no clean-up without a login');
 			$snapshot(options: $on);
-			self::same([false, false, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: stale leftovers swept, fresh ones stay');
-			self::same([true, true], [is_file($storageDir . '/' . Store::FILE), is_file($storageDir . '/secret.txt')], 'Snapshot: sweep leaves the database and the secret alone');
+			Assert::assertSame([false, false, true], array_map('is_file', [$storageDir . '/.snapshot-stale.sqlite', $storageDir . '/.snapshot-stale.sqlite-wal', $storageDir . '/.snapshot-fresh.sqlite']), 'Snapshot: stale leftovers swept, fresh ones stay');
+			Assert::assertSame([true, true], [is_file($storageDir . '/' . Store::FILE), is_file($storageDir . '/secret.txt')], 'Snapshot: sweep leaves the database and the secret alone');
 			unlink($storageDir . '/.snapshot-fresh.sqlite');
 
 			// cleanup() and sweep() directly.
@@ -669,9 +645,9 @@ final class ReportTest extends TestCase
 				$make('.snapshot-gone.sqlite' . $suffix, 0);
 			}
 			$make('.snapshot-other.sqlite', 0);
-			self::same(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
-			self::same(['.snapshot-other.sqlite'], $listing(), 'cleanup(): the copy and its side files go, other files stay');
-			self::same(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
+			Assert::assertSame(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-gone.sqlite'), 'cleanup() returns nothing');
+			Assert::assertSame(['.snapshot-other.sqlite'], $listing(), 'cleanup(): the copy and its side files go, other files stay');
+			Assert::assertSame(null, Sayamaapps\Kizami\SnapshotService::cleanup($dir . '/.snapshot-missing.sqlite'), 'cleanup() of a missing copy: no error');
 			unlink($dir . '/.snapshot-other.sqlite');
 			foreach (['', '-wal', '-shm', '-journal'] as $suffix) {
 				$make('.snapshot-old.sqlite' . $suffix, 7200);
@@ -683,10 +659,10 @@ final class ReportTest extends TestCase
 			$make('secret.txt', 7200);
 			$make('snapshot-without-dot', 7200);
 			mkdir($dir . '/.snapshot-directory');
-			self::same(5, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
-			self::same(['.snapshot-directory', '.snapshot-edge.sqlite', '.snapshot-new.sqlite', Store::FILE, 'secret.txt', 'snapshot-without-dot'], $listing(), 'sweep(): only .snapshot-* files older than an hour go');
-			self::same(0, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
-			self::same(0, Sayamaapps\Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
+			Assert::assertSame(5, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): returns the number of files removed');
+			Assert::assertSame(['.snapshot-directory', '.snapshot-edge.sqlite', '.snapshot-new.sqlite', Store::FILE, 'secret.txt', 'snapshot-without-dot'], $listing(), 'sweep(): only .snapshot-* files older than an hour go');
+			Assert::assertSame(0, Sayamaapps\Kizami\SnapshotService::sweep($dir), 'sweep(): nothing more to remove');
+			Assert::assertSame(0, Sayamaapps\Kizami\SnapshotService::sweep($dir . '/missing'), 'sweep() of a missing directory: 0');
 
 			// Memory: a copy larger than twice the memory_limit still comes through, in a child
 			// process with that limit. The helper boots Kirby plus respond() in ~6.5 MB; the limit
@@ -715,22 +691,22 @@ final class ReportTest extends TestCase
 			$big->exec('COMMIT');
 			$big->exec('PRAGMA wal_checkpoint(TRUNCATE)');
 			$big->close();
-			self::same(true, filesize($bigDb) >= 2 * $limitMb * 1048576, 'Memory test: the database is more than twice the memory limit');
+			Assert::assertSame(true, filesize($bigDb) >= 2 * $limitMb * 1048576, 'Memory test: the database is more than twice the memory limit');
 			$child = proc_open([PHP_BINARY, '-d', 'memory_limit=' . $limitMb . 'M', $base . '/tests/helpers/snapshot-stream.php', $tmp, $bigStorage], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
 			$childOut = stream_get_contents($pipes[1]);
 			fclose($pipes[1]);
 			$childErr = stream_get_contents($pipes[2]);
 			fclose($pipes[2]);
 			$childExit = proc_close($child);
-			self::same(0, $childExit, 'Memory test: child process under memory_limit=' . $limitMb . 'M ends normally: ' . substr(trim($childOut . ' ' . $childErr), 0, 300));
+			Assert::assertSame(0, $childExit, 'Memory test: child process under memory_limit=' . $limitMb . 'M ends normally: ' . substr(trim($childOut . ' ' . $childErr), 0, 300));
 			$result = json_decode(trim($childOut), true);
-			self::same(true, is_array($result), 'Memory test: child reports JSON: ' . substr($childOut, 0, 300));
-			self::same([200, 'SQLite format 3', ''], [$result['code'], $result['head'], $result['returned']], 'Memory test: status, SQLite header, send() result');
-			self::same(true, $result['bytes'] >= 2 * $limitMb * 1048576 && $result['bytes'] === (int)$result['length'], 'Memory test: all bytes of the copy arrive, as many as Content-Length says');
-			self::same($result['sha256'], $result['hash'], 'Memory test: the bytes that arrive match X-Kizami-Sha256');
-			self::same(true, $result['peak'] < $result['bytes'] / 2, 'Memory test: peak memory (' . $result['peak'] . ') far below the size of the copy (' . $result['bytes'] . ')');
-			self::same([], glob($bigStorage . '/kizami/.snapshot-*'), 'Memory test: no file left in the storage');
-			self::same(true, in_array('k/snapshot', array_column($app()->extensions('routes'), 'pattern'), true), 'Snapshot route registered');
+			Assert::assertSame(true, is_array($result), 'Memory test: child reports JSON: ' . substr($childOut, 0, 300));
+			Assert::assertSame([200, 'SQLite format 3', ''], [$result['code'], $result['head'], $result['returned']], 'Memory test: status, SQLite header, send() result');
+			Assert::assertSame(true, $result['bytes'] >= 2 * $limitMb * 1048576 && $result['bytes'] === (int)$result['length'], 'Memory test: all bytes of the copy arrive, as many as Content-Length says');
+			Assert::assertSame($result['sha256'], $result['hash'], 'Memory test: the bytes that arrive match X-Kizami-Sha256');
+			Assert::assertSame(true, $result['peak'] < $result['bytes'] / 2, 'Memory test: peak memory (' . $result['peak'] . ') far below the size of the copy (' . $result['bytes'] . ')');
+			Assert::assertSame([], glob($bigStorage . '/kizami/.snapshot-*'), 'Memory test: no file left in the storage');
+			Assert::assertSame(true, in_array('k/snapshot', array_column($app()->extensions('routes'), 'pattern'), true), 'Snapshot route registered');
 		} catch (Throwable $e) {
 			throw $e;
 		} finally {
@@ -741,14 +717,12 @@ final class ReportTest extends TestCase
 
 	private static function throws(callable $f, string $pattern, string $what): void
 	{
-		global $n;
 		try {
 			$f();
 		} catch (InvalidArgumentException $e) {
 			if (!str_contains($e->getMessage(), $pattern)) {
 				Assert::fail($what . ': wrong message ' . $e->getMessage());
 			}
-			$n++;
 			Assert::assertTrue(true);
 			return;
 		}

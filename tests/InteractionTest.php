@@ -15,22 +15,10 @@ use Sayamaapps\Kizami\Store;
 #[RunTestsInSeparateProcesses]
 final class InteractionTest extends TestCase
 {
-	private static function same($expected, $actual, string $what): void
-	{
-		global $n;
-		if ($expected !== $actual) {
-			Assert::fail($what . ': ' . var_export($actual, true));
-		}
-		$n++;
-		Assert::assertTrue(true);
-	}
-
 	public function testSuite(): void
 	{
-		global $n;
 		$tmp = sys_get_temp_dir() . '/kizami-interaction-' . bin2hex(random_bytes(6));
 		mkdir($tmp, 0700);
-		$n = 0;
 		try {
 			// Exactly the formerly productive pre-1.0 schema (German names), including
 			// device/notfound data (state before 'bild'/position AND before
@@ -54,9 +42,9 @@ final class InteractionTest extends TestCase
 			$db->close();
 			$store = new Store("$tmp/k.sqlite");
 			$db = new SQLite3("$tmp/k.sqlite");
-			self::same(['id' => 41, 'type' => 'notfound', 'path' => '/old', 'device' => 'mobile', 'position' => '', 'seconds' => 0], $db->query('SELECT id,type,path,device,position,seconds FROM kizami_events')->fetchArray(SQLITE3_ASSOC), 'Migration keeps existing data');
+			Assert::assertSame(['id' => 41, 'type' => 'notfound', 'path' => '/old', 'device' => 'mobile', 'position' => '', 'seconds' => 0], $db->query('SELECT id,type,path,device,position,seconds FROM kizami_events')->fetchArray(SQLITE3_ASSOC), 'Migration keeps existing data');
 			$store2 = new Store("$tmp/k.sqlite");
-			self::same(1, $db->querySingle('SELECT COUNT(*) FROM kizami_events'), 'Migration repeatable');
+			Assert::assertSame(1, $db->querySingle('SELECT COUNT(*) FROM kizami_events'), 'Migration repeatable');
 			$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
 			// Events lie at 10:00: reference time fixed to noon, otherwise before
 			// 10:00 they would drop out of the window as future.
@@ -92,25 +80,25 @@ final class InteractionTest extends TestCase
 			$put('redirect', 'boundary', 0, ['target' => 'call']);
 			$k = $store->contactSources(7, ['call', 'route']);
 			$q = array_column($k['sources'], null, 'source');
-			self::same(['source' => 'google.com', 'visits' => 1, 'clicks' => 2, 'withContact' => 1], $q['google.com'], 'Several clicks one contact visit, repeat capped, social excluded');
-			self::same(['source' => 'utm:qr', 'visits' => 2, 'clicks' => 2, 'withContact' => 2], $q['utm:qr'], 'UTM before referrer, first entry wins');
-			self::same(0, $q['bing.com']['clicks'], 'No later entry retroactively');
-			self::same(0, $q['example.org']['clicks'], 'No link across the day boundary');
-			self::same(5, $k['withoutEntry'], 'Unknown source transparent');
-			self::same(1, $q[Names::DIRECT]['visits'], 'Direct visit without action included');
-			self::same(6, array_sum(array_column($store->entryPages(7), 'count')), 'Entries without repeat views, empty identifier, future, previous period');
-			self::same(1, array_column($store->entryPages(7), 'count', 'path')['/menu'], 'First page stays');
-			self::same(['sources' => [], 'withoutEntry' => 0], $store->contactSources(7, []), 'Without configured targets');
+			Assert::assertSame(['source' => 'google.com', 'visits' => 1, 'clicks' => 2, 'withContact' => 1], $q['google.com'], 'Several clicks one contact visit, repeat capped, social excluded');
+			Assert::assertSame(['source' => 'utm:qr', 'visits' => 2, 'clicks' => 2, 'withContact' => 2], $q['utm:qr'], 'UTM before referrer, first entry wins');
+			Assert::assertSame(0, $q['bing.com']['clicks'], 'No later entry retroactively');
+			Assert::assertSame(0, $q['example.org']['clicks'], 'No link across the day boundary');
+			Assert::assertSame(5, $k['withoutEntry'], 'Unknown source transparent');
+			Assert::assertSame(1, $q[Names::DIRECT]['visits'], 'Direct visit without action included');
+			Assert::assertSame(6, array_sum(array_column($store->entryPages(7), 'count')), 'Entries without repeat views, empty identifier, future, previous period');
+			Assert::assertSame(1, array_column($store->entryPages(7), 'count', 'path')['/menu'], 'First page stays');
+			Assert::assertSame(['sources' => [], 'withoutEntry' => 0], $store->contactSources(7, []), 'Without configured targets');
 			$before = [$store->visits(7), $store->clicks(7), $store->devices(7), $store->longTerm()['total']];
 			$put('image', 'photo', 0, ['target' => 'yard', 'path' => '/contact']);
 			$store2->write(['type' => 'image', 'action' => 'click', 'session' => 'photo', 'target' => 'yard', 'path' => '/elsewhere', 'created_at' => $time(1)]);
 			$put('image', 'photo', 2, ['target' => 'garden']);
 			$put('image', 'photo-next-day', 0, ['target' => 'yard'], -1);
-			self::same(3, array_sum(array_column($store->images(7), 'count')), 'One photo per daily identifier, regardless of page');
-			self::same(1, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type='image' AND path='/contact'"), 'First opening page kept');
-			self::same(0, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type='image' AND path='/elsewhere'"), 'Second handle does not count twice');
-			self::same($before, [$store->visits(7), $store->clicks(7), $store->devices(7), $store->longTerm()['total']], 'Images do not affect visits, actions and archive');
-			self::same(1, count(array_filter($store->linkPositions(7), fn ($z) => $z['position'] === 'header' && $z['count'] === 1)), 'Link position stored');
+			Assert::assertSame(3, array_sum(array_column($store->images(7), 'count')), 'One photo per daily identifier, regardless of page');
+			Assert::assertSame(1, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type='image' AND path='/contact'"), 'First opening page kept');
+			Assert::assertSame(0, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type='image' AND path='/elsewhere'"), 'Second handle does not count twice');
+			Assert::assertSame($before, [$store->visits(7), $store->clicks(7), $store->devices(7), $store->longTerm()['total']], 'Images do not affect visits, actions and archive');
+			Assert::assertSame(1, count(array_filter($store->linkPositions(7), fn ($z) => $z['position'] === 'header' && $z['count'] === 1)), 'Link position stored');
 			// Own hosts stored as bare referrers (rows from before the host was
 			// listed, www., preview host) are internal for the dashboard too.
 			$put('page', 'self-www', 0, ['referrer' => 'www.example.de']);
@@ -119,13 +107,13 @@ final class InteractionTest extends TestCase
 			$own = new Store("$tmp/k.sqlite", null, ['Example.de.', 'www.preview.example', '', 42, "x'y"]);
 			$own = $own->atTime($today->setTime(12, 0));
 			$q = array_column($own->contactSources(7, ['call'])['sources'], 'visits', 'source');
-			self::same(2, $q[Names::ENTRY_UNKNOWN] ?? 0, 'Own hosts are an unrecorded entry, with or without www');
-			self::same(false, isset($q['www.example.de']) || isset($q['preview.example']), 'Own hosts are no source of their own');
-			self::same(4, array_column($own->sources(7), 'count', 'source')[Names::INTERNAL] ?? 0, 'Own hosts are internal navigation among all page views');
-			self::same(1, array_column($store->contactSources(7, ['call'])['sources'], 'visits', 'source')['www.example.de'] ?? 0, 'Without own hosts the bare host stays a source');
+			Assert::assertSame(2, $q[Names::ENTRY_UNKNOWN] ?? 0, 'Own hosts are an unrecorded entry, with or without www');
+			Assert::assertSame(false, isset($q['www.example.de']) || isset($q['preview.example']), 'Own hosts are no source of their own');
+			Assert::assertSame(4, array_column($own->sources(7), 'count', 'source')[Names::INTERNAL] ?? 0, 'Own hosts are internal navigation among all page views');
+			Assert::assertSame(1, array_column($store->contactSources(7, ['call'])['sources'], 'visits', 'source')['www.example.de'] ?? 0, 'Without own hosts the bare host stays a source');
 			$labels = array_column(Sayamaapps\Kizami\Analysis::data($own, new Names([], [], []), 7, ['contactTargets' => ['call']])['contact']['sources'], 'visits', 'name');
-			self::same(2, $labels[Sayamaapps\Kizami\I18n::t('source.unknown')] ?? 0, 'Unrecorded entries get their own label');
-			self::same(true, Sayamaapps\Kizami\I18n::t('source.unknown') !== Sayamaapps\Kizami\I18n::t('source.directUnknown'), 'Label differs from direct / unknown');
+			Assert::assertSame(2, $labels[Sayamaapps\Kizami\I18n::t('source.unknown')] ?? 0, 'Unrecorded entries get their own label');
+			Assert::assertSame(true, Sayamaapps\Kizami\I18n::t('source.unknown') !== Sayamaapps\Kizami\I18n::t('source.directUnknown'), 'Label differs from direct / unknown');
 			for ($i = 0; $i < 19; $i++) {
 				$put('page', 'g' . $i, 0, ['referrer' => 'www.google.com']);
 			}
@@ -136,16 +124,16 @@ final class InteractionTest extends TestCase
 				['contactTargets' => ['call', 'route'], 'images' => ['yard' => '<Photo>'], 'positionNames' => ['header' => '<Header>']]
 			);
 			$q = array_column($a['contact']['sources'], null, 'name');
-			self::same(20, $q['Google']['visits'], 'Source names merged before computing the rate');
-			self::same(5.0, $q['Google']['rate'], 'Rate counts visits, not clicks');
-			self::same(null, $q['Campaign “qr”']['rate'], 'Small sample without a percentage');
+			Assert::assertSame(20, $q['Google']['visits'], 'Source names merged before computing the rate');
+			Assert::assertSame(5.0, $q['Google']['rate'], 'Rate counts visits, not clicks');
+			Assert::assertSame(null, $q['Campaign “qr”']['rate'], 'Small sample without a percentage');
 			// Render in its own scope: the view's loop variables must not clobber the test's globals.
 			$html = (static function (array $data): string {
 				ob_start();
 				include __DIR__ . '/../views/dashboard.php';
 				return ob_get_clean();
 			})($a);
-			self::same(true, str_contains($html, '&lt;Photo&gt;') && str_contains($html, '&lt;Header&gt;') && !str_contains($html, '<Photo>'), 'New tables HTML-escaped');
+			Assert::assertSame(true, str_contains($html, '&lt;Photo&gt;') && str_contains($html, '&lt;Header&gt;') && !str_contains($html, '<Photo>'), 'New tables HTML-escaped');
 		} finally {
 			unset($store,$store2,$own,$db);
 			foreach (glob("$tmp/*") as $f) {

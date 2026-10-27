@@ -64,7 +64,6 @@ const cases = {
 };
 process.stdout.write(JSON.stringify(cases));
 JS;
-		$n = 0;
 		$failed = false;
 		$dir = sys_get_temp_dir() . '/kizami-eventjs-' . bin2hex(random_bytes(6));
 		try {
@@ -85,7 +84,6 @@ JS;
 				if ($sent !== $wanted) {
 					Assert::fail("$case: " . json_encode($sent));
 				}
-				$n++;
 				Assert::assertTrue(true);
 			};
 			$expect('attribute', '/books/kizami'); // click, play and kizami.event() send the path of the tag

@@ -171,22 +171,6 @@ use Sayamaapps\Kizami\Store;
 #[RunTestsInSeparateProcesses]
 final class CoreTest extends TestCase
 {
-	private static function check(string $what, mixed $expected, mixed $actual): void
-	{
-		global $passed, $failures;
-		if ($expected === $actual) {
-			$passed++;
-			Assert::assertTrue(true);
-			return;
-		}
-		$failures[] = sprintf(
-			"  ✗ %s\n      expected: %s\n      actual:   %s",
-			$what,
-			var_export($expected, true),
-			var_export($actual, true)
-		);
-	}
-
 	private static function day(string $ymd): DateTimeImmutable
 	{
 		return new DateTimeImmutable($ymd, new DateTimeZone('Europe/Berlin'));
@@ -219,97 +203,26 @@ final class CoreTest extends TestCase
 		// Failure paths below raise PHP warnings on purpose (read-only directories,
 		// a file where a directory belongs). They are expected, not failures.
 		set_error_handler(static fn (): bool => true, E_WARNING);
-		global $passed, $failures;
 		$logFile = sys_get_temp_dir() . '/kizami-log-' . bin2hex(random_bytes(6)) . '.txt';
 		ini_set('error_log', $logFile);
-		$passed = 0;
-		$failures = [];
 		$h1 = Capture::sessionHash('1.2.3.4', 'Firefox', 'secret', self::day('2026-08-25'));
-		self::check(
-			'Hash is deterministic for equal inputs',
-			$h1,
-			Capture::sessionHash('1.2.3.4', 'Firefox', 'secret', self::day('2026-08-25'))
-		);
-		self::check(
-			'Hash rotates across the day boundary',
-			false,
-			$h1 === Capture::sessionHash('1.2.3.4', 'Firefox', 'secret', self::day('2026-08-26'))
-		);
-		self::check(
-			'Hash differs for another IP',
-			false,
-			$h1 === Capture::sessionHash('9.9.9.9', 'Firefox', 'secret', self::day('2026-08-25'))
-		);
-		self::check(
-			'Hash differs for another user agent',
-			false,
-			$h1 === Capture::sessionHash('1.2.3.4', 'Chrome', 'secret', self::day('2026-08-25'))
-		);
-		self::check(
-			'No secret, no hash — nothing may be recorded',
-			'',
-			Capture::sessionHash('1.2.3.4', 'Firefox', '', self::day('2026-08-25'))
-		);
-		self::check(
-			'Known bot UA counts as a bot',
-			true,
-			Capture::isBot('Mozilla/5.0 (compatible; Googlebot/2.1)')
-		);
-		self::check(
-			'Empty UA counts as a bot — no real browser omits it',
-			true,
-			Capture::isBot('')
-		);
-		self::check(
-			'Normal browser is not a bot',
-			false,
-			Capture::isBot('Mozilla/5.0 (Macintosh) Firefox/130.0')
-		);
-		self::check(
-			'DNT: 1 suppresses capture',
-			true,
-			Capture::optedOut(['HTTP_DNT' => '1'])
-		);
-		self::check(
-			'Sec-GPC: 1 suppresses capture',
-			true,
-			Capture::optedOut(['HTTP_SEC_GPC' => '1'])
-		);
-		self::check(
-			'Without DNT/GPC the request counts',
-			false,
-			Capture::optedOut(['HTTP_USER_AGENT' => 'Firefox'])
-		);
-		self::check(
-			'Path loses the query string',
-			'/services',
-			Capture::cleanPath('/services?utm_source=google')
-		);
-		self::check(
-			'Path drops dangerous characters',
-			'/scriptalert(1)/script',
-			Capture::cleanPath('/<script>alert(1)</script>')
-		);
-		self::check(
-			'Path is capped at 255 characters',
-			255,
-			strlen(Capture::cleanPath('/' . str_repeat('a', 400)))
-		);
-		self::check(
-			'Referrer is reduced to the domain',
-			'google.com',
-			Capture::cleanReferrer('https://google.com/search?q=doctor')
-		);
-		self::check(
-			'Referrer without a value gives an empty string',
-			'',
-			Capture::cleanReferrer(null)
-		);
-		self::check(
-			'utm value loses special characters',
-			'scriptalert1script',
-			Capture::cleanId('<script>alert(1)</script>')
-		);
+		Assert::assertSame($h1, Capture::sessionHash('1.2.3.4', 'Firefox', 'secret', self::day('2026-08-25')), 'Hash is deterministic for equal inputs');
+		Assert::assertSame(false, $h1 === Capture::sessionHash('1.2.3.4', 'Firefox', 'secret', self::day('2026-08-26')), 'Hash rotates across the day boundary');
+		Assert::assertSame(false, $h1 === Capture::sessionHash('9.9.9.9', 'Firefox', 'secret', self::day('2026-08-25')), 'Hash differs for another IP');
+		Assert::assertSame(false, $h1 === Capture::sessionHash('1.2.3.4', 'Chrome', 'secret', self::day('2026-08-25')), 'Hash differs for another user agent');
+		Assert::assertSame('', Capture::sessionHash('1.2.3.4', 'Firefox', '', self::day('2026-08-25')), 'No secret, no hash — nothing may be recorded');
+		Assert::assertSame(true, Capture::isBot('Mozilla/5.0 (compatible; Googlebot/2.1)'), 'Known bot UA counts as a bot');
+		Assert::assertSame(true, Capture::isBot(''), 'Empty UA counts as a bot — no real browser omits it');
+		Assert::assertSame(false, Capture::isBot('Mozilla/5.0 (Macintosh) Firefox/130.0'), 'Normal browser is not a bot');
+		Assert::assertSame(true, Capture::optedOut(['HTTP_DNT' => '1']), 'DNT: 1 suppresses capture');
+		Assert::assertSame(true, Capture::optedOut(['HTTP_SEC_GPC' => '1']), 'Sec-GPC: 1 suppresses capture');
+		Assert::assertSame(false, Capture::optedOut(['HTTP_USER_AGENT' => 'Firefox']), 'Without DNT/GPC the request counts');
+		Assert::assertSame('/services', Capture::cleanPath('/services?utm_source=google'), 'Path loses the query string');
+		Assert::assertSame('/scriptalert(1)/script', Capture::cleanPath('/<script>alert(1)</script>'), 'Path drops dangerous characters');
+		Assert::assertSame(255, strlen(Capture::cleanPath('/' . str_repeat('a', 400))), 'Path is capped at 255 characters');
+		Assert::assertSame('google.com', Capture::cleanReferrer('https://google.com/search?q=doctor'), 'Referrer is reduced to the domain');
+		Assert::assertSame('', Capture::cleanReferrer(null), 'Referrer without a value gives an empty string');
+		Assert::assertSame('scriptalert1script', Capture::cleanId('<script>alert(1)</script>'), 'utm value loses special characters');
 		$printable = fn (string $s) => json_encode($s, JSON_INVALID_UTF8_SUBSTITUTE | JSON_UNESCAPED_UNICODE);
 		foreach ([
 			['https://google.com/search?q=doctor', 'google.com'],
@@ -325,9 +238,9 @@ final class CoreTest extends TestCase
 			['garbage', ''],
 			['https://', ''],
 		] as [$url, $host]) {
-			self::check('Referrer host stays as it was: ' . $printable($url), $host, Capture::cleanReferrer($url));
+			Assert::assertSame($host, Capture::cleanReferrer($url), 'Referrer host stays as it was: ' . $printable($url));
 		}
-		self::check('Own host stays "(internal)"', '(internal)', Capture::cleanReferrer('https://own.example/x', ['own.example']));
+		Assert::assertSame('(internal)', Capture::cleanReferrer('https://own.example/x', ['own.example']), 'Own host stays "(internal)"');
 		$notices = [];
 		set_error_handler(function (int $severity, string $message) use (&$notices) {
 			$notices[] = $message;
@@ -338,19 +251,19 @@ final class CoreTest extends TestCase
 			'truncated sequence at the host end' => "https://foo.example\xC3/",
 		];
 		foreach ($invalidReferrers as $what => $url) {
-			self::check('Referrer with ' . $what . ' is discarded', '', Capture::cleanReferrer($url));
+			Assert::assertSame('', Capture::cleanReferrer($url), 'Referrer with ' . $what . ' is discarded');
 		}
 		$zeroWidth = Capture::cleanReferrer("https://a\u{200B}b.example/");
-		self::check('Referrer with a zero-width space in the host: discarded or cleaned, never stored as is', true, in_array($zeroWidth, ['', 'ab.example'], true));
+		Assert::assertSame(true, in_array($zeroWidth, ['', 'ab.example'], true), 'Referrer with a zero-width space in the host: discarded or cleaned, never stored as is');
 		restore_error_handler();
-		self::check('Discarding an invalid referrer raises no PHP notice or deprecation', [], $notices);
-		self::check('Referrer: control character is gone', 'foo_bar.example', Capture::cleanReferrer("https://foo\x01bar.example/"));
-		self::check('Referrer: <, >, " and \' are removed from the host', 'abcd.example', Capture::cleanReferrer("https://a<b>\"c'd.example/"));
-		self::check('Referrer: format character (BOM) is removed from the host', 'ab.example', Capture::cleanReferrer("https://a\u{FEFF}b.example/"));
-		self::check('Referrer: nothing left after cleaning gives an empty string', '', Capture::cleanReferrer('https://<>"\'/'));
+		Assert::assertSame([], $notices, 'Discarding an invalid referrer raises no PHP notice or deprecation');
+		Assert::assertSame('foo_bar.example', Capture::cleanReferrer("https://foo\x01bar.example/"), 'Referrer: control character is gone');
+		Assert::assertSame('abcd.example', Capture::cleanReferrer("https://a<b>\"c'd.example/"), 'Referrer: <, >, " and \' are removed from the host');
+		Assert::assertSame('ab.example', Capture::cleanReferrer("https://a\u{FEFF}b.example/"), 'Referrer: format character (BOM) is removed from the host');
+		Assert::assertSame('', Capture::cleanReferrer('https://<>"\'/'), 'Referrer: nothing left after cleaning gives an empty string');
 		$cutReferrer = Capture::cleanReferrer('https://a' . str_repeat("\u{E4}", 150) . '/');
-		self::check('Referrer is cut at 100 characters, not in the middle of one', [100, 1], [preg_match_all('/./us', $cutReferrer), preg_match('//u', $cutReferrer)]);
-		self::check('Referrer cut keeps whole characters', 'a' . str_repeat("\u{E4}", 99), $cutReferrer);
+		Assert::assertSame([100, 1], [preg_match_all('/./us', $cutReferrer), preg_match('//u', $cutReferrer)], 'Referrer is cut at 100 characters, not in the middle of one');
+		Assert::assertSame('a' . str_repeat("\u{E4}", 99), $cutReferrer, 'Referrer cut keeps whole characters');
 		foreach ([
 			['/services?utm_source=google', '/services'],
 			['/a%FFb', '/a%FFb'],                                   // Kirby keeps percent-encoding: pure ASCII
@@ -359,118 +272,78 @@ final class CoreTest extends TestCase
 			["/ok?x=\xFF", '/ok'],                                  // the query is dropped before the check
 			['/' . str_repeat('a', 255), '/' . str_repeat('a', 254)],
 		] as [$path, $expected]) {
-			self::check('Path stays as it was: ' . $printable($path), $expected, Capture::cleanPath($path));
+			Assert::assertSame($expected, Capture::cleanPath($path), 'Path stays as it was: ' . $printable($path));
 		}
-		self::check('Path with an invalid byte is discarded', '', Capture::cleanPath("/a\xFFb"));
-		self::check('Path with a truncated sequence is discarded', '', Capture::cleanPath("/a\xE2\x82"));
-		self::check('Path of an invalid byte: nothing is "repaired" into U+FFFD', false, str_contains(Capture::cleanPath("/a\xFFb"), "\u{FFFD}"));
+		Assert::assertSame('', Capture::cleanPath("/a\xFFb"), 'Path with an invalid byte is discarded');
+		Assert::assertSame('', Capture::cleanPath("/a\xE2\x82"), 'Path with a truncated sequence is discarded');
+		Assert::assertSame(false, str_contains(Capture::cleanPath("/a\xFFb"), "\u{FFFD}"), 'Path of an invalid byte: nothing is "repaired" into U+FFFD');
 		$cutPath = Capture::cleanPath('/' . str_repeat("\u{20AC}", 100));
-		self::check('Path is cut at 255 bytes on a character boundary', [1 + 3 * 84, 1], [strlen($cutPath), preg_match('//u', $cutPath)]);
-		self::check('Path cut keeps whole characters', '/' . str_repeat("\u{20AC}", 84), $cutPath);
-		self::check('Path of 400 ASCII characters still ends at 255 bytes', 255, strlen(Capture::cleanPath('/' . str_repeat('a', 400))));
-		self::check(
-			'utm value is capped at 50 characters',
-			50,
-			strlen(Capture::cleanId(str_repeat('a', 80)))
-		);
-		self::check(
-			'utm value without content gives an empty string',
-			'',
-			Capture::cleanId(null)
-		);
+		Assert::assertSame([1 + 3 * 84, 1], [strlen($cutPath), preg_match('//u', $cutPath)], 'Path is cut at 255 bytes on a character boundary');
+		Assert::assertSame('/' . str_repeat("\u{20AC}", 84), $cutPath, 'Path cut keeps whole characters');
+		Assert::assertSame(255, strlen(Capture::cleanPath('/' . str_repeat('a', 400))), 'Path of 400 ASCII characters still ends at 255 bytes');
+		Assert::assertSame(50, strlen(Capture::cleanId(str_repeat('a', 80))), 'utm value is capped at 50 characters');
+		Assert::assertSame('', Capture::cleanId(null), 'utm value without content gives an empty string');
 		$tmp = sys_get_temp_dir() . '/kizami-test-' . bin2hex(random_bytes(6));
 		$s1 = Secret::get($tmp, '2026-09-20');
-		self::check('Secret is not empty', false, $s1 === '');
-		self::check('Secret has full length (32 bytes hex)', 64, strlen($s1));
-		self::check(
-			'Second call on the same day returns the same secret',
-			$s1,
-			Secret::get($tmp, '2026-09-20')
-		);
-		self::check('File has mode 0600', '0600', substr(sprintf('%o', fileperms($tmp . '/' . Secret::FILE)), -4));
+		Assert::assertSame(false, $s1 === '', 'Secret is not empty');
+		Assert::assertSame(64, strlen($s1), 'Secret has full length (32 bytes hex)');
+		Assert::assertSame($s1, Secret::get($tmp, '2026-09-20'), 'Second call on the same day returns the same secret');
+		Assert::assertSame('0600', substr(sprintf('%o', fileperms($tmp . '/' . Secret::FILE)), -4), 'File has mode 0600');
 		$s2 = Secret::get($tmp, '2026-09-21');
-		self::check('A different secret on the next day', false, $s1 === $s2);
-		self::check(
-			'The new secret is the valid one from now on',
-			$s2,
-			Secret::get($tmp, '2026-09-21')
-		);
-		self::check(
-			'The old secret is no longer in the file',
-			false,
-			str_contains((string)file_get_contents($tmp . '/' . Secret::FILE), $s1)
-		);
+		Assert::assertSame(false, $s1 === $s2, 'A different secret on the next day');
+		Assert::assertSame($s2, Secret::get($tmp, '2026-09-21'), 'The new secret is the valid one from now on');
+		Assert::assertSame(false, str_contains((string)file_get_contents($tmp . '/' . Secret::FILE), $s1), 'The old secret is no longer in the file');
 		$unwritable = '/proc/kizami-does-not-exist';
-		self::check(
-			'Directory that cannot be created → empty string, no crash',
-			'',
-			Secret::get($unwritable, '2026-09-20')
-		);
-		self::check(
-			'… and writes a log entry',
-			true,
-			str_contains((string)@file_get_contents($logFile), 'secret directory cannot be created')
-		);
+		Assert::assertSame('', Secret::get($unwritable, '2026-09-20'), 'Directory that cannot be created → empty string, no crash');
+		Assert::assertSame(true, str_contains((string)@file_get_contents($logFile), 'secret directory cannot be created'), '… and writes a log entry');
 		$rot = sys_get_temp_dir() . '/kizami-rotate-' . bin2hex(random_bytes(6));
-		self::check('rotate() with no key file: nothing to do, true', true, Secret::rotate($rot, '2026-09-22'));
-		self::check('… and it creates neither directory nor key', false, file_exists($rot));
+		Assert::assertSame(true, Secret::rotate($rot, '2026-09-22'), 'rotate() with no key file: nothing to do, true');
+		Assert::assertSame(false, file_exists($rot), '… and it creates neither directory nor key');
 		mkdir($rot, 0755, true);
-		self::check(
-			'rotate() in an existing directory without a key: true, no file',
-			[true, false],
-			[Secret::rotate($rot, '2026-09-22'), is_file($rot . '/' . Secret::FILE)]
-		);
+		Assert::assertSame([true, false], [Secret::rotate($rot, '2026-09-22'), is_file($rot . '/' . Secret::FILE)], 'rotate() in an existing directory without a key: true, no file');
 		file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
-		self::check('rotate() replaces a stale key', true, Secret::rotate($rot, '2026-09-22'));
+		Assert::assertSame(true, Secret::rotate($rot, '2026-09-22'), 'rotate() replaces a stale key');
 		[$rotDate, $rotValue] = explode("\n", (string)file_get_contents($rot . '/' . Secret::FILE), 2);
-		self::check('… the date line is the given day', '2026-09-22', $rotDate);
-		self::check('… the value is new and full length', [false, 64], [$rotValue === 'STALE-SECRET-VALUE', strlen($rotValue)]);
-		self::check('… and it is the key get() returns now', $rotValue, Secret::get($rot, '2026-09-22'));
-		self::check('… file mode stays 0600', '0600', substr(sprintf('%o', fileperms($rot . '/' . Secret::FILE)), -4));
+		Assert::assertSame('2026-09-22', $rotDate, '… the date line is the given day');
+		Assert::assertSame([false, 64], [$rotValue === 'STALE-SECRET-VALUE', strlen($rotValue)], '… the value is new and full length');
+		Assert::assertSame($rotValue, Secret::get($rot, '2026-09-22'), '… and it is the key get() returns now');
+		Assert::assertSame('0600', substr(sprintf('%o', fileperms($rot . '/' . Secret::FILE)), -4), '… file mode stays 0600');
 		$before = (string)file_get_contents($rot . '/' . Secret::FILE);
-		self::check('rotate() with a current key: true', true, Secret::rotate($rot, '2026-09-22'));
-		self::check('… the file is untouched byte for byte', $before, (string)file_get_contents($rot . '/' . Secret::FILE));
-		self::check('rotate() leaves no temp files behind', [$rot . '/' . Secret::FILE], glob($rot . '/*'));
+		Assert::assertSame(true, Secret::rotate($rot, '2026-09-22'), 'rotate() with a current key: true');
+		Assert::assertSame($before, (string)file_get_contents($rot . '/' . Secret::FILE), '… the file is untouched byte for byte');
+		Assert::assertSame([$rot . '/' . Secret::FILE], glob($rot . '/*'), 'rotate() leaves no temp files behind');
 		file_put_contents($rot . '/' . Secret::FILE, 'garbage without date line');
-		self::check(
-			'rotate() replaces a file without a date line',
-			[true, '2026-09-22'],
-			[Secret::rotate($rot, '2026-09-22'), explode("\n", (string)file_get_contents($rot . '/' . Secret::FILE))[0]]
-		);
+		Assert::assertSame([true, '2026-09-22'], [Secret::rotate($rot, '2026-09-22'), explode("\n", (string)file_get_contents($rot . '/' . Secret::FILE))[0]], 'rotate() replaces a file without a date line');
 		if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
 			file_put_contents($rot . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
 			chmod($rot, 0555);
-			self::check('rotate() reports false when a stale key cannot be replaced', false, Secret::rotate($rot, '2026-09-23'));
-			self::check('… and the stale key stays (honest failure, not a silent success)', "2010-01-01\nSTALE-SECRET-VALUE", (string)file_get_contents($rot . '/' . Secret::FILE));
-			self::check('… with a log entry', true, str_contains((string)@file_get_contents($logFile), 'secret not writable'));
+			Assert::assertSame(false, Secret::rotate($rot, '2026-09-23'), 'rotate() reports false when a stale key cannot be replaced');
+			Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", (string)file_get_contents($rot . '/' . Secret::FILE), '… and the stale key stays (honest failure, not a silent success)');
+			Assert::assertSame(true, str_contains((string)@file_get_contents($logFile), 'secret not writable'), '… with a log entry');
 			chmod($rot, 0755);
 		}
 		@unlink($rot . '/' . Secret::FILE);
 		@rmdir($rot);
 		$exp = sys_get_temp_dir() . '/kizami-expire-' . bin2hex(random_bytes(6));
-		self::check('expire() with no directory: true', true, Secret::expire($exp, '2026-09-22'));
-		self::check('… and it creates neither directory nor key', false, file_exists($exp));
+		Assert::assertSame(true, Secret::expire($exp, '2026-09-22'), 'expire() with no directory: true');
+		Assert::assertSame(false, file_exists($exp), '… and it creates neither directory nor key');
 		mkdir($exp, 0755, true);
-		self::check(
-			'expire() in an existing directory without a key: true, still no file',
-			[true, false],
-			[Secret::expire($exp, '2026-09-22'), is_file($exp . '/' . Secret::FILE)]
-		);
+		Assert::assertSame([true, false], [Secret::expire($exp, '2026-09-22'), is_file($exp . '/' . Secret::FILE)], 'expire() in an existing directory without a key: true, still no file');
 		file_put_contents($exp . '/' . Secret::FILE, "2026-09-22\nCURRENT-SECRET-VALUE");
-		self::check('expire() with a current key: true', true, Secret::expire($exp, '2026-09-22'));
-		self::check('… the file is untouched byte for byte', "2026-09-22\nCURRENT-SECRET-VALUE", (string)file_get_contents($exp . '/' . Secret::FILE));
+		Assert::assertSame(true, Secret::expire($exp, '2026-09-22'), 'expire() with a current key: true');
+		Assert::assertSame("2026-09-22\nCURRENT-SECRET-VALUE", (string)file_get_contents($exp . '/' . Secret::FILE), '… the file is untouched byte for byte');
 		file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
-		self::check('expire() removes a stale key', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
-		self::check('… and leaves nothing else behind', [], glob($exp . '/*'));
+		Assert::assertSame([true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)], 'expire() removes a stale key');
+		Assert::assertSame([], glob($exp . '/*'), '… and leaves nothing else behind');
 		file_put_contents($exp . '/' . Secret::FILE, 'garbage without date line');
-		self::check('expire() removes a file without a date line', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+		Assert::assertSame([true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)], 'expire() removes a file without a date line');
 		file_put_contents($exp . '/' . Secret::FILE, '');
-		self::check('expire() removes an empty file', [true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)]);
+		Assert::assertSame([true, false], [Secret::expire($exp, '2026-09-22'), file_exists($exp . '/' . Secret::FILE)], 'expire() removes an empty file');
 		if (function_exists('posix_geteuid') && posix_geteuid() !== 0) {
 			file_put_contents($exp . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
 			chmod($exp, 0555);
-			self::check('expire() reports false when a stale key cannot be removed', false, Secret::expire($exp, '2026-09-23'));
-			self::check('… and the stale key stays', "2010-01-01\nSTALE-SECRET-VALUE", (string)file_get_contents($exp . '/' . Secret::FILE));
+			Assert::assertSame(false, Secret::expire($exp, '2026-09-23'), 'expire() reports false when a stale key cannot be removed');
+			Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", (string)file_get_contents($exp . '/' . Secret::FILE), '… and the stale key stays');
 			chmod($exp, 0755);
 		}
 		@unlink($exp . '/' . Secret::FILE);
@@ -481,8 +354,8 @@ final class CoreTest extends TestCase
 		mkdir($dbDir, 0755, true);
 		$dbPath = $dbDir . '/' . Store::FILE;
 		$st = new Store($dbPath);
-		self::check('Schema is complete after creation', [], $st->missingTables());
-		self::check('Fresh DB is writable', null, $st->writeProbe());
+		Assert::assertSame([], $st->missingTables(), 'Schema is complete after creation');
+		Assert::assertSame(null, $st->writeProbe(), 'Fresh DB is writable');
 		$st->write([
 			'type' => 'page', 'action' => 'view', 'path' => '/services',
 			'referrer' => 'google.com', 'utm_source' => 'newsletter',
@@ -490,12 +363,8 @@ final class CoreTest extends TestCase
 		]);
 		$db = new SQLite3($dbPath);
 		$count = (int)$db->querySingle('SELECT COUNT(*) FROM kizami_events');
-		self::check('One row was written', 1, $count);
-		self::check(
-			'The missing field target is stored as an empty string',
-			'',
-			(string)$db->querySingle('SELECT target FROM kizami_events')
-		);
+		Assert::assertSame(1, $count, 'One row was written');
+		Assert::assertSame('', (string)$db->querySingle('SELECT target FROM kizami_events'), 'The missing field target is stored as an empty string');
 		$db->close();
 		$broken = new Store($dbDir . '/broken.sqlite');
 		$db2 = new SQLite3($dbDir . '/broken.sqlite');
@@ -511,12 +380,8 @@ final class CoreTest extends TestCase
 		} catch (\RuntimeException $e) {
 			$thrown = true;
 		}
-		self::check('Writing to a broken schema throws', true, $thrown);
-		self::check(
-			'missingTables detects the missing schema',
-			['kizami_events'],
-			$broken->missingTables()
-		);
+		Assert::assertSame(true, $thrown, 'Writing to a broken schema throws');
+		Assert::assertSame(['kizami_events'], $broken->missingTables(), 'missingTables detects the missing schema');
 		$roFile = $dbDir . '/read-only.sqlite';
 		touch($roFile);
 		chmod($roFile, 0444);
@@ -526,7 +391,7 @@ final class CoreTest extends TestCase
 		} catch (\RuntimeException $e) {
 			$thrownRo = true;
 		}
-		self::check('Schemaless read-only DB throws RuntimeException', true, $thrownRo);
+		Assert::assertSame(true, $thrownRo, 'Schemaless read-only DB throws RuntimeException');
 		chmod($roFile, 0644);
 		$db3 = new SQLite3($dbPath);
 		$db3->exec("INSERT INTO kizami_events (type,action,path,referrer,utm_source,session) VALUES
@@ -538,124 +403,52 @@ final class CoreTest extends TestCase
     ('page','view','/ancient','2019-01-01 12:00:00','hashC')");
 		$db3->close();
 		$pages = $st->viewsPerPage(30);
-		self::check('Most viewed page is /services', '/services', $pages[0]['path']);
-		self::check('/services has four views (including the row written above)', 4, $pages[0]['count']);
-		self::check(
-			'Visits count distinct sessions (within 30 days: A and B)',
-			2,
-			$st->visits(30)
-		);
+		Assert::assertSame('/services', $pages[0]['path'], 'Most viewed page is /services');
+		Assert::assertSame(4, $pages[0]['count'], '/services has four views (including the row written above)');
+		Assert::assertSame(2, $st->visits(30), 'Visits count distinct sessions (within 30 days: A and B)');
 		$perDay = $st->viewsPerDay(30);
-		self::check('Views per day return exactly one day (everything is from today)', 1, count($perDay));
-		self::check('And count all five rows of today', 5, $perDay[0]['count']);
+		Assert::assertSame(1, count($perDay), 'Views per day return exactly one day (everything is from today)');
+		Assert::assertSame(5, $perDay[0]['count'], 'And count all five rows of today');
 		$sources = array_column($st->sources(30), 'count', 'source');
-		self::check('Sources know the referrer domain', 1, $sources['google.com'] ?? 0);
-		self::check(
-			'With referrer AND utm, utm wins — the same row counts only once',
-			2,
-			$sources['utm:newsletter'] ?? 0
-		);
-		self::check('Sources count the rest as direct', 2, $sources[Names::DIRECT] ?? 0);
-		self::check(
-			'The sum is the number of views in the window, nothing twice',
-			5,
-			array_sum($sources)
-		);
+		Assert::assertSame(1, $sources['google.com'] ?? 0, 'Sources know the referrer domain');
+		Assert::assertSame(2, $sources['utm:newsletter'] ?? 0, 'With referrer AND utm, utm wins — the same row counts only once');
+		Assert::assertSame(2, $sources[Names::DIRECT] ?? 0, 'Sources count the rest as direct');
+		Assert::assertSame(5, array_sum($sources), 'The sum is the number of views in the window, nothing twice');
 		$deleted = $st->compact();
-		self::check('Compaction removes the row older than the retention (13 months)', 1, $deleted);
+		Assert::assertSame(1, $deleted, 'Compaction removes the row older than the retention (13 months)');
 		$db4 = new SQLite3($dbPath);
 		$rest = (int)$db4->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/ancient'");
 		$db4->close();
-		self::check('The ancient row is gone', 0, $rest);
+		Assert::assertSame(0, $rest, 'The ancient row is gone');
 		$hash  = password_hash('secret123', PASSWORD_DEFAULT);
 		$creds = ['user' => 'client', 'hash' => $hash];
-		self::check(
-			'Right user + right password → granted',
-			true,
-			Access::checkFile($creds, 'client', 'secret123')
-		);
-		self::check(
-			'Right user + wrong password → denied',
-			false,
-			Access::checkFile($creds, 'client', 'wrong')
-		);
-		self::check(
-			'Wrong user → denied',
-			false,
-			Access::checkFile($creds, 'stranger', 'secret123')
-		);
-		self::check(
-			'Missing configuration → denied (fail closed, unlike a preview guard)',
-			false,
-			Access::checkFile(null, 'client', 'secret123')
-		);
-		self::check(
-			'Empty hash → denied',
-			false,
-			Access::checkFile(['user' => 'client', 'hash' => ''], 'client', 'secret123')
-		);
-		self::check(
-			'Missing input → denied',
-			false,
-			Access::checkFile($creds, null, null)
-		);
-		self::check(
-			'Name is lower-cased and cleaned',
-			'call',
-			Redirect::cleanName('Call')
-		);
-		self::check(
-			'Special characters are dropped from the name',
-			'call',
-			Redirect::cleanName('ca<>ll')
-		);
-		self::check(
-			'Hyphen and underscore stay',
-			'plan-route_2',
-			Redirect::cleanName('Plan-Route_2')
-		);
-		self::check(
-			'Name is capped at 50 characters',
-			50,
-			strlen(Redirect::cleanName(str_repeat('a', 80)))
-		);
-		self::check('Null gives an empty string', '', Redirect::cleanName(null));
-		self::check(
-			'A string target is passed through',
-			'tel:+4980317',
-			Redirect::resolveTarget('tel:+4980317')
-		);
-		self::check(
-			'A closure target is called',
-			'tel:+4980317',
-			Redirect::resolveTarget(fn () => 'tel:+4980317')
-		);
-		self::check(
-			'Throwing closure gives an empty string instead of a crash',
-			'',
-			Redirect::resolveTarget(function () {
-				throw new \RuntimeException('broken');
-			})
-		);
-		self::check(
-			'… and logs why the target is missing',
-			true,
-			str_contains((string)@file_get_contents($logFile), 'redirect target cannot be resolved')
-		);
-		self::check('Array target gives an empty string', '', Redirect::resolveTarget(['tel:1']));
-		self::check('tel: is allowed', true, Redirect::targetAllowed('tel:+4980317'));
-		self::check('mailto: is allowed', true, Redirect::targetAllowed('mailto:farm@example.org'));
-		self::check('https: is allowed', true, Redirect::targetAllowed('https://example.org/x'));
-		self::check('Own path is allowed', true, Redirect::targetAllowed('/menu'));
-		self::check('javascript: is forbidden', false, Redirect::targetAllowed('javascript:alert(1)'));
-		self::check('data: is forbidden', false, Redirect::targetAllowed('data:text/html,<script>'));
-		self::check('http: without TLS is forbidden', false, Redirect::targetAllowed('http://example.org'));
-		self::check(
-			'Protocol-relative (//host) is forbidden',
-			false,
-			Redirect::targetAllowed('//foreign.example/phishing')
-		);
-		self::check('Empty target is forbidden', false, Redirect::targetAllowed(''));
+		Assert::assertSame(true, Access::checkFile($creds, 'client', 'secret123'), 'Right user + right password → granted');
+		Assert::assertSame(false, Access::checkFile($creds, 'client', 'wrong'), 'Right user + wrong password → denied');
+		Assert::assertSame(false, Access::checkFile($creds, 'stranger', 'secret123'), 'Wrong user → denied');
+		Assert::assertSame(false, Access::checkFile(null, 'client', 'secret123'), 'Missing configuration → denied (fail closed, unlike a preview guard)');
+		Assert::assertSame(false, Access::checkFile(['user' => 'client', 'hash' => ''], 'client', 'secret123'), 'Empty hash → denied');
+		Assert::assertSame(false, Access::checkFile($creds, null, null), 'Missing input → denied');
+		Assert::assertSame('call', Redirect::cleanName('Call'), 'Name is lower-cased and cleaned');
+		Assert::assertSame('call', Redirect::cleanName('ca<>ll'), 'Special characters are dropped from the name');
+		Assert::assertSame('plan-route_2', Redirect::cleanName('Plan-Route_2'), 'Hyphen and underscore stay');
+		Assert::assertSame(50, strlen(Redirect::cleanName(str_repeat('a', 80))), 'Name is capped at 50 characters');
+		Assert::assertSame('', Redirect::cleanName(null), 'Null gives an empty string');
+		Assert::assertSame('tel:+4980317', Redirect::resolveTarget('tel:+4980317'), 'A string target is passed through');
+		Assert::assertSame('tel:+4980317', Redirect::resolveTarget(fn () => 'tel:+4980317'), 'A closure target is called');
+		Assert::assertSame('', Redirect::resolveTarget(function () {
+			throw new \RuntimeException('broken');
+		}), 'Throwing closure gives an empty string instead of a crash');
+		Assert::assertSame(true, str_contains((string)@file_get_contents($logFile), 'redirect target cannot be resolved'), '… and logs why the target is missing');
+		Assert::assertSame('', Redirect::resolveTarget(['tel:1']), 'Array target gives an empty string');
+		Assert::assertSame(true, Redirect::targetAllowed('tel:+4980317'), 'tel: is allowed');
+		Assert::assertSame(true, Redirect::targetAllowed('mailto:farm@example.org'), 'mailto: is allowed');
+		Assert::assertSame(true, Redirect::targetAllowed('https://example.org/x'), 'https: is allowed');
+		Assert::assertSame(true, Redirect::targetAllowed('/menu'), 'Own path is allowed');
+		Assert::assertSame(false, Redirect::targetAllowed('javascript:alert(1)'), 'javascript: is forbidden');
+		Assert::assertSame(false, Redirect::targetAllowed('data:text/html,<script>'), 'data: is forbidden');
+		Assert::assertSame(false, Redirect::targetAllowed('http://example.org'), 'http: without TLS is forbidden');
+		Assert::assertSame(false, Redirect::targetAllowed('//foreign.example/phishing'), 'Protocol-relative (//host) is forbidden');
+		Assert::assertSame(false, Redirect::targetAllowed(''), 'Empty target is forbidden');
 		$stR = new Store($dbDir . '/redirect.sqlite');
 		foreach ([['/cafe', 'call'], ['/cafe', 'call'], ['/', 'call']] as [$pathR, $targetR]) {
 			$stR->write([
@@ -670,131 +463,55 @@ final class CoreTest extends TestCase
 			'utm_campaign' => '', 'session' => 'hashW',
 		]);
 		$r = $stR->redirects(30);
-		self::check('Two origin pages grouped', 2, count($r));
-		self::check('Most clicked origin comes first', '/cafe', $r[0]['path']);
-		self::check('With the right count', 2, $r[0]['count']);
-		self::check('And the right target', 'call', $r[0]['target']);
+		Assert::assertSame(2, count($r), 'Two origin pages grouped');
+		Assert::assertSame('/cafe', $r[0]['path'], 'Most clicked origin comes first');
+		Assert::assertSame(2, $r[0]['count'], 'With the right count');
+		Assert::assertSame('call', $r[0]['target'], 'And the right target');
 		$stX = new Store(':memory:');
 		$stX->write(['type' => 'page', 'action' => 'view', 'path' => '/<script>alert(1)</script>', 'referrer' => 'utm:"><script>evil</script>']);
 		for ($i = 0; $i < 7; $i++) {
 			$stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'ca<script>ll</script>', 'path' => '/']);
 		}
 		$html = self::renderDashboard(Analysis::data($stX, new Names([], [], []), 30, []));
-		self::check(
-			'Dashboard escapes the path — no raw <script>',
-			false,
-			str_contains($html, '<script>alert(1)</script>')
-		);
-		self::check(
-			'Dashboard escapes the source — no raw <script>',
-			false,
-			str_contains($html, '<script>evil</script>')
-		);
-		self::check(
-			'Dashboard escapes the redirect target — no raw <script>',
-			false,
-			str_contains($html, '<script>ll</script>')
-		);
-		self::check(
-			'Escaped markup is present (proof that the value was rendered at all)',
-			true,
-			str_contains($html, '&lt;script&gt;')
-		);
-		self::check(
-			'No inline event handler in the output (CSP break)',
-			false,
-			str_contains(strtolower($html), 'onclick=')
-		);
-		self::check(
-			'The redirect count is in the output',
-			true,
-			str_contains($html, '>7<')
-		);
+		Assert::assertSame(false, str_contains($html, '<script>alert(1)</script>'), 'Dashboard escapes the path — no raw <script>');
+		Assert::assertSame(false, str_contains($html, '<script>evil</script>'), 'Dashboard escapes the source — no raw <script>');
+		Assert::assertSame(false, str_contains($html, '<script>ll</script>'), 'Dashboard escapes the redirect target — no raw <script>');
+		Assert::assertSame(true, str_contains($html, '&lt;script&gt;'), 'Escaped markup is present (proof that the value was rendered at all)');
+		Assert::assertSame(false, str_contains(strtolower($html), 'onclick='), 'No inline event handler in the output (CSP break)');
+		Assert::assertSame(true, str_contains($html, '>7<'), 'The redirect count is in the output');
 		$stBad = new Store(':memory:');
 		$stBad->write(['type' => 'page', 'action' => 'view', 'path' => "/a\xFFb", 'referrer' => "foo\xFF.example", 'session' => 'bad', 'device' => 'desktop']);
 		$stBad->write(['type' => 'notfound', 'action' => 'view', 'path' => "/missing\xFFpage", 'session' => 'bad2']);
 		$htmlBad = self::renderDashboard(Analysis::data($stBad, new Names([], [], []), 30, []));
-		self::check(
-			'Dashboard shows an invalid source with U+FFFD, not empty',
-			true,
-			str_contains($htmlBad, "foo\u{FFFD}.example")
-		);
-		self::check(
-			'Dashboard shows an invalid page path with U+FFFD, not empty',
-			true,
-			str_contains($htmlBad, "/a\u{FFFD}b")
-		);
-		self::check(
-			'Dashboard shows an invalid missing-page path with U+FFFD',
-			true,
-			str_contains($htmlBad, "<td>/missing\u{FFFD}page</td>")
-		);
-		self::check(
-			'Dashboard output stays valid UTF-8 with invalid stored bytes',
-			1,
-			preg_match('//u', $htmlBad)
-		);
+		Assert::assertSame(true, str_contains($htmlBad, "foo\u{FFFD}.example"), 'Dashboard shows an invalid source with U+FFFD, not empty');
+		Assert::assertSame(true, str_contains($htmlBad, "/a\u{FFFD}b"), 'Dashboard shows an invalid page path with U+FFFD, not empty');
+		Assert::assertSame(true, str_contains($htmlBad, "<td>/missing\u{FFFD}page</td>"), 'Dashboard shows an invalid missing-page path with U+FFFD');
+		Assert::assertSame(1, preg_match('//u', $htmlBad), 'Dashboard output stays valid UTF-8 with invalid stored bytes');
 		$unavailable = self::renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test']);
-		self::check(
-			'No setup message by default',
-			1,
-			substr_count($unavailable, 'class="warning"')
-		);
-		self::check(
-			'Stylesheet defaults to the domain root',
-			true,
-			str_contains($unavailable, '<link rel="stylesheet" href="/k/dashboard.css">')
-		);
+		Assert::assertSame(1, substr_count($unavailable, 'class="warning"'), 'No setup message by default');
+		Assert::assertSame(true, str_contains($unavailable, '<link rel="stylesheet" href="/k/dashboard.css">'), 'Stylesheet defaults to the domain root');
 		$unavailable = self::renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'setup' => 'Kizami: storage root /a&b/<x> is "bad"', 'cssUrl' => 'https://example.invalid/sub/k/dashboard.css']);
-		self::check(
-			'Setup message is shown escaped under the warning',
-			true,
-			str_contains($unavailable, '<p class="warning">Kizami: storage root /a&amp;b/&lt;x&gt; is &quot;bad&quot;</p>')
-		);
-		self::check(
-			'Setup message is never printed raw',
-			false,
-			str_contains($unavailable, '<x>')
-		);
-		self::check(
-			'Stylesheet URL from the data package',
-			true,
-			str_contains($unavailable, '<link rel="stylesheet" href="https://example.invalid/sub/k/dashboard.css">')
-		);
+		Assert::assertSame(true, str_contains($unavailable, '<p class="warning">Kizami: storage root /a&amp;b/&lt;x&gt; is &quot;bad&quot;</p>'), 'Setup message is shown escaped under the warning');
+		Assert::assertSame(false, str_contains($unavailable, '<x>'), 'Setup message is never printed raw');
+		Assert::assertSame(true, str_contains($unavailable, '<link rel="stylesheet" href="https://example.invalid/sub/k/dashboard.css">'), 'Stylesheet URL from the data package');
 		$unavailable = self::renderDashboard(['days' => 30, 'error' => true, 'brand' => 'Test', 'cssUrl' => '"><script>x</script>']);
-		self::check(
-			'Stylesheet URL is escaped',
-			false,
-			str_contains($unavailable, '<script>x')
-		);
+		Assert::assertSame(false, str_contains($unavailable, '<script>x'), 'Stylesheet URL is escaped');
 		$stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'call', 'path' => '/']);
 		$stX->write(['type' => 'redirect', 'action' => 'click', 'target' => 'route', 'path' => '/contact']);
 		$html = self::renderDashboard(Analysis::data($stX, new Names(['call' => 'Call'], [], []), 30, []));
-		self::check('Redirect with a readable name', true, str_contains($html, '<td>Call</td>'));
-		self::check('Without a name the internal name stays', true, str_contains($html, '<td>route</td>'));
-		self::check('"/" is called Home', true, str_contains($html, 'Home'));
+		Assert::assertSame(true, str_contains($html, '<td>Call</td>'), 'Redirect with a readable name');
+		Assert::assertSame(true, str_contains($html, '<td>route</td>'), 'Without a name the internal name stays');
+		Assert::assertSame(true, str_contains($html, 'Home'), '"/" is called Home');
 		I18n::setLanguage('de');
 		$htmlDe = self::renderDashboard(Analysis::data($stX, new Names(['call' => 'Anruf'], [], []), 30, []));
 		I18n::setLanguage('en');
-		self::check('German dashboard: "/" is called Startseite', true, str_contains($htmlDe, 'Startseite'));
-		self::check('German dashboard: html lang is de', true, str_contains($htmlDe, '<html lang="de">'));
-		self::check('Array utm is ignored', '', Capture::cleanId(['test']));
-		self::check('Nested path is ignored', '', Capture::cleanPath([['x']]));
-		self::check(
-			'Internal referrer stays separate from direct access',
-			'(internal)',
-			Capture::cleanReferrer('https://EXAMPLE.org./x', ['example.org'])
-		);
-		self::check(
-			'Foreign referrer stays external',
-			'other.org',
-			Capture::cleanReferrer('https://other.org/x', ['example.org'])
-		);
-		self::check(
-			'Array in the access file is rejected',
-			false,
-			Access::checkFile(['user' => [], 'hash' => []], 'x', 'x')
-		);
+		Assert::assertSame(true, str_contains($htmlDe, 'Startseite'), 'German dashboard: "/" is called Startseite');
+		Assert::assertSame(true, str_contains($htmlDe, '<html lang="de">'), 'German dashboard: html lang is de');
+		Assert::assertSame('', Capture::cleanId(['test']), 'Array utm is ignored');
+		Assert::assertSame('', Capture::cleanPath([['x']]), 'Nested path is ignored');
+		Assert::assertSame('(internal)', Capture::cleanReferrer('https://EXAMPLE.org./x', ['example.org']), 'Internal referrer stays separate from direct access');
+		Assert::assertSame('other.org', Capture::cleanReferrer('https://other.org/x', ['example.org']), 'Foreign referrer stays external');
+		Assert::assertSame(false, Access::checkFile(['user' => [], 'hash' => []], 'x', 'x'), 'Array in the access file is rejected');
 		$dst = new Store($dbDir . '/dst.sqlite');
 		$dstDb = new SQLite3($dbDir . '/dst.sqlite');
 		foreach (['2025-03-29 23:30:00', '2025-03-30 22:30:00', '2025-10-25 22:30:00', '2025-10-26 23:30:00'] as $time) {
@@ -802,28 +519,16 @@ final class CoreTest extends TestCase
 		}
 		$daysDst = array_column($dst->viewsPerDay(3650), 'count', 'day');
 		foreach (['2025-03-30', '2025-03-31', '2025-10-26', '2025-10-27'] as $date) {
-			self::check('Berlin day grouping including daylight saving time: ' . $date, 1, $daysDst[$date] ?? 0);
+			Assert::assertSame(1, $daysDst[$date] ?? 0, 'Berlin day grouping including daylight saving time: ' . $date);
 		}
 		$dstDb->exec("INSERT INTO kizami_events (type, created_at) VALUES ('page','2010-01-01 00:00:00')");
 		$dst->write(['type' => 'page', 'action' => 'view']);
-		self::check(
-			'A new view compacts without the dashboard',
-			0,
-			$dstDb->querySingle("SELECT count(*) FROM kizami_events WHERE created_at < '2011'")
-		);
+		Assert::assertSame(0, $dstDb->querySingle("SELECT count(*) FROM kizami_events WHERE created_at < '2011'"), 'A new view compacts without the dashboard');
 		$dst->snapshot($dbDir . '/snapshot.sqlite');
-		self::check(
-			'SQLite snapshot without WAL mode and side files',
-			[1, false, false],
-			[ord(file_get_contents($dbDir . '/snapshot.sqlite', false, null, 18, 1)), is_file($dbDir . '/snapshot.sqlite-wal'), is_file($dbDir . '/snapshot.sqlite-shm')]
-		);
+		Assert::assertSame([1, false, false], [ord(file_get_contents($dbDir . '/snapshot.sqlite', false, null, 18, 1)), is_file($dbDir . '/snapshot.sqlite-wal'), is_file($dbDir . '/snapshot.sqlite-shm')], 'SQLite snapshot without WAL mode and side files');
 		$backup = new SQLite3($dbDir . '/snapshot.sqlite');
-		self::check('SQLite snapshot is consistent', 'ok', $backup->querySingle('PRAGMA integrity_check'));
-		self::check(
-			'SQLite snapshot contains the WAL data',
-			$dstDb->querySingle('SELECT count(*) FROM kizami_events'),
-			$backup->querySingle('SELECT count(*) FROM kizami_events')
-		);
+		Assert::assertSame('ok', $backup->querySingle('PRAGMA integrity_check'), 'SQLite snapshot is consistent');
+		Assert::assertSame($dstDb->querySingle('SELECT count(*) FROM kizami_events'), $backup->querySingle('SELECT count(*) FROM kizami_events'), 'SQLite snapshot contains the WAL data');
 		$backup->close();
 		$dstDb->close();
 		$throws = false;
@@ -832,37 +537,33 @@ final class CoreTest extends TestCase
 		} catch (RuntimeException) {
 			$throws = true;
 		}
-		self::check('Snapshot does not overwrite an existing file', true, $throws);
-		self::check('Maintenance CLI compacts successfully', 0, self::maintenanceCli(['compact', $dbDir]));
-		self::check('Maintenance CLI without a key file creates none', [0, false], [self::maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+		Assert::assertSame(true, $throws, 'Snapshot does not overwrite an existing file');
+		Assert::assertSame(0, self::maintenanceCli(['compact', $dbDir]), 'Maintenance CLI compacts successfully');
+		Assert::assertSame([0, false], [self::maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)], 'Maintenance CLI without a key file creates none');
 		file_put_contents($dbDir . '/' . Secret::FILE, "2010-01-01\nSTALE-SECRET-VALUE");
-		self::check('Maintenance CLI with a stale key succeeds and removes it', [0, false], [self::maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)]);
+		Assert::assertSame([0, false], [self::maintenanceCli(['compact', $dbDir]), is_file($dbDir . '/' . Secret::FILE)], 'Maintenance CLI with a stale key succeeds and removes it');
 		$cliBefore = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\nCURRENT-SECRET-VALUE";
 		file_put_contents($dbDir . '/' . Secret::FILE, $cliBefore);
 		self::maintenanceCli(['compact', $dbDir]);
-		self::check('Maintenance CLI leaves a current key alone', $cliBefore, (string)file_get_contents($dbDir . '/' . Secret::FILE));
+		Assert::assertSame($cliBefore, (string)file_get_contents($dbDir . '/' . Secret::FILE), 'Maintenance CLI leaves a current key alone');
 		@unlink($dbDir . '/' . Secret::FILE);
-		self::check('Maintenance CLI snapshots successfully', 0, self::maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']));
+		Assert::assertSame(0, self::maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']), 'Maintenance CLI snapshots successfully');
 		$restoreDir = $dbDir . '/restore';
 		mkdir($restoreDir, 0700);
 		copy($dbDir . '/cli.sqlite', $restoreDir . '/' . Store::FILE);
 		$restoredDb = new SQLite3($restoreDir . '/' . Store::FILE);
-		self::check('Offline restore passes integrity_check', 'ok', $restoredDb->querySingle('PRAGMA integrity_check'));
-		self::check(
-			'Offline restore contains representative page rows',
-			4,
-			$restoredDb->querySingle("SELECT count(*) FROM kizami_events WHERE path='/services'")
-		);
+		Assert::assertSame('ok', $restoredDb->querySingle('PRAGMA integrity_check'), 'Offline restore passes integrity_check');
+		Assert::assertSame(4, $restoredDb->querySingle("SELECT count(*) FROM kizami_events WHERE path='/services'"), 'Offline restore contains representative page rows');
 		$restoredDb->close();
 		$restored = new Store($restoreDir . '/' . Store::FILE);
-		self::check('Offline restore shows the same page counts', $st->viewsPerPage(30), $restored->viewsPerPage(30));
+		Assert::assertSame($st->viewsPerPage(30), $restored->viewsPerPage(30), 'Offline restore shows the same page counts');
 		$restored->write(['type' => 'redirect', 'action' => 'click', 'path' => '/restore-test', 'target' => 'call']);
-		self::check('Offline restore can write new clicks', '/restore-test', $restored->redirects(30)[0]['path']);
+		Assert::assertSame('/restore-test', $restored->redirects(30)[0]['path'], 'Offline restore can write new clicks');
 		unset($restored);
 		array_map('unlink', glob($restoreDir . '/*') ?: []);
 		rmdir($restoreDir);
-		self::check('Maintenance CLI refuses a missing database', 1, self::maintenanceCli(['compact', $dbDir . '/not-there']));
-		self::check('Maintenance CLI refuses an existing snapshot', 1, self::maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']));
+		Assert::assertSame(1, self::maintenanceCli(['compact', $dbDir . '/not-there']), 'Maintenance CLI refuses a missing database');
+		Assert::assertSame(1, self::maintenanceCli(['snapshot', $dbDir, $dbDir . '/cli.sqlite']), 'Maintenance CLI refuses an existing snapshot');
 		array_map('unlink', glob($dbDir . '/*') ?: []);
 		@rmdir($dbDir);
 		@unlink($logFile);
@@ -871,19 +572,19 @@ final class CoreTest extends TestCase
 		$androidPhone = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36';
 		$androidTablet = 'Mozilla/5.0 (Linux; Android 13; SM-X710) AppleWebKit/537.36 Chrome/120.0 Safari/537.36';
 		$desktop = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
-		self::check('iPad is a tablet', 'tablet', Capture::deviceClass($ipad));
-		self::check('iPhone is mobile', 'mobile', Capture::deviceClass($iphone));
-		self::check('Android with Mobile is mobile', 'mobile', Capture::deviceClass($androidPhone));
-		self::check('Android without Mobile is a tablet', 'tablet', Capture::deviceClass($androidTablet));
-		self::check('Mac is desktop', 'desktop', Capture::deviceClass($desktop));
-		self::check('Empty is desktop', 'desktop', Capture::deviceClass(''));
+		Assert::assertSame('tablet', Capture::deviceClass($ipad), 'iPad is a tablet');
+		Assert::assertSame('mobile', Capture::deviceClass($iphone), 'iPhone is mobile');
+		Assert::assertSame('mobile', Capture::deviceClass($androidPhone), 'Android with Mobile is mobile');
+		Assert::assertSame('tablet', Capture::deviceClass($androidTablet), 'Android without Mobile is a tablet');
+		Assert::assertSame('desktop', Capture::deviceClass($desktop), 'Mac is desktop');
+		Assert::assertSame('desktop', Capture::deviceClass(''), 'Empty is desktop');
 		$dirG = sys_get_temp_dir() . '/kizami-device-' . bin2hex(random_bytes(4));
 		mkdir($dirG, 0700);
 		$stG = new Store($dirG . '/' . Store::FILE);
 		$stG->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'h1', 'device' => 'mobile']);
 		$dbG = new SQLite3($dirG . '/' . Store::FILE);
-		self::check('Device class is stored', 'mobile', $dbG->querySingle('SELECT device FROM kizami_events'));
-		self::check('Column device is in the schema', true, in_array('device', Store::columns(), true));
+		Assert::assertSame('mobile', $dbG->querySingle('SELECT device FROM kizami_events'), 'Device class is stored');
+		Assert::assertSame(true, in_array('device', Store::columns(), true), 'Column device is in the schema');
 		$dbG->close();
 		array_map('unlink', glob($dirG . '/*'));
 		rmdir($dirG);
@@ -902,13 +603,13 @@ final class CoreTest extends TestCase
 		$stF->write(['type' => 'notfound', 'action' => 'view', 'path' => '/does-not-exist', 'session' => 'h2']);
 		$stF->write(['type' => 'notfound', 'action' => 'view', 'path' => '/also-missing', 'session' => 'h1']);
 		$dbF = new SQLite3($dirF . '/' . Store::FILE);
-		self::check('Migration keeps old rows', 1, $dbF->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/old'"));
-		self::check('Migration adds device', '', $dbF->querySingle("SELECT device FROM kizami_events WHERE path='/old'"));
-		self::check('Path index exists after the migration', 1, $dbF->querySingle("SELECT COUNT(*) FROM sqlite_master WHERE name='idx_kizami_events_path'"));
+		Assert::assertSame(1, $dbF->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/old'"), 'Migration keeps old rows');
+		Assert::assertSame('', $dbF->querySingle("SELECT device FROM kizami_events WHERE path='/old'"), 'Migration adds device');
+		Assert::assertSame(1, $dbF->querySingle("SELECT COUNT(*) FROM sqlite_master WHERE name='idx_kizami_events_path'"), 'Path index exists after the migration');
 		$dbF->close();
 		$stF2 = new Store($dirF . '/' . Store::FILE);
 		$dbF = new SQLite3($dirF . '/' . Store::FILE);
-		self::check('Opening again does not migrate again (4 rows)', 4, $dbF->querySingle('SELECT COUNT(*) FROM kizami_events'));
+		Assert::assertSame(4, $dbF->querySingle('SELECT COUNT(*) FROM kizami_events'), 'Opening again does not migrate again (4 rows)');
 		$dbF->close();
 		$dirZ = sys_get_temp_dir() . '/kizami-intermediate-' . bin2hex(random_bytes(4));
 		mkdir($dirZ, 0700);
@@ -922,14 +623,14 @@ final class CoreTest extends TestCase
 		$stZ = new Store($dirZ . '/' . Store::FILE);
 		$stZ->write(['type' => 'notfound', 'action' => 'view', 'path' => '/x', 'session' => 'h']);
 		$mid = new SQLite3($dirZ . '/' . Store::FILE);
-		self::check('Intermediate state: device value is kept', 'tablet', $mid->querySingle("SELECT device FROM kizami_events WHERE path='/'"));
+		Assert::assertSame('tablet', $mid->querySingle("SELECT device FROM kizami_events WHERE path='/'"), 'Intermediate state: device value is kept');
 		$mid->close();
 		array_map('unlink', glob($dirZ . '/*'));
 		rmdir($dirZ);
 		$notFound = $stF->notFound(30);
-		self::check('Missing pages: most frequent first', ['path' => '/does-not-exist', 'count' => 2], $notFound[0]);
-		self::check('Missing pages do not count as page views', 1, count($stF->viewsPerPage(30)));
-		self::check('Missing pages do not count as visits', 1, $stF->visits(30));
+		Assert::assertSame(['path' => '/does-not-exist', 'count' => 2], $notFound[0], 'Missing pages: most frequent first');
+		Assert::assertSame(1, count($stF->viewsPerPage(30)), 'Missing pages do not count as page views');
+		Assert::assertSame(1, $stF->visits(30), 'Missing pages do not count as visits');
 		array_map('unlink', glob($dirF . '/*'));
 		rmdir($dirF);
 		$dirD1 = sys_get_temp_dir() . '/kizami-dwell-mig-' . bin2hex(random_bytes(4));
@@ -943,21 +644,17 @@ final class CoreTest extends TestCase
 		$oldD->close();
 		$stD1 = new Store($dirD1 . '/' . Store::FILE);
 		$dbD1 = new SQLite3($dirD1 . '/' . Store::FILE);
-		self::check(
-			'Migration to duration/seconds keeps the existing row',
-			['id' => 7, 'path' => '/old', 'device' => 'mobile', 'position' => 'header', 'seconds' => 0],
-			$dbD1->query('SELECT id,path,device,position,seconds FROM kizami_events')->fetchArray(SQLITE3_ASSOC)
-		);
+		Assert::assertSame(['id' => 7, 'path' => '/old', 'device' => 'mobile', 'position' => 'header', 'seconds' => 0], $dbD1->query('SELECT id,path,device,position,seconds FROM kizami_events')->fetchArray(SQLITE3_ASSOC), 'Migration to duration/seconds keeps the existing row');
 		$stD1b = new Store($dirD1 . '/' . Store::FILE);
-		self::check('Opening again does not migrate again', 1, $dbD1->querySingle('SELECT COUNT(*) FROM kizami_events'));
+		Assert::assertSame(1, $dbD1->querySingle('SELECT COUNT(*) FROM kizami_events'), 'Opening again does not migrate again');
 		$thrownDuration = false;
 		try {
 			$stD1->write(['type' => 'duration', 'action' => 'visible', 'path' => '/x', 'session' => 's', 'seconds' => 12]);
 		} catch (\Throwable) {
 			$thrownDuration = true;
 		}
-		self::check('type=duration is allowed by the CHECK after the migration', false, $thrownDuration);
-		self::check('The written duration row carries its seconds', 12, (int)$dbD1->querySingle("SELECT seconds FROM kizami_events WHERE type='duration'"));
+		Assert::assertSame(false, $thrownDuration, 'type=duration is allowed by the CHECK after the migration');
+		Assert::assertSame(12, (int)$dbD1->querySingle("SELECT seconds FROM kizami_events WHERE type='duration'"), 'The written duration row carries its seconds');
 		$dbD1->close();
 		array_map('unlink', glob($dirD1 . '/*'));
 		rmdir($dirD1);
@@ -968,12 +665,12 @@ final class CoreTest extends TestCase
 		$stD2->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 's1']);
 		$stD2->write(['type' => 'duration', 'action' => 'visible', 'path' => '/', 'session' => 'duration-only', 'seconds' => 9]);
 		$dbD2 = new SQLite3($dirD2 . '/' . Store::FILE);
-		self::check('Duration row has its seconds', 37, (int)$dbD2->querySingle("SELECT seconds FROM kizami_events WHERE type='duration' AND path='/contact'"));
-		self::check('Page row stays at seconds=0 (default)', 0, (int)$dbD2->querySingle("SELECT seconds FROM kizami_events WHERE type='page'"));
+		Assert::assertSame(37, (int)$dbD2->querySingle("SELECT seconds FROM kizami_events WHERE type='duration' AND path='/contact'"), 'Duration row has its seconds');
+		Assert::assertSame(0, (int)$dbD2->querySingle("SELECT seconds FROM kizami_events WHERE type='page'"), 'Page row stays at seconds=0 (default)');
 		$dbD2->close();
-		self::check('Duration does not count as a page view', 1, $stD2->pageViews(30));
-		self::check('A duration-only session does not count as a visit', 1, $stD2->visits(30));
-		self::check('Duration does not count as a click', 0, $stD2->clicks(30));
+		Assert::assertSame(1, $stD2->pageViews(30), 'Duration does not count as a page view');
+		Assert::assertSame(1, $stD2->visits(30), 'A duration-only session does not count as a visit');
+		Assert::assertSame(0, $stD2->clicks(30), 'Duration does not count as a click');
 		array_map('unlink', glob($dirD2 . '/*'));
 		rmdir($dirD2);
 		$dirD3 = sys_get_temp_dir() . '/kizami-dwell-median-' . bin2hex(random_bytes(4));
@@ -983,21 +680,21 @@ final class CoreTest extends TestCase
 			$stD3->write(['type' => 'duration', 'action' => 'visible', 'path' => '/menu', 'session' => $session, 'seconds' => $sec]);
 		}
 		$anD3 = Analysis::data($stD3, new Names([], [], []), 30, ['dwellTime' => true]);
-		self::check('Median of 4 values (5,15,45,200): mean of the two middle ones (15+45)/2', 30, $anD3['dwellTime']['median']);
+		Assert::assertSame(30, $anD3['dwellTime']['median'], 'Median of 4 values (5,15,45,200): mean of the two middle ones (15+45)/2');
 		$buckets = array_column($anD3['dwellTime']['buckets'], 'value', 'name');
-		self::check('Bucket "under 10 s" contains 5 s', 1, $buckets['under 10 s']);
-		self::check('Bucket "10–30 s" contains 15 s', 1, $buckets['10–30 s']);
-		self::check('Bucket "30 s–1 min" contains 45 s', 1, $buckets['30 s–1 min']);
-		self::check('Bucket "1–3 min" is empty', 0, $buckets['1–3 min']);
-		self::check('Bucket "over 3 min" contains 200 s', 1, $buckets['over 3 min']);
+		Assert::assertSame(1, $buckets['under 10 s'], 'Bucket "under 10 s" contains 5 s');
+		Assert::assertSame(1, $buckets['10–30 s'], 'Bucket "10–30 s" contains 15 s');
+		Assert::assertSame(1, $buckets['30 s–1 min'], 'Bucket "30 s–1 min" contains 45 s');
+		Assert::assertSame(0, $buckets['1–3 min'], 'Bucket "1–3 min" is empty');
+		Assert::assertSame(1, $buckets['over 3 min'], 'Bucket "over 3 min" contains 200 s');
 		$pagesD3 = array_column($anD3['dwellTime']['pages'], null, 'name');
-		self::check('Per page: /menu has 4 measurements', 4, $pagesD3['/menu']['measurements']);
-		self::check('Per page: the /menu median equals the overall median (only page)', 30, $pagesD3['/menu']['median']);
-		self::check('First measurement is set', true, $anD3['dwellTime']['firstMeasurement'] !== null);
+		Assert::assertSame(4, $pagesD3['/menu']['measurements'], 'Per page: /menu has 4 measurements');
+		Assert::assertSame(30, $pagesD3['/menu']['median'], 'Per page: the /menu median equals the overall median (only page)');
+		Assert::assertSame(true, $anD3['dwellTime']['firstMeasurement'] !== null, 'First measurement is set');
 		I18n::setLanguage('de');
 		$bucketsDe = array_column(Analysis::data($stD3, new Names([], [], []), 30, ['dwellTime' => true])['dwellTime']['buckets'], 'value', 'name');
 		I18n::setLanguage('en');
-		self::check('German bucket "über 3 Min" contains 200 s', 1, $bucketsDe['über 3 Min'] ?? null);
+		Assert::assertSame(1, $bucketsDe['über 3 Min'] ?? null, 'German bucket "über 3 Min" contains 200 s');
 		array_map('unlink', glob($dirD3 . '/*'));
 		rmdir($dirD3);
 		$dirD4 = sys_get_temp_dir() . '/kizami-dwell-median-odd-' . bin2hex(random_bytes(4));
@@ -1007,39 +704,23 @@ final class CoreTest extends TestCase
 			$stD4->write(['type' => 'duration', 'action' => 'visible', 'path' => '/', 'session' => $session, 'seconds' => $sec]);
 		}
 		$anD4 = Analysis::data($stD4, new Names([], [], []), 30, ['dwellTime' => true]);
-		self::check('Median of 3 values (10,20,30) is the middle value', 20, $anD4['dwellTime']['median']);
+		Assert::assertSame(20, $anD4['dwellTime']['median'], 'Median of 3 values (10,20,30) is the middle value');
 		array_map('unlink', glob($dirD4 . '/*'));
 		rmdir($dirD4);
 		$dirD5 = sys_get_temp_dir() . '/kizami-dwell-empty-' . bin2hex(random_bytes(4));
 		mkdir($dirD5, 0700);
 		$stD5 = new Store($dirD5 . '/' . Store::FILE);
 		$anD5 = Analysis::data($stD5, new Names([], [], []), 30, ['dwellTime' => true]);
-		self::check('Without measurements: firstMeasurement is null', null, $anD5['dwellTime']['firstMeasurement']);
-		self::check('Without measurements: median 0', 0, $anD5['dwellTime']['median']);
-		self::check('Without measurements: empty buckets and pages', true, array_sum(array_column($anD5['dwellTime']['buckets'], 'value')) === 0 && $anD5['dwellTime']['pages'] === []);
-		self::check('Without measurements: comparison –', '–', $anD5['dwellTime']['comparison']['text']);
-		self::check(
-			'Without the switch the section is missing entirely (null)',
-			null,
-			Analysis::data($stD5, new Names([], [], []), 30, [])['dwellTime']
-		);
+		Assert::assertSame(null, $anD5['dwellTime']['firstMeasurement'], 'Without measurements: firstMeasurement is null');
+		Assert::assertSame(0, $anD5['dwellTime']['median'], 'Without measurements: median 0');
+		Assert::assertSame(true, array_sum(array_column($anD5['dwellTime']['buckets'], 'value')) === 0 && $anD5['dwellTime']['pages'] === [], 'Without measurements: empty buckets and pages');
+		Assert::assertSame('–', $anD5['dwellTime']['comparison']['text'], 'Without measurements: comparison –');
+		Assert::assertSame(null, Analysis::data($stD5, new Names([], [], []), 30, [])['dwellTime'], 'Without the switch the section is missing entirely (null)');
 		array_map('unlink', glob($dirD5 . '/*'));
 		rmdir($dirD5);
-		self::check(
-			'Comparison with base: enough visits → percentage, even for a small median',
-			['class' => 'up', 'text' => '▲ +25 %'],
-			Comparison::text(15, 12, 25)
-		);
-		self::check(
-			'Comparison with base: too few visits → no percentage, despite a high median',
-			['class' => 'neutral', 'text' => 'not enough data to compare'],
-			Comparison::text(500, 400, 3)
-		);
-		self::check(
-			'Comparison without base behaves as before (backward compatibility)',
-			['class' => 'up', 'text' => '▲ +18 %'],
-			Comparison::text(118, 100)
-		);
+		Assert::assertSame(['class' => 'up', 'text' => '▲ +25 %'], Comparison::text(15, 12, 25), 'Comparison with base: enough visits → percentage, even for a small median');
+		Assert::assertSame(['class' => 'neutral', 'text' => 'not enough data to compare'], Comparison::text(500, 400, 3), 'Comparison with base: too few visits → no percentage, despite a high median');
+		Assert::assertSame(['class' => 'up', 'text' => '▲ +18 %'], Comparison::text(118, 100), 'Comparison without base behaves as before (backward compatibility)');
 		$dirW = sys_get_temp_dir() . '/kizami-window-' . bin2hex(random_bytes(4));
 		mkdir($dirW, 0700);
 		$stW = new Store($dirW . '/' . Store::FILE);
@@ -1063,7 +744,7 @@ final class CoreTest extends TestCase
 		$berlinZone = new DateTimeZone('Europe/Berlin');
 		$utcZone = new DateTimeZone('UTC');
 		$w1UntilPlusN = (new DateTimeImmutable($w1['until'], $utcZone))->setTimezone($berlinZone)->modify('+7 days')->setTimezone($utcZone)->format('Y-m-d H:i:s');
-		self::check('Previous period end + n days is the end of the current window', $w0['until'], $w1UntilPlusN);
+		Assert::assertSame($w0['until'], $w1UntilPlusN, 'Previous period end + n days is the end of the current window');
 		foreach ([
 			['2026-10-28 20:00', '2026-10-28 19:00:00', '2026-10-21 18:00:00'],
 			['2027-03-30 20:00', '2027-03-30 18:00:00', '2027-03-23 19:00:00'],
@@ -1071,78 +752,54 @@ final class CoreTest extends TestCase
 			$fixedAt = new DateTimeImmutable($fixedNow, $berlinZone);
 			$wf0 = Store::window(7, 0, $fixedAt);
 			$wf1 = Store::window(7, 1, $fixedAt);
-			self::check("Fixed $fixedNow (DST): current window ends at the reference time", $expectUntil, $wf0['until']);
-			self::check("Fixed $fixedNow (DST): previous period ends 7 Berlin days earlier", $expectPrevUntil, $wf1['until']);
-			self::check("Fixed $fixedNow (DST): previous period + 7 days lines up with the current window", $wf0['until'], (new DateTimeImmutable($wf1['until'], $utcZone))->setTimezone($berlinZone)->modify('+7 days')->setTimezone($utcZone)->format('Y-m-d H:i:s'));
+			Assert::assertSame($expectUntil, $wf0['until'], "Fixed $fixedNow (DST): current window ends at the reference time");
+			Assert::assertSame($expectPrevUntil, $wf1['until'], "Fixed $fixedNow (DST): previous period ends 7 Berlin days earlier");
+			Assert::assertSame($wf0['until'], (new DateTimeImmutable($wf1['until'], $utcZone))->setTimezone($berlinZone)->modify('+7 days')->setTimezone($utcZone)->format('Y-m-d H:i:s'), "Fixed $fixedNow (DST): previous period + 7 days lines up with the current window");
 		}
-		self::check('Current window: 3 visits', 3, $stW->visits(7));
-		self::check('Previous period: 2 visits', 2, $stW->visits(7, 1));
-		self::check('Page views current', 3, $stW->pageViews(7));
-		self::check('Clicks current', 1, $stW->clicks(7));
-		self::check('Clicks per target', 1, $stW->clicks(7, 0, 'call'));
-		self::check('Clicks previous period', 1, $stW->clicks(7, 1));
+		Assert::assertSame(3, $stW->visits(7), 'Current window: 3 visits');
+		Assert::assertSame(2, $stW->visits(7, 1), 'Previous period: 2 visits');
+		Assert::assertSame(3, $stW->pageViews(7), 'Page views current');
+		Assert::assertSame(1, $stW->clicks(7), 'Clicks current');
+		Assert::assertSame(1, $stW->clicks(7, 0, 'call'), 'Clicks per target');
+		Assert::assertSame(1, $stW->clicks(7, 1), 'Clicks previous period');
 		$ins(['created_at' => $utc('-3 days 15:06'), 'type' => 'redirect', 'action' => 'click', 'path' => '/menu', 'target' => 'route', 'session' => 'b', 'device' => 'desktop']);
-		self::check('Clicks after the second click', 2, $stW->clicks(7));
-		self::check('Visits with an action count sessions, not clicks', 1, $stW->visitsWithAction(7));
+		Assert::assertSame(2, $stW->clicks(7), 'Clicks after the second click');
+		Assert::assertSame(1, $stW->visitsWithAction(7), 'Visits with an action count sessions, not clicks');
 		$perDay = $stW->visitsPerDay(7);
-		self::check('Per day: 7 entries ascending', 7, count($perDay));
-		self::check('Per day: the last one is today', $todayB->format('Y-m-d'), $perDay[6]['day']);
-		self::check('Per day: today 1 visit', 1, $perDay[6]['count']);
-		self::check('Per day: 5 days ago 0', 0, $perDay[1]['count']);
-		self::check('Actions per day count clicks: 3 days ago 2', 2, $stW->actionsPerDay(7)[3]['count']);
-		self::check('Actions per target', [['target' => 'call', 'count' => 1], ['target' => 'route', 'count' => 1]], $stW->actions(7));
-		self::check('Actions previous period', [['target' => 'route', 'count' => 1]], $stW->actions(7, 1));
+		Assert::assertSame(7, count($perDay), 'Per day: 7 entries ascending');
+		Assert::assertSame($todayB->format('Y-m-d'), $perDay[6]['day'], 'Per day: the last one is today');
+		Assert::assertSame(1, $perDay[6]['count'], 'Per day: today 1 visit');
+		Assert::assertSame(0, $perDay[1]['count'], 'Per day: 5 days ago 0');
+		Assert::assertSame(2, $stW->actionsPerDay(7)[3]['count'], 'Actions per day count clicks: 3 days ago 2');
+		Assert::assertSame([['target' => 'call', 'count' => 1], ['target' => 'route', 'count' => 1]], $stW->actions(7), 'Actions per target');
+		Assert::assertSame([['target' => 'route', 'count' => 1]], $stW->actions(7, 1), 'Actions previous period');
 		$grid = $stW->weekGrid(7);
-		self::check('Grid has 7 rows', 7, count($grid));
-		self::check('Grid has 24 columns', 24, count($grid[0]));
+		Assert::assertSame(7, count($grid), 'Grid has 7 rows');
+		Assert::assertSame(24, count($grid[0]), 'Grid has 24 columns');
 		$wd3 = (int)$todayB->modify('-3 days')->format('N') - 1;
-		self::check('Grid: one view 3 days ago at 15:00', 1, $grid[$wd3][15]);
-		self::check('Devices: 2 mobile, 1 desktop; previous-period sessions without a class stay unknown', ['mobile' => 2, 'tablet' => 0, 'desktop' => 1, 'unknown' => 0], $stW->devices(7));
-		self::check('Devices previous period: all unknown (stored without device)', ['mobile' => 0, 'tablet' => 0, 'desktop' => 0, 'unknown' => 2], $stW->devices(7, 1));
-		self::check('Pages previous period only /', [['path' => '/', 'count' => 2]], $stW->viewsPerPage(7, 1));
+		Assert::assertSame(1, $grid[$wd3][15], 'Grid: one view 3 days ago at 15:00');
+		Assert::assertSame(['mobile' => 2, 'tablet' => 0, 'desktop' => 1, 'unknown' => 0], $stW->devices(7), 'Devices: 2 mobile, 1 desktop; previous-period sessions without a class stay unknown');
+		Assert::assertSame(['mobile' => 0, 'tablet' => 0, 'desktop' => 0, 'unknown' => 2], $stW->devices(7, 1), 'Devices previous period: all unknown (stored without device)');
+		Assert::assertSame([['path' => '/', 'count' => 2]], $stW->viewsPerPage(7, 1), 'Pages previous period only /');
 		$dirF1 = sys_get_temp_dir() . '/kizami-window-fix-' . bin2hex(random_bytes(4));
 		mkdir($dirF1, 0700);
 		$nineAm = (new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin')))->modify('+9 hours');
 		$w0Fix = Store::window(7, 0, $nineAm);
 		$w1Fix = Store::window(7, 1, $nineAm);
 		$todayFix = $nineAm->setTime(0, 0, 0);
-		self::check(
-			'Window: current since = today−6 00:00',
-			$todayFix->modify('-6 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-			$w0Fix['since']
-		);
-		self::check(
-			'Window: current until = 9 am today',
-			$nineAm->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-			$w0Fix['until']
-		);
-		self::check(
-			'Window: previous since = today−13 00:00',
-			$todayFix->modify('-13 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-			$w1Fix['since']
-		);
-		self::check(
-			'Window: previous until = today−7 9 am',
-			$nineAm->modify('-7 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-			$w1Fix['until']
-		);
+		Assert::assertSame($todayFix->modify('-6 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $w0Fix['since'], 'Window: current since = today−6 00:00');
+		Assert::assertSame($nineAm->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $w0Fix['until'], 'Window: current until = 9 am today');
+		Assert::assertSame($todayFix->modify('-13 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $w1Fix['since'], 'Window: previous since = today−13 00:00');
+		Assert::assertSame($nineAm->modify('-7 days')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'), $w1Fix['until'], 'Window: previous until = today−7 9 am');
 		$stF1 = new Store($dirF1 . '/' . Store::FILE);
 		$stF1 = $stF1->atTime($nineAm);
 		$utcFix = fn (string $when) => $nineAm->modify($when)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 		$stF1->write(['created_at' => $utcFix('today 08:00'), 'type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'today8']);
 		$stF1->write(['created_at' => $utcFix('-7 days 10:00'), 'type' => 'page', 'action' => 'view', 'path' => '/later', 'session' => 'minus7-10']);
 		$stF1->write(['created_at' => $utcFix('-7 days 08:00'), 'type' => 'page', 'action' => 'view', 'path' => '/earlier', 'session' => 'minus7-8']);
-		self::check('Window: event today 8 am counts as current', 1, $stF1->visits(7));
-		self::check(
-			'Window: today−7 10 am does NOT count, today−7 8 am counts (1 visit together)',
-			1,
-			$stF1->visits(7, 1)
-		);
-		self::check(
-			'Window: … and it is the 8 am event (/earlier), not /later',
-			[['path' => '/earlier', 'count' => 1]],
-			$stF1->viewsPerPage(7, 1)
-		);
+		Assert::assertSame(1, $stF1->visits(7), 'Window: event today 8 am counts as current');
+		Assert::assertSame(1, $stF1->visits(7, 1), 'Window: today−7 10 am does NOT count, today−7 8 am counts (1 visit together)');
+		Assert::assertSame([['path' => '/earlier', 'count' => 1]], $stF1->viewsPerPage(7, 1), 'Window: … and it is the 8 am event (/earlier), not /later');
 		array_map('unlink', glob($dirF1 . '/*'));
 		rmdir($dirF1);
 		$names = new Names(
@@ -1151,73 +808,69 @@ final class CoreTest extends TestCase
 			['/menu' => 'Menu'],
 			fn (string $path) => $path === '/cafe' ? 'Café' : null
 		);
-		self::check('Target with a name', 'Call', $names->target('call'));
-		self::check('Target without a name stays the key', 'route', $names->target('route'));
-		self::check('utm source with a name', 'QR cube', $names->source('utm:qr'));
-		self::check('utm source without a name', 'Campaign “newsletter”', $names->source('utm:newsletter'));
-		self::check('Host source with a name', 'Google', $names->source('google.com'));
-		self::check('Host source without a name, without www', 'bing.com', $names->source('www.bing.com'));
-		self::check('Direct source', 'Direct', $names->source(Names::DIRECT));
-		self::check('Internal source', 'Internal navigation', $names->source(Names::INTERNAL));
-		self::check('Internal is recognised', true, $names->isInternal(Names::INTERNAL));
-		self::check('Page from the configuration', 'Menu', $names->page('/menu'));
-		self::check('Page from the Kirby title', 'Café', $names->page('/cafe'));
-		self::check('Home page', 'Home', $names->page('/'));
-		self::check('Unknown page stays the path', '/x/y', $names->page('/x/y'));
+		Assert::assertSame('Call', $names->target('call'), 'Target with a name');
+		Assert::assertSame('route', $names->target('route'), 'Target without a name stays the key');
+		Assert::assertSame('QR cube', $names->source('utm:qr'), 'utm source with a name');
+		Assert::assertSame('Campaign “newsletter”', $names->source('utm:newsletter'), 'utm source without a name');
+		Assert::assertSame('Google', $names->source('google.com'), 'Host source with a name');
+		Assert::assertSame('bing.com', $names->source('www.bing.com'), 'Host source without a name, without www');
+		Assert::assertSame('Direct', $names->source(Names::DIRECT), 'Direct source');
+		Assert::assertSame('Internal navigation', $names->source(Names::INTERNAL), 'Internal source');
+		Assert::assertSame(true, $names->isInternal(Names::INTERNAL), 'Internal is recognised');
+		Assert::assertSame('Menu', $names->page('/menu'), 'Page from the configuration');
+		Assert::assertSame('Café', $names->page('/cafe'), 'Page from the Kirby title');
+		Assert::assertSame('Home', $names->page('/'), 'Home page');
+		Assert::assertSame('/x/y', $names->page('/x/y'), 'Unknown page stays the path');
 		I18n::setLanguage('de');
-		self::check('German: direct source', 'Direkt', $names->source(Names::DIRECT));
-		self::check('German: home page', 'Startseite', $names->page('/'));
-		self::check('German: campaign', 'Kampagne „newsletter“', $names->source('utm:newsletter'));
-		self::check('German: too few to compare', ['class' => 'neutral', 'text' => 'zu wenig Vergleichsdaten'], Comparison::text(12, 3));
+		Assert::assertSame('Direkt', $names->source(Names::DIRECT), 'German: direct source');
+		Assert::assertSame('Startseite', $names->page('/'), 'German: home page');
+		Assert::assertSame('Kampagne „newsletter“', $names->source('utm:newsletter'), 'German: campaign');
+		Assert::assertSame(['class' => 'neutral', 'text' => 'zu wenig Vergleichsdaten'], Comparison::text(12, 3), 'German: too few to compare');
 		I18n::setLanguage('en');
-		self::check('Comparison: both zero', ['class' => 'neutral', 'text' => '–'], Comparison::text(0, 0));
-		self::check('Comparison: new', ['class' => 'new', 'text' => 'new'], Comparison::text(5, 0));
-		self::check('Comparison: too few', ['class' => 'neutral', 'text' => 'not enough data to compare'], Comparison::text(12, 3));
-		self::check('Comparison: up', ['class' => 'up', 'text' => '▲ +18 %'], Comparison::text(118, 100));
-		self::check('Comparison: down', ['class' => 'down', 'text' => '▼ −4 %'], Comparison::text(96, 100));
-		self::check('Comparison: equal', ['class' => 'neutral', 'text' => '±0 %'], Comparison::text(50, 50));
-		self::check('Comparison: sharp', ['class' => 'up', 'text' => '▲ sharply up'], Comparison::text(2500, 20));
+		Assert::assertSame(['class' => 'neutral', 'text' => '–'], Comparison::text(0, 0), 'Comparison: both zero');
+		Assert::assertSame(['class' => 'new', 'text' => 'new'], Comparison::text(5, 0), 'Comparison: new');
+		Assert::assertSame(['class' => 'neutral', 'text' => 'not enough data to compare'], Comparison::text(12, 3), 'Comparison: too few');
+		Assert::assertSame(['class' => 'up', 'text' => '▲ +18 %'], Comparison::text(118, 100), 'Comparison: up');
+		Assert::assertSame(['class' => 'down', 'text' => '▼ −4 %'], Comparison::text(96, 100), 'Comparison: down');
+		Assert::assertSame(['class' => 'neutral', 'text' => '±0 %'], Comparison::text(50, 50), 'Comparison: equal');
+		Assert::assertSame(['class' => 'up', 'text' => '▲ sharply up'], Comparison::text(2500, 20), 'Comparison: sharp');
 		$an = Analysis::data(
 			$stW,
 			new Names(['call' => 'Call'], [], []),
 			7,
 			['brand' => 'Test', 'tiles' => ['call', 'route'], 'color' => '#2f4f2a']
 		);
-		self::check('Analysis: 4 tiles', 4, count($an['tiles']));
-		self::check('Tile visits', 3, $an['tiles'][0]['value']);
-		self::check('Tile visits comparison (previous period 2 < 20)', 'not enough data to compare', $an['tiles'][0]['comparison']['text']);
-		self::check('Tile call is called Call', 'Call', $an['tiles'][2]['name']);
-		self::check('Tile call value', 1, $an['tiles'][2]['value']);
-		self::check('Tile route without a name', 'route', $an['tiles'][3]['name']);
+		Assert::assertSame(4, count($an['tiles']), 'Analysis: 4 tiles');
+		Assert::assertSame(3, $an['tiles'][0]['value'], 'Tile visits');
+		Assert::assertSame('not enough data to compare', $an['tiles'][0]['comparison']['text'], 'Tile visits comparison (previous period 2 < 20)');
+		Assert::assertSame('Call', $an['tiles'][2]['name'], 'Tile call is called Call');
+		Assert::assertSame(1, $an['tiles'][2]['value'], 'Tile call value');
+		Assert::assertSame('route', $an['tiles'][3]['name'], 'Tile route without a name');
 		$anTileNames = Analysis::data(
 			$stW,
 			new Names(['call' => 'Call'], [], []),
 			7,
 			['brand' => 'Test', 'tiles' => ['call', 'route'], 'tileNames' => ['call' => 'Calls'], 'color' => '#2f4f2a']
 		);
-		self::check('Tile 2 is called Calls with tileNames set', 'Calls', $anTileNames['tiles'][2]['name']);
-		self::check('Tile without a tileNames entry keeps the target name', 'route', $anTileNames['tiles'][3]['name']);
+		Assert::assertSame('Calls', $anTileNames['tiles'][2]['name'], 'Tile 2 is called Calls with tileNames set');
+		Assert::assertSame('route', $anTileNames['tiles'][3]['name'], 'Tile without a tileNames entry keeps the target name');
 		$dirMon = sys_get_temp_dir() . '/kizami-month-' . bin2hex(random_bytes(4));
 		mkdir($dirMon, 0700);
 		$stMon = new Store($dirMon . '/' . Store::FILE);
 		$stMon->write(['created_at' => '2026-09-15 10:00:00', 'type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'm1']);
 		$anMon = Analysis::data($stMon, new Names([], [], []), 30, ['brand' => 'Test', 'tiles' => [], 'color' => '#2f4f2a']);
-		self::check(
-			'Month formatted readably (Sep 26 instead of 2026-09)',
-			'Sep 26',
-			$anMon['longTerm']['months'][0]['name'] ?? null
-		);
+		Assert::assertSame('Sep 26', $anMon['longTerm']['months'][0]['name'] ?? null, 'Month formatted readably (Sep 26 instead of 2026-09)');
 		I18n::setLanguage('de');
 		$anMonDe = Analysis::data($stMon, new Names([], [], []), 30, ['brand' => 'Test', 'tiles' => [], 'color' => '#2f4f2a']);
 		I18n::setLanguage('en');
-		self::check('German month label (Sep. 26)', 'Sep. 26', $anMonDe['longTerm']['months'][0]['name'] ?? null);
+		Assert::assertSame('Sep. 26', $anMonDe['longTerm']['months'][0]['name'] ?? null, 'German month label (Sep. 26)');
 		array_map('unlink', glob($dirMon . '/*'));
 		rmdir($dirMon);
-		self::check('Trend has 7 points', 7, count($an['tiles'][0]['trend']));
-		self::check('Actions: Call first (alphabetical on a tie)', 'Call', $an['actions'][0]['name']);
-		self::check('Actions: page /menu stays the path', '/menu', $an['actions'][0]['pages'][0]['name']);
-		self::check('Action rate: one visit with two clicks out of three visits → 33.3', 33.3, $an['actionRate']['value']);
-		self::check('Action rate sentence counts visits with an action (1 of 3; previous period 1 of 2)', 'About 1 in 3 visits leads to an action (previous period: 1 in 2)', $an['actionRate']['text']);
+		Assert::assertSame(7, count($an['tiles'][0]['trend']), 'Trend has 7 points');
+		Assert::assertSame('Call', $an['actions'][0]['name'], 'Actions: Call first (alphabetical on a tie)');
+		Assert::assertSame('/menu', $an['actions'][0]['pages'][0]['name'], 'Actions: page /menu stays the path');
+		Assert::assertSame(33.3, $an['actionRate']['value'], 'Action rate: one visit with two clicks out of three visits → 33.3');
+		Assert::assertSame('About 1 in 3 visits leads to an action (previous period: 1 in 2)', $an['actionRate']['text'], 'Action rate sentence counts visits with an action (1 of 3; previous period 1 of 2)');
 		I18n::setLanguage('de');
 		$anDe = Analysis::data(
 			$stW,
@@ -1226,15 +879,15 @@ final class CoreTest extends TestCase
 			['brand' => 'Test', 'tiles' => ['call', 'route'], 'color' => '#2f4f2a']
 		);
 		I18n::setLanguage('en');
-		self::check('German action rate sentence', 'Etwa jeder 3. Besuch führt zu einer Aktion (Vorperiode: jeder 2.)', $anDe['actionRate']['text']);
-		self::check('Unknown devices in the current window 0', 0, $an['devicesUnknown']);
-		self::check('Grid 7 × 17', [7, 17], [count($an['weekGrid']['values']), count($an['weekGrid']['values'][0])]);
-		self::check('Grid columns 6..22', '6', $an['weekGrid']['columns'][0]);
-		self::check('Devices: phone first with share', ['name' => 'Phone', 'value' => 2, 'share' => '67 %'], $an['devices'][0]);
-		self::check('Sources: Direct', 'Direct', $an['sources'][0]['name']);
-		self::check('Pages: home page named', 'Home', $an['pages'][0]['name']);
-		self::check('5 shades', 5, count($an['shades']));
-		self::check('From/to set', true, preg_match('/^\d{4}-\d\d-\d\d$/', $an['from']) === 1 && $an['to'] === $todayB->format('Y-m-d'));
+		Assert::assertSame('Etwa jeder 3. Besuch führt zu einer Aktion (Vorperiode: jeder 2.)', $anDe['actionRate']['text'], 'German action rate sentence');
+		Assert::assertSame(0, $an['devicesUnknown'], 'Unknown devices in the current window 0');
+		Assert::assertSame([7, 17], [count($an['weekGrid']['values']), count($an['weekGrid']['values'][0])], 'Grid 7 × 17');
+		Assert::assertSame('6', $an['weekGrid']['columns'][0], 'Grid columns 6..22');
+		Assert::assertSame(['name' => 'Phone', 'value' => 2, 'share' => '67 %'], $an['devices'][0], 'Devices: phone first with share');
+		Assert::assertSame('Direct', $an['sources'][0]['name'], 'Sources: Direct');
+		Assert::assertSame('Home', $an['pages'][0]['name'], 'Pages: home page named');
+		Assert::assertSame(5, count($an['shades']), '5 shades');
+		Assert::assertSame(true, preg_match('/^\d{4}-\d\d-\d\d$/', $an['from']) === 1 && $an['to'] === $todayB->format('Y-m-d'), 'From/to set');
 		$dirL = sys_get_temp_dir() . '/kizami-empty-' . bin2hex(random_bytes(4));
 		mkdir($dirL, 0700);
 		$empty = Analysis::data(
@@ -1243,31 +896,29 @@ final class CoreTest extends TestCase
 			30,
 			['brand' => 'Test', 'tiles' => [], 'color' => '#2f4f2a']
 		);
-		self::check('Empty: 2 tiles without redirects', 2, count($empty['tiles']));
-		self::check('Empty: action rate 0', 0.0, $empty['actionRate']['value']);
-		self::check('Empty: comparison –', '–', $empty['tiles'][0]['comparison']['text']);
+		Assert::assertSame(2, count($empty['tiles']), 'Empty: 2 tiles without redirects');
+		Assert::assertSame(0.0, $empty['actionRate']['value'], 'Empty: action rate 0');
+		Assert::assertSame('–', $empty['tiles'][0]['comparison']['text'], 'Empty: comparison –');
 		$emptyHtml = self::renderDashboard($empty);
-		self::check('Empty dashboard shows placeholders', true, substr_count($emptyHtml, 'No data yet') >= 5);
-		self::check('Empty dashboard without NaN or INF', false, preg_match('/\b(?:NaN|INF)\b/', $emptyHtml) === 1);
+		Assert::assertSame(true, substr_count($emptyHtml, 'No data yet') >= 5, 'Empty dashboard shows placeholders');
+		Assert::assertSame(false, preg_match('/\b(?:NaN|INF)\b/', $emptyHtml) === 1, 'Empty dashboard without NaN or INF');
 		array_map('unlink', glob($dirL . '/*'));
 		rmdir($dirL);
-		self::check('Views per day gapless', 7, count($stW->viewsPerDayFilled(7)));
-		self::check('Actions per day per target', 1, array_sum(array_column($stW->actionsPerDay(7, 0, 'call'), 'count')));
+		Assert::assertSame(7, count($stW->viewsPerDayFilled(7)), 'Views per day gapless');
+		Assert::assertSame(1, array_sum(array_column($stW->actionsPerDay(7, 0, 'call'), 'count')), 'Actions per day per target');
 		$beforeBoundary = $stW->visits(7);
 		$stW->write(['created_at' => $w0['until'], 'type' => 'page', 'action' => 'view', 'session' => 'future']);
 		$stW->write(['created_at' => $utc('12:00'), 'type' => 'notfound', 'action' => 'view', 'path' => '/missing', 'session' => 'error', 'device' => 'desktop']);
-		self::check('Future and missing pages are absent from visits', $beforeBoundary, $stW->visits(7));
-		self::check('Future is absent from page views', 3, $stW->pageViews(7));
-		self::check('Missing page is absent from devices', ['mobile' => 2, 'tablet' => 0, 'desktop' => 1, 'unknown' => 0], $stW->devices(7));
-		self::check('Missing pages in the previous period empty', [], $stW->notFound(7, 1));
+		Assert::assertSame($beforeBoundary, $stW->visits(7), 'Future and missing pages are absent from visits');
+		Assert::assertSame(3, $stW->pageViews(7), 'Future is absent from page views');
+		Assert::assertSame(['mobile' => 2, 'tablet' => 0, 'desktop' => 1, 'unknown' => 0], $stW->devices(7), 'Missing page is absent from devices');
+		Assert::assertSame([], $stW->notFound(7, 1), 'Missing pages in the previous period empty');
 		$stW->write(['created_at' => $utc('12:00'), 'type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'a', 'device' => 'mobile', 'referrer' => '(internal)']);
 		$extra = Analysis::data($stW, new Names([], [], []), 7, ['targets' => ['mail']]);
-		self::check('Configured target without a click is visible', 0, array_column($extra['actions'], 'value', 'name')['mail']);
-		self::check('Internal navigation only in the table', true, !in_array('Internal navigation', array_column($extra['sources'], 'name'), true) && in_array('Internal navigation', array_column($extra['sourcesTable'], 'name'), true));
+		Assert::assertSame(0, array_column($extra['actions'], 'value', 'name')['mail'], 'Configured target without a click is visible');
+		Assert::assertSame(true, !in_array('Internal navigation', array_column($extra['sources'], 'name'), true) && in_array('Internal navigation', array_column($extra['sourcesTable'], 'name'), true), 'Internal navigation only in the table');
 		array_map('unlink', glob($dirW . '/*'));
 		rmdir($dirW);
 		restore_error_handler();
-		$this->assertSame([], $failures, implode('
-', $failures));
 	}
 }

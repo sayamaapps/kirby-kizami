@@ -23,20 +23,16 @@ final class PanelMenuTest extends TestCase
 {
 	private static function expect($expected, $actual, string $what): void
 	{
-		global $n;
 		if ($expected !== $actual) {
 			Assert::fail($what . ': ' . var_export($actual, true));
 		}
-		$n++;
 		Assert::assertTrue(true);
 	}
 
 	public function testSuite(): void
 	{
-		global $n;
 		$base = dirname(__DIR__);
 		require $base . '/vendor/autoload.php';
-		$n = 0;
 		$tmp = sys_get_temp_dir() . '/kizami-panel-' . bin2hex(random_bytes(6));
 		$failed = false;
 		try {

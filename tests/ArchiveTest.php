@@ -17,23 +17,21 @@ final class ArchiveTest extends TestCase
 {
 	private static function archiveCase(string $name, callable $test): void
 	{
-		global $root, $failures;
+		global $root;
 		$dir = $root . '/' . $name;
 		mkdir($dir, 0700);
 		try {
 			$test($dir);
 		} catch (Throwable $e) {
-			$failures[] = $name . ': ' . $e->getMessage();
+			Assert::fail($name . ': ' . $e->getMessage());
 		}
 	}
 
 	private static function archiveCheck(string $label, mixed $expected, mixed $actual): void
 	{
-		global $checks;
 		if ($expected !== $actual) {
 			throw new RuntimeException($label . ': expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
 		}
-		++$checks;
 		Assert::assertTrue(true);
 	}
 
@@ -87,11 +85,9 @@ final class ArchiveTest extends TestCase
 
 	public function testSuite(): void
 	{
-		global $checks, $root, $failures;
+		global $root;
 		$root = sys_get_temp_dir() . '/kizami-archivee-' . bin2hex(random_bytes(8));
 		mkdir($root, 0700);
-		$checks = 0;
-		$failures = [];
 		self::archiveCase('migration', function ($dir) {
 			$db = self::archiveDb($dir);
 			// Minimal events table only: neither archivee nor maintenance table exists.
@@ -285,6 +281,5 @@ final class ArchiveTest extends TestCase
 			}
 		}
 		rmdir($root);
-		$this->assertSame([], $failures);
 	}
 }

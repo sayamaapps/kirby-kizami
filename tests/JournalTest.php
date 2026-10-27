@@ -9,6 +9,7 @@
  * file stays one file without -wal/-shm. Every opener has to respect the
  * mode; CLI tools without Kirby options keep the mode the file already has.
  */
+use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
@@ -28,15 +29,11 @@ final class JournalTest extends TestCase
 
 	private static function pruefe(bool $ok, string $was): void
 	{
-		global $passed, $failures;
-		$ok ? $passed++ : $failures[] = $was;
+		Assert::assertTrue($ok, $was);
 	}
 
 	public function testSuite(): void
 	{
-		global $passed, $failures;
-		$passed = 0;
-		$failures = [];
 		$dir = sys_get_temp_dir() . '/kizami-journal-' . bin2hex(random_bytes(4));
 		mkdir($dir);
 		try {
@@ -81,6 +78,5 @@ final class JournalTest extends TestCase
 			}
 			@rmdir($dir);
 		}
-		$this->assertSame([], $failures);
 	}
 }

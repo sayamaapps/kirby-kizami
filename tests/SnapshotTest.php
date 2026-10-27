@@ -15,16 +15,6 @@ use PHPUnit\Framework\TestCase;
 #[RunTestsInSeparateProcesses]
 final class SnapshotTest extends TestCase
 {
-	private static function check(bool $ok, string $what): void
-	{
-		global $n;
-		if (!$ok) {
-			Assert::fail($what);
-		}
-		$n++;
-		Assert::assertTrue(true);
-	}
-
 	private static function snapshot(string ...$arguments): array
 	{
 		$p = proc_open([PHP_BINARY, __DIR__ . '/../bin/kizami-snapshot', ...$arguments], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
@@ -38,10 +28,8 @@ final class SnapshotTest extends TestCase
 
 	public function testSuite(): void
 	{
-		global $n;
 		$tmp = sys_get_temp_dir() . '/kizami-snapshot-' . bin2hex(random_bytes(6));
 		mkdir($tmp . '/kizami', 0700, true);
-		$n = 0;
 		$failed = false;
 		try {
 			$db = $tmp . '/kizami/kizami.sqlite';
@@ -58,27 +46,27 @@ final class SnapshotTest extends TestCase
 			$reader = new SQLite3($db);
 			$reader->exec('PRAGMA wal_autocheckpoint = 0');
 			$reader->querySingle('SELECT COUNT(*) FROM kizami_events');
-			self::check(is_file($db . '-wal') && filesize($db . '-wal') > 0, 'WAL is in use');
+			Assert::assertTrue(is_file($db . '-wal') && filesize($db . '-wal') > 0, 'WAL is in use');
 
 			[$rc, $out] = self::snapshot($tmp . '/kizami', $tmp . '/copy.sqlite');
-			self::check($rc === 0 && str_contains($out, 'integrity_check ok'), 'Snapshot succeeds: ' . $out);
+			Assert::assertTrue($rc === 0 && str_contains($out, 'integrity_check ok'), 'Snapshot succeeds: ' . $out);
 			$copy = new SQLite3($tmp . '/copy.sqlite');
-			self::check($copy->querySingle('SELECT COUNT(*) FROM kizami_events') === 51, 'all rows including the WAL in the copy');
-			self::check($copy->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path = '/old'") === 1, 'nothing compacted or removed');
-			self::check($copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events") === 'download|menu.pdf', 'reported actions in the copy');
-			self::check($copy->querySingle('PRAGMA integrity_check') === 'ok', 'copy is intact');
+			Assert::assertTrue($copy->querySingle('SELECT COUNT(*) FROM kizami_events') === 51, 'all rows including the WAL in the copy');
+			Assert::assertTrue($copy->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path = '/old'") === 1, 'nothing compacted or removed');
+			Assert::assertTrue($copy->querySingle("SELECT event || '|' || detail FROM kizami_custom_events") === 'download|menu.pdf', 'reported actions in the copy');
+			Assert::assertTrue($copy->querySingle('PRAGMA integrity_check') === 'ok', 'copy is intact');
 			$copy->close();
-			self::check(substr(sprintf('%o', fileperms($tmp . '/copy.sqlite')), -4) === '0600', 'copy with 0600');
-			self::check(!str_contains((string)file_get_contents($tmp . '/copy.sqlite'), 'SECRETVALUE'), 'secret not in the copy');
-			self::check(glob($tmp . '/secret*') === [], 'secret not copied next to it');
+			Assert::assertTrue(substr(sprintf('%o', fileperms($tmp . '/copy.sqlite')), -4) === '0600', 'copy with 0600');
+			Assert::assertTrue(!str_contains((string)file_get_contents($tmp . '/copy.sqlite'), 'SECRETVALUE'), 'secret not in the copy');
+			Assert::assertTrue(glob($tmp . '/secret*') === [], 'secret not copied next to it');
 
 			$before = md5_file($tmp . '/copy.sqlite');
 			[$rc, , $err] = self::snapshot($tmp . '/kizami', $tmp . '/copy.sqlite');
-			self::check($rc === 1 && str_contains($err, 'already exists') && md5_file($tmp . '/copy.sqlite') === $before, 'existing target rejected and untouched');
+			Assert::assertTrue($rc === 1 && str_contains($err, 'already exists') && md5_file($tmp . '/copy.sqlite') === $before, 'existing target rejected and untouched');
 			[$rc, , $err] = self::snapshot($tmp . '/missing', $tmp . '/new.sqlite');
-			self::check($rc === 1 && str_contains($err, 'no database') && !file_exists($tmp . '/new.sqlite'), 'missing database: error, no empty copy');
+			Assert::assertTrue($rc === 1 && str_contains($err, 'no database') && !file_exists($tmp . '/new.sqlite'), 'missing database: error, no empty copy');
 			[$rc] = self::snapshot();
-			self::check($rc === 2, 'wrong usage: exit code 2');
+			Assert::assertTrue($rc === 2, 'wrong usage: exit code 2');
 			$reader->close();
 		} catch (Throwable $e) {
 			throw $e;

@@ -75,8 +75,6 @@ final class SqliteCompatibilityTest extends TestCase
 
 	public function testSuite(): void
 	{
-		$passed = 0;
-		$failures = [];
 		$root = dirname(__DIR__);
 		$files = array_merge(
 			glob($root . '/src/*.php'),
@@ -86,7 +84,7 @@ final class SqliteCompatibilityTest extends TestCase
 		$sources = [];
 		foreach ($files as $file) {
 			if (!is_file($file)) {
-				$failures[] = 'File to scan missing: ' . substr($file, strlen($root) + 1);
+				Assert::fail('File to scan missing: ' . substr($file, strlen($root) + 1));
 				continue;
 			}
 			$sources[substr($file, strlen($root) + 1)] = file_get_contents($file);
@@ -111,9 +109,8 @@ final class SqliteCompatibilityTest extends TestCase
 
 			foreach ($forbidden as $pattern => $what) {
 				if (preg_match($pattern, $sql, $m)) {
-					$failures[] = "$name: $what in \"" . trim($m[0]) . '"';
+					Assert::fail("$name: $what in \"" . trim($m[0]) . '"');
 				} else {
-					$passed++;
 					Assert::assertTrue(true);
 				}
 			}
@@ -122,9 +119,8 @@ final class SqliteCompatibilityTest extends TestCase
 			foreach ($selects[1] as $list) {
 				foreach (self::columnList($list) as $column) {
 					if (preg_match('/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/', $column)) {
-						$failures[] = "$name: result column \"{$column}\" without AS — SQLite 3.7.17 returns it as \"{$column}\"";
+						Assert::fail("$name: result column \"{$column}\" without AS — SQLite 3.7.17 returns it as \"{$column}\"");
 					} else {
-						$passed++;
 						Assert::assertTrue(true);
 					}
 				}
@@ -139,25 +135,21 @@ final class SqliteCompatibilityTest extends TestCase
 			'actions queries (1.4.0)' => 'FROM kizami_custom_events',
 		] as $what => $needle) {
 			if (str_contains($scanned['src/Store.php'] ?? '', $needle)) {
-				$passed++;
 				Assert::assertTrue(true);
 			} else {
-				$failures[] = "Scan does not see the SQL of the $what in src/Store.php";
+				Assert::fail("Scan does not see the SQL of the $what in src/Store.php");
 			}
 		}
 		$probe = self::columnList('e.source, COUNT(DISTINCT e.id) AS visits');
 		if (preg_match('/^[A-Za-z_]\w*\.[A-Za-z_]\w*$/', $probe[0]) && count($probe) === 2) {
-			$passed++;
 			Assert::assertTrue(true);
 		} else {
-			$failures[] = 'Self-check: "e.source" without AS is not detected';
+			Assert::fail('Self-check: "e.source" without AS is not detected');
 		}
 		if (preg_match('/\bDO\s+UPDATE\b/i', self::sqlOf('<?php $x = "INSERT INTO t (a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = 2";'))) {
-			$passed++;
 			Assert::assertTrue(true);
 		} else {
-			$failures[] = 'Self-check: UPSERT in a string literal is not detected';
+			Assert::fail('Self-check: UPSERT in a string literal is not detected');
 		}
-		$this->assertSame([], $failures);
 	}
 }

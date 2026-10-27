@@ -39,25 +39,13 @@ final class EventsTest extends TestCase
 		return ob_get_clean();
 	}
 
-	private static function same($expected, $actual, string $what): void
-	{
-		global $n;
-		if ($expected !== $actual) {
-			Assert::fail($what . ': ' . var_export($actual, true));
-		}
-		$n++;
-		Assert::assertTrue(true);
-	}
-
 	public function testSuite(): void
 	{
-		global $n;
 		set_error_handler(function (int $level, string $message, string $file, int $line): bool {
 			throw new ErrorException($message, 0, $level, $file, $line);
 		});
 		$tmp = sys_get_temp_dir() . '/kizami-events-' . bin2hex(random_bytes(6));
 		mkdir($tmp, 0700);
-		$n = 0;
 		try {
 			// Allow list: only valid keys with an array entry; detail strictly true.
 			$config = Events::config([
@@ -75,20 +63,20 @@ final class EventsTest extends TestCase
 				'plain' => 'not an array',
 				'labels' => ['label' => ['de' => '', 'en' => ['x'], 'fr' => 'Étiquette']],
 			]);
-			self::same(['download', 'video_play', 'social-click', 'resume', str_repeat('b', 32), 'labels'], array_keys($config), 'Config: only valid keys with an array entry');
-			self::same([true, false, false, false], [$config['download']['detail'], $config['video_play']['detail'], $config['social-click']['detail'], $config['resume']['detail']], "Config: detail only with exactly true ('yes' is not true)");
-			self::same([], Events::config(null), 'Config: not set means empty');
-			self::same([], Events::config('download'), 'Config: a string is no list');
-			self::same('Video gestartet', Events::label($config, 'video_play', 'de'), 'Label in the dashboard language');
-			self::same('Video played', Events::label($config, 'video_play', 'fr'), 'Label falls back to English');
-			self::same('Social', Events::label($config, 'social-click', 'de'), 'A string label is the English label');
-			self::same('Étiquette', Events::label($config, 'labels', 'de'), 'Empty and non-string labels are skipped, then the first one');
-			self::same('resume', Events::label($config, 'resume', 'de'), 'Without a label: the key');
+			Assert::assertSame(['download', 'video_play', 'social-click', 'resume', str_repeat('b', 32), 'labels'], array_keys($config), 'Config: only valid keys with an array entry');
+			Assert::assertSame([true, false, false, false], [$config['download']['detail'], $config['video_play']['detail'], $config['social-click']['detail'], $config['resume']['detail']], "Config: detail only with exactly true ('yes' is not true)");
+			Assert::assertSame([], Events::config(null), 'Config: not set means empty');
+			Assert::assertSame([], Events::config('download'), 'Config: a string is no list');
+			Assert::assertSame('Video gestartet', Events::label($config, 'video_play', 'de'), 'Label in the dashboard language');
+			Assert::assertSame('Video played', Events::label($config, 'video_play', 'fr'), 'Label falls back to English');
+			Assert::assertSame('Social', Events::label($config, 'social-click', 'de'), 'A string label is the English label');
+			Assert::assertSame('Étiquette', Events::label($config, 'labels', 'de'), 'Empty and non-string labels are skipped, then the first one');
+			Assert::assertSame('resume', Events::label($config, 'resume', 'de'), 'Without a label: the key');
 			foreach (['download', 'a', '0-9_x', str_repeat('z', 32)] as $key) {
-				self::same(true, Events::isKey($key), "Key accepted: $key");
+				Assert::assertSame(true, Events::isKey($key), "Key accepted: $key");
 			}
 			foreach (['', 'Download', 'down load', 'a.b', 'ä', str_repeat('z', 33), "download\n", ['download'], null, 5] as $key) {
-				self::same(false, Events::isKey($key), 'Key rejected: ' . json_encode($key));
+				Assert::assertSame(false, Events::isKey($key), 'Key rejected: ' . json_encode($key));
 			}
 
 			// Detail: cleaned, capped, URLs without query and fragment.
@@ -118,24 +106,24 @@ final class EventsTest extends TestCase
 				['   ', '', 'only spaces → empty'],
 				['', '', 'empty'],
 			] as [$raw, $expected, $what]) {
-				self::same($expected, Capture::cleanDetail($raw), 'cleanDetail: ' . $what);
+				Assert::assertSame($expected, Capture::cleanDetail($raw), 'cleanDetail: ' . $what);
 			}
 			foreach ([null, 5, ['a'], true, "\xff\xfeabc", "abc\xc3"] as $raw) {
-				self::same('', Capture::cleanDetail($raw), 'cleanDetail: rejected ' . json_encode(is_string($raw) ? bin2hex($raw) : $raw));
+				Assert::assertSame('', Capture::cleanDetail($raw), 'cleanDetail: rejected ' . json_encode(is_string($raw) ? bin2hex($raw) : $raw));
 			}
-			self::same(100, mb_strlen(Capture::cleanDetail(str_repeat('ä', 150))), 'cleanDetail: at most 100 characters, not bytes');
-			self::same(str_repeat('ä', 100), Capture::cleanDetail(str_repeat('ä', 150)), 'cleanDetail: cut on a character boundary');
-			self::same(str_repeat('x', 99), Capture::cleanDetail(str_repeat('x', 99) . ' yz'), 'cleanDetail: no trailing space after cutting');
-			self::same(false, str_contains(Capture::cleanDetail(str_repeat('a', 90) . ' https://x.de/' . str_repeat('p', 20) . '?SECRET'), 'SECRET'), 'cleanDetail: query removed before cutting');
+			Assert::assertSame(100, mb_strlen(Capture::cleanDetail(str_repeat('ä', 150))), 'cleanDetail: at most 100 characters, not bytes');
+			Assert::assertSame(str_repeat('ä', 100), Capture::cleanDetail(str_repeat('ä', 150)), 'cleanDetail: cut on a character boundary');
+			Assert::assertSame(str_repeat('x', 99), Capture::cleanDetail(str_repeat('x', 99) . ' yz'), 'cleanDetail: no trailing space after cutting');
+			Assert::assertSame(false, str_contains(Capture::cleanDetail(str_repeat('a', 90) . ' https://x.de/' . str_repeat('p', 20) . '?SECRET'), 'SECRET'), 'cleanDetail: query removed before cutting');
 
 			// Size cap of /k/event.
-			self::same(false, Capture::requestTooLarge(['CONTENT_LENGTH' => '120'], 2048), 'Size: normal beacon');
-			self::same(false, Capture::requestTooLarge(['CONTENT_LENGTH' => '2048'], 2048), 'Size: exactly the limit');
-			self::same(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '2049'], 2048), 'Size: one byte over');
-			self::same(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '-1'], 2048), 'Size: no number');
-			self::same(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '1e9'], 2048), 'Size: no plain number');
-			self::same(false, Capture::requestTooLarge([], 2048), 'Size: no body');
-			self::same(true, Capture::requestTooLarge(['QUERY_STRING' => str_repeat('a', 2049)], 2048), 'Size: long query string');
+			Assert::assertSame(false, Capture::requestTooLarge(['CONTENT_LENGTH' => '120'], 2048), 'Size: normal beacon');
+			Assert::assertSame(false, Capture::requestTooLarge(['CONTENT_LENGTH' => '2048'], 2048), 'Size: exactly the limit');
+			Assert::assertSame(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '2049'], 2048), 'Size: one byte over');
+			Assert::assertSame(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '-1'], 2048), 'Size: no number');
+			Assert::assertSame(true, Capture::requestTooLarge(['CONTENT_LENGTH' => '1e9'], 2048), 'Size: no plain number');
+			Assert::assertSame(false, Capture::requestTooLarge([], 2048), 'Size: no body');
+			Assert::assertSame(true, Capture::requestTooLarge(['QUERY_STRING' => str_repeat('a', 2049)], 2048), 'Size: long query string');
 
 			// Table of its own; numbers per key; visits per Berlin day and identifier.
 			$store = new Store("$tmp/k.sqlite");
@@ -159,50 +147,42 @@ final class EventsTest extends TestCase
 			$event('video_play', 'b', 0);
 			$event('video_play', 'c', -7);            // previous period
 			$event('gone', 'a', 0);                   // no longer configured
-			self::same(0, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type NOT IN ('page')"), 'Actions are not written to kizami_events');
-			self::same(9, $db->querySingle('SELECT COUNT(*) FROM kizami_custom_events'), 'Actions written to kizami_custom_events');
-			self::same(
-				['created_at' => $at(0), 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'a'],
-				$db->query('SELECT created_at, event, detail, path, session FROM kizami_custom_events ORDER BY id LIMIT 1')->fetchArray(SQLITE3_ASSOC),
-				'Row: key, detail, page, day identifier — no device, no other fields'
-			);
-			self::same([
+			Assert::assertSame(0, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE type NOT IN ('page')"), 'Actions are not written to kizami_events');
+			Assert::assertSame(9, $db->querySingle('SELECT COUNT(*) FROM kizami_custom_events'), 'Actions written to kizami_custom_events');
+			Assert::assertSame(['created_at' => $at(0), 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'a'], $db->query('SELECT created_at, event, detail, path, session FROM kizami_custom_events ORDER BY id LIMIT 1')->fetchArray(SQLITE3_ASSOC), 'Row: key, detail, page, day identifier — no device, no other fields');
+			Assert::assertSame([
 				['event' => 'download', 'count' => 6, 'visits' => 3],
 				['event' => 'gone', 'count' => 1, 'visits' => 1],
 				['event' => 'video_play', 'count' => 1, 'visits' => 1],
 			], $store->customEvents(7), 'Total and visits per action (visits per Berlin day, empty identifier not a visit)');
-			self::same([['event' => 'video_play', 'count' => 1, 'visits' => 1]], $store->customEvents(7, 1), 'Previous period');
-			self::same(
-				[['event' => 'download', 'count' => 5, 'visits' => 2], ['event' => 'gone', 'count' => 1, 'visits' => 1], ['event' => 'video_play', 'count' => 1, 'visits' => 1]],
-				$store->customEvents(1),
-				'One day'
-			);
-			self::same(['details' => [
+			Assert::assertSame([['event' => 'video_play', 'count' => 1, 'visits' => 1]], $store->customEvents(7, 1), 'Previous period');
+			Assert::assertSame([['event' => 'download', 'count' => 5, 'visits' => 2], ['event' => 'gone', 'count' => 1, 'visits' => 1], ['event' => 'video_play', 'count' => 1, 'visits' => 1]], $store->customEvents(1), 'One day');
+			Assert::assertSame(['details' => [
 				['detail' => 'a.pdf', 'count' => 4, 'visits' => 3],
 				['detail' => 'b.pdf', 'count' => 1, 'visits' => 1],
 				['detail' => 'c.pdf', 'count' => 1, 'visits' => 0],
 			], 'omitted' => 0], $store->customEventDetails('download', 7, 10), 'Details: by count, then name');
-			self::same(['details' => [['detail' => 'a.pdf', 'count' => 4, 'visits' => 3]], 'omitted' => 2], $store->customEventDetails('download', 7, 1), 'Details: capped, the rest counted');
-			self::same(['details' => [], 'omitted' => 0], $store->customEventDetails('video_play', 7, 10), 'Details: empty details are no details');
-			self::same($before, [$store->visits(7), $store->pageViews(7), $store->clicks(7), $store->devices(7), $store->longTerm()], 'Actions change neither visits, page views, clicks, devices nor the long term');
+			Assert::assertSame(['details' => [['detail' => 'a.pdf', 'count' => 4, 'visits' => 3]], 'omitted' => 2], $store->customEventDetails('download', 7, 1), 'Details: capped, the rest counted');
+			Assert::assertSame(['details' => [], 'omitted' => 0], $store->customEventDetails('video_play', 7, 10), 'Details: empty details are no details');
+			Assert::assertSame($before, [$store->visits(7), $store->pageViews(7), $store->clicks(7), $store->devices(7), $store->longTerm()], 'Actions change neither visits, page views, clicks, devices nor the long term');
 
 			// Summary for dashboard and report: configured actions only, most reported first.
 			I18n::setLanguage('de');
 			$summary = Events::summary($store, $config, 7, I18n::language());
-			self::same(['download', 'video_play', 'social-click', 'resume', str_repeat('b', 32), 'labels'], array_column($summary, 'key'), 'Summary: configured actions, most reported first, ties in configuration order, unconfigured key left out');
-			self::same(['key' => 'download', 'name' => 'Download', 'count' => 6, 'visits' => 3, 'detail' => true, 'details' => [
+			Assert::assertSame(['download', 'video_play', 'social-click', 'resume', str_repeat('b', 32), 'labels'], array_column($summary, 'key'), 'Summary: configured actions, most reported first, ties in configuration order, unconfigured key left out');
+			Assert::assertSame(['key' => 'download', 'name' => 'Download', 'count' => 6, 'visits' => 3, 'detail' => true, 'details' => [
 				['name' => 'a.pdf', 'count' => 4, 'visits' => 3], ['name' => 'b.pdf', 'count' => 1, 'visits' => 1], ['name' => 'c.pdf', 'count' => 1, 'visits' => 0],
 			], 'detailsOmitted' => 0], $summary[0], 'Summary: an action with details');
-			self::same(['key' => 'video_play', 'name' => 'Video gestartet', 'count' => 1, 'visits' => 1, 'detail' => false, 'details' => [], 'detailsOmitted' => 0], $summary[1], 'Summary: an action without details, German label');
-			self::same(0, $summary[2]['count'], 'Summary: a configured action without reports is listed with 0');
+			Assert::assertSame(['key' => 'video_play', 'name' => 'Video gestartet', 'count' => 1, 'visits' => 1, 'detail' => false, 'details' => [], 'detailsOmitted' => 0], $summary[1], 'Summary: an action without details, German label');
+			Assert::assertSame(0, $summary[2]['count'], 'Summary: a configured action without reports is listed with 0');
 			$db->exec("INSERT INTO kizami_custom_events (created_at, event, detail, session) VALUES ('" . $at(0) . "', 'video_play', 'stored earlier', 'x')");
-			self::same([], Events::summary($store, $config, 7, 'de')[1]['details'], 'Summary: details only for actions with detail => true');
+			Assert::assertSame([], Events::summary($store, $config, 7, 'de')[1]['details'], 'Summary: details only for actions with detail => true');
 			$db->exec("DELETE FROM kizami_custom_events WHERE detail = 'stored earlier'");
 			for ($i = 1; $i <= 12; $i++) {
 				$event('download', 'flood', 0, sprintf('junk-%02d', $i));
 			}
 			$flood = Events::summary($store, $config, 7, 'de')[0];
-			self::same([Events::DETAILS_MAX, 'a.pdf', 5], [count($flood['details']), $flood['details'][0]['name'], $flood['detailsOmitted']], 'Summary: details capped at 10, the most frequent first, the rest counted');
+			Assert::assertSame([Events::DETAILS_MAX, 'a.pdf', 5], [count($flood['details']), $flood['details'][0]['name'], $flood['detailsOmitted']], 'Summary: details capped at 10, the most frequent first, the rest counted');
 			$db->exec("DELETE FROM kizami_custom_events WHERE session = 'flood'");
 
 			// Dashboard section.
@@ -211,33 +191,29 @@ final class EventsTest extends TestCase
 			$html = self::render(Analysis::data($store, $names, 7, ['events' => $config]));
 			preg_match('/<section class="block" aria-labelledby="events-title">.*?<\/section>/s', $html, $section);
 			$section = $section[0] ?? '';
-			self::same(true, str_contains($section, '<h2 id="events-title">Actions</h2>'), 'Dashboard: section "Actions"');
-			self::same(true, str_contains($section, '<th scope="col" class="num">Total</th><th scope="col" class="num">Visits with this action</th>'), 'Dashboard: total and visits columns');
-			self::same(true, str_contains($section, '<tr><td>Download</td><td class="num">6</td><td class="num">3</td></tr>'), 'Dashboard: row per action with total and visits');
-			self::same(true, str_contains($section, '<tr><td>Video played</td><td class="num">1</td><td class="num">1</td></tr>'), 'Dashboard: English label');
-			self::same(true, str_contains($section, '<h3>Download: most frequent details</h3>') && str_contains($section, '<tr><td>a.pdf</td><td class="num">4</td><td class="num">3</td></tr>'), 'Dashboard: top details below');
-			self::same(false, str_contains($section, 'Video played: most frequent details'), 'Dashboard: no detail table for actions without details');
-			self::same(false, str_contains($html, '<script') || (bool)preg_match('/ style="/', $html), 'Dashboard: still no script, no inline style');
+			Assert::assertSame(true, str_contains($section, '<h2 id="events-title">Actions</h2>'), 'Dashboard: section "Actions"');
+			Assert::assertSame(true, str_contains($section, '<th scope="col" class="num">Total</th><th scope="col" class="num">Visits with this action</th>'), 'Dashboard: total and visits columns');
+			Assert::assertSame(true, str_contains($section, '<tr><td>Download</td><td class="num">6</td><td class="num">3</td></tr>'), 'Dashboard: row per action with total and visits');
+			Assert::assertSame(true, str_contains($section, '<tr><td>Video played</td><td class="num">1</td><td class="num">1</td></tr>'), 'Dashboard: English label');
+			Assert::assertSame(true, str_contains($section, '<h3>Download: most frequent details</h3>') && str_contains($section, '<tr><td>a.pdf</td><td class="num">4</td><td class="num">3</td></tr>'), 'Dashboard: top details below');
+			Assert::assertSame(false, str_contains($section, 'Video played: most frequent details'), 'Dashboard: no detail table for actions without details');
+			Assert::assertSame(false, str_contains($html, '<script') || (bool)preg_match('/ style="/', $html), 'Dashboard: still no script, no inline style');
 			$event('download', 'x', 0, '<b>"&</b>');
 			$db->exec("INSERT INTO kizami_custom_events (created_at, event, detail, session) VALUES ('" . $at(0) . "', 'download', '<script>alert(1)</script>', 'x')");
 			$html = self::render(Analysis::data($store, $names, 7, ['events' => $config + Events::config(['xss' => ['label' => '<i>Label</i>']])]));
-			self::same(
-				true,
-				str_contains($html, '&lt;b&gt;&quot;&amp;&lt;/b&gt;') && str_contains($html, '&lt;script&gt;alert(1)&lt;/script&gt;') && str_contains($html, '&lt;i&gt;Label&lt;/i&gt;') && !str_contains($html, '<script>'),
-				'Dashboard: details and labels HTML-escaped, even if written past the cleaning'
-			);
+			Assert::assertSame(true, str_contains($html, '&lt;b&gt;&quot;&amp;&lt;/b&gt;') && str_contains($html, '&lt;script&gt;alert(1)&lt;/script&gt;') && str_contains($html, '&lt;i&gt;Label&lt;/i&gt;') && !str_contains($html, '<script>'), 'Dashboard: details and labels HTML-escaped, even if written past the cleaning');
 			$db->exec("DELETE FROM kizami_custom_events WHERE session = 'x'");
-			self::same(false, str_contains(self::render(Analysis::data($store, $names, 7, [])), 'events-title'), 'Dashboard: no section without kizami.events');
+			Assert::assertSame(false, str_contains(self::render(Analysis::data($store, $names, 7, [])), 'events-title'), 'Dashboard: no section without kizami.events');
 			$quiet = self::render(Analysis::data(new Store("$tmp/quiet.sqlite"), $names, 7, ['events' => $config]));
-			self::same(true, str_contains($quiet, 'events-title') && str_contains($quiet, 'No reported actions in this period yet'), 'Dashboard: section with a note while nothing was reported');
+			Assert::assertSame(true, str_contains($quiet, 'events-title') && str_contains($quiet, 'No reported actions in this period yet'), 'Dashboard: section with a note while nothing was reported');
 			for ($i = 1; $i <= 12; $i++) {
 				$event('download', 'flood', 0, sprintf('junk-%02d', $i));
 			}
-			self::same(true, str_contains(self::render(Analysis::data($store, $names, 7, ['events' => $config])), '5 more details not shown.'), 'Dashboard: hidden details counted');
+			Assert::assertSame(true, str_contains(self::render(Analysis::data($store, $names, 7, ['events' => $config])), '5 more details not shown.'), 'Dashboard: hidden details counted');
 			$db->exec("DELETE FROM kizami_custom_events WHERE session = 'flood'");
 			I18n::setLanguage('de');
 			$htmlDe = self::render(Analysis::data($store, $names, 7, ['events' => $config]));
-			self::same(true, str_contains($htmlDe, '<h2 id="events-title">Aktionen</h2>') && str_contains($htmlDe, 'Besuche mit dieser Aktion') && str_contains($htmlDe, 'Download: häufigste Zusatzangaben'), 'Dashboard: German');
+			Assert::assertSame(true, str_contains($htmlDe, '<h2 id="events-title">Aktionen</h2>') && str_contains($htmlDe, 'Besuche mit dieser Aktion') && str_contains($htmlDe, 'Download: häufigste Zusatzangaben'), 'Dashboard: German');
 			I18n::setLanguage('en');
 
 			// Report: field events, a text line only when something was reported.
@@ -246,26 +222,26 @@ final class EventsTest extends TestCase
 			$utc = fn (string $time) => (new DateTimeImmutable($time, $berlin))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 			$report->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:00')]);
 			$plain = Report::data($report, $names, 'day', $thu, ['brand' => 'Test']);
-			self::same([], $plain['events'], 'Report: empty list without kizami.events');
+			Assert::assertSame([], $plain['events'], 'Report: empty list without kizami.events');
 			$configured = Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config]);
-			self::same($plain['text'], $configured['text'], 'Report: text unchanged while nothing was reported');
-			self::same(0, array_sum(array_column($configured['events'], 'count')), 'Report: configured actions listed with 0');
+			Assert::assertSame($plain['text'], $configured['text'], 'Report: text unchanged while nothing was reported');
+			Assert::assertSame(0, array_sum(array_column($configured['events'], 'count')), 'Report: configured actions listed with 0');
 			$report->write(['type' => 'event', 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:05')]);
 			$report->write(['type' => 'event', 'event' => 'download', 'detail' => 'a.pdf', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:06')]);
 			$report->write(['type' => 'event', 'event' => 'video_play', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-09-30 10:07')]);
 			$report->write(['type' => 'event', 'event' => 'video_play', 'path' => '/', 'session' => 'r', 'created_at' => $utc('2026-10-01 08:00')]);  // today: not in the report
 			$day = Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config]);
-			self::same(['key' => 'download', 'name' => 'Download', 'count' => 2, 'visits' => 1, 'detail' => true,
+			Assert::assertSame(['key' => 'download', 'name' => 'Download', 'count' => 2, 'visits' => 1, 'detail' => true,
 				'details' => [['name' => 'a.pdf', 'count' => 2, 'visits' => 1]], 'detailsOmitted' => 0], $day['events'][0], 'Report: total, visits and details of the day');
-			self::same(['video_play', 1], [$day['events'][1]['key'], $day['events'][1]['count']], 'Report: only completed days');
-			self::same(true, in_array('Actions: Download 2 · Video played 1', explode("\n", $day['text']), true), 'Report: text line with the reported actions only');
+			Assert::assertSame(['video_play', 1], [$day['events'][1]['key'], $day['events'][1]['count']], 'Report: only completed days');
+			Assert::assertSame(true, in_array('Actions: Download 2 · Video played 1', explode("\n", $day['text']), true), 'Report: text line with the reported actions only');
 			$lines = explode("\n", $day['text']);
-			self::same(array_search('Actions: Download 2 · Video played 1', $lines, true) - 1, array_search('Page views: 1 (0)', $lines, true), 'Report: actions line after the page views (no link clicks that day)');
+			Assert::assertSame(array_search('Actions: Download 2 · Video played 1', $lines, true) - 1, array_search('Page views: 1 (0)', $lines, true), 'Report: actions line after the page views (no link clicks that day)');
 			I18n::setLanguage('de');
-			self::same(true, in_array('Aktionen: Download 2 · Video gestartet 1', explode("\n", Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config])['text']), true), 'Report: German line with German labels');
+			Assert::assertSame(true, in_array('Aktionen: Download 2 · Video gestartet 1', explode("\n", Report::data($report, $names, 'day', $thu, ['brand' => 'Test', 'events' => $config])['text']), true), 'Report: German line with German labels');
 			I18n::setLanguage('en');
 			$week = Report::data($report, $names, 'week', new DateTimeImmutable('2026-10-05 09:00', $berlin), ['events' => $config])['events'];
-			self::same([['download', 2, 1], ['video_play', 2, 2]], array_map(fn ($e) => [$e['key'], $e['count'], $e['visits']], array_slice($week, 0, 2)), 'Report: the week counts all its days, a visit per day');
+			Assert::assertSame([['download', 2, 1], ['video_play', 2, 2]], array_map(fn ($e) => [$e['key'], $e['count'], $e['visits']], array_slice($week, 0, 2)), 'Report: the week counts all its days, a visit per day');
 
 			// Retention: 13 months, like the single events; not rolled up.
 			$old = (new DateTimeImmutable('today', $berlin))->modify('-13 months -1 day')->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
@@ -274,19 +250,15 @@ final class EventsTest extends TestCase
 			$retention->write(['type' => 'page', 'action' => 'view', 'session' => 'o', 'created_at' => $old]);
 			$retention->write(['type' => 'event', 'event' => 'download', 'detail' => 'old.pdf', 'session' => 'o', 'created_at' => $old]);
 			$retention->write(['type' => 'event', 'event' => 'download', 'detail' => 'recent.pdf', 'session' => 'o', 'created_at' => $recent]);
-			self::same(1, $retention->compact(), 'Retention: compact() still returns the rolled-up single events');
+			Assert::assertSame(1, $retention->compact(), 'Retention: compact() still returns the rolled-up single events');
 			$rdb = new SQLite3("$tmp/retention.sqlite");
-			self::same(
-				['recent.pdf'],
-				array_column(iterator_to_array((function () use ($rdb) {
-					$r = $rdb->query('SELECT detail FROM kizami_custom_events');
-					while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
-						yield $row;
-					}
-				})(), false), 'detail'),
-				'Retention: actions older than 13 months deleted, younger ones kept'
-			);
-			self::same(['views' => 1, 'clicks' => 0, 'devices' => 1], $rdb->query('SELECT views, clicks, devices FROM kizami_days')->fetchArray(SQLITE3_ASSOC), 'Retention: actions are not part of the daily totals');
+			Assert::assertSame(['recent.pdf'], array_column(iterator_to_array((function () use ($rdb) {
+				$r = $rdb->query('SELECT detail FROM kizami_custom_events');
+				while ($row = $r->fetchArray(SQLITE3_ASSOC)) {
+					yield $row;
+				}
+			})(), false), 'detail'), 'Retention: actions older than 13 months deleted, younger ones kept');
+			Assert::assertSame(['views' => 1, 'clicks' => 0, 'devices' => 1], $rdb->query('SELECT views, clicks, devices FROM kizami_days')->fetchArray(SQLITE3_ASSOC), 'Retention: actions are not part of the daily totals');
 			$rdb->close();
 			// The daily compaction on write deletes them as well.
 			$daily = new Store("$tmp/daily.sqlite");
@@ -294,7 +266,7 @@ final class EventsTest extends TestCase
 			$ddb = new SQLite3("$tmp/daily.sqlite");
 			$ddb->exec('DELETE FROM kizami_maintenance');
 			$daily->write(['type' => 'page', 'action' => 'view', 'session' => 'n']);
-			self::same(0, $ddb->querySingle('SELECT COUNT(*) FROM kizami_custom_events'), 'Retention: the daily compaction on the first write of a day');
+			Assert::assertSame(0, $ddb->querySingle('SELECT COUNT(*) FROM kizami_custom_events'), 'Retention: the daily compaction on the first write of a day');
 			$ddb->close();
 
 			// A database from 1.3.0 gets the table on the next open, nothing else changes.
@@ -306,7 +278,7 @@ final class EventsTest extends TestCase
 			$upgraded = new Store("$tmp/legacy.sqlite");
 			$upgraded->write(['type' => 'event', 'event' => 'download', 'session' => 's']);
 			$ldb = new SQLite3("$tmp/legacy.sqlite");
-			self::same([1, 1], [$ldb->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path = '/kept'"), $ldb->querySingle('SELECT COUNT(*) FROM kizami_custom_events')], 'Upgrade from 1.3.0: table created, events kept');
+			Assert::assertSame([1, 1], [$ldb->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path = '/kept'"), $ldb->querySingle('SELECT COUNT(*) FROM kizami_custom_events')], 'Upgrade from 1.3.0: table created, events kept');
 			$ldb->close();
 
 			$db->close();

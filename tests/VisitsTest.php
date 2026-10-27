@@ -15,10 +15,8 @@ final class VisitsTest extends TestCase
 {
 	public function testSuite(): void
 	{
-		global $checks;
 		$dir = sys_get_temp_dir() . '/kizami-visits-' . bin2hex(random_bytes(6));
 		mkdir($dir, 0700);
-		$checks = 0;
 		try {
 			$store = new Sayamaapps\Kizami\Store($dir . '/k.sqlite');
 			$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Berlin'));
@@ -32,10 +30,10 @@ final class VisitsTest extends TestCase
 			for ($i = 0; $i < 10; $i++) {
 				$put('redirect', 'scanner-' . $i, 0, 'call');
 			}
-			self::visitsCheck(0, $store->visits(7), 'Link scanners alone create no visits');
-			self::visitsCheck(0, array_sum(array_column($store->visitsPerDay(7), 'count')), 'Daily trend stays without visits too');
-			self::visitsCheck(0, array_sum($store->devices(7)), 'Link scanners do not change device shares');
-			self::visitsCheck(0, $store->longTerm()['total']['devices'], 'Long term counts no scanners as visitors');
+			Assert::assertSame(0, $store->visits(7), 'Link scanners alone create no visits');
+			Assert::assertSame(0, array_sum(array_column($store->visitsPerDay(7), 'count')), 'Daily trend stays without visits too');
+			Assert::assertSame(0, array_sum($store->devices(7)), 'Link scanners do not change device shares');
+			Assert::assertSame(0, $store->longTerm()['total']['devices'], 'Long term counts no scanners as visitors');
 
 			$put('page', 'visitor', 0);
 			$put('redirect', 'visitor', 1, 'call');
@@ -52,29 +50,29 @@ final class VisitsTest extends TestCase
 			$put('page', 'previous', 0, '', -8);
 			$put('redirect', 'previous', 1, 'call', -8);
 			$put('redirect', 'scanner-old', 0, 'call', -8);
-			self::visitsCheck(1, $store->visits(7, 1), 'Previous period also counts only page visits');
-			self::visitsCheck(1, array_sum(array_column($store->contactSources(7, ['call'], 1)['sources'], 'withContact')), 'Contact attribution uses the previous-period window');
-			self::visitsCheck(5, $store->visits(7), 'Visits count page identifiers per calendar day');
-			self::visitsCheck(5, array_sum(array_column($store->visitsPerDay(7), 'count')), 'Daily series matches the headline number');
-			self::visitsCheck(2, $store->visitsWithAction(7), 'Only later actions of the same day count');
-			self::visitsCheck(12, array_sum(array_column($store->directLinkHits(7), 'count')), 'Scanners, early clicks and day changes counted separately');
+			Assert::assertSame(1, $store->visits(7, 1), 'Previous period also counts only page visits');
+			Assert::assertSame(1, array_sum(array_column($store->contactSources(7, ['call'], 1)['sources'], 'withContact')), 'Contact attribution uses the previous-period window');
+			Assert::assertSame(5, $store->visits(7), 'Visits count page identifiers per calendar day');
+			Assert::assertSame(5, array_sum(array_column($store->visitsPerDay(7), 'count')), 'Daily series matches the headline number');
+			Assert::assertSame(2, $store->visitsWithAction(7), 'Only later actions of the same day count');
+			Assert::assertSame(12, array_sum(array_column($store->directLinkHits(7), 'count')), 'Scanners, early clicks and day changes counted separately');
 			$store->write(['type' => 'page', 'action' => 'view', 'session' => 'visitor',
 				'device' => '', 'created_at' => $today->setTime(10, 4)->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s')]);
-			self::visitsCheck(5, array_sum($store->devices(7)), 'Different metadata of the same day visit create no duplicate devices');
+			Assert::assertSame(5, array_sum($store->devices(7)), 'Different metadata of the same day visit create no duplicate devices');
 			$data = Sayamaapps\Kizami\Analysis::data(
 				$store,
 				new Sayamaapps\Kizami\Names([], [], []),
 				7,
 				['targets' => ['call', 'instagram'], 'contactTargets' => ['call']]
 			);
-			self::visitsCheck(20.0, $data['actionRate']['value'], 'Contact rate: one contact visit of five, social and scanners excluded');
-			self::visitsCheck(100.0, $data['actionRate']['previous'], 'Previous-period rate with the same definition');
-			self::visitsCheck(12, $data['directLinkHits']['total'], 'Direct hits shown separately in the dashboard');
+			Assert::assertSame(20.0, $data['actionRate']['value'], 'Contact rate: one contact visit of five, social and scanners excluded');
+			Assert::assertSame(100.0, $data['actionRate']['previous'], 'Previous-period rate with the same definition');
+			Assert::assertSame(12, $data['directLinkHits']['total'], 'Direct hits shown separately in the dashboard');
 			ob_start();
 			include __DIR__ . '/../views/dashboard.php';
 			$html = ob_get_clean();
-			self::visitsCheck(true, str_contains($html, 'Link clicks without a previous page visit'), 'Separate section visible');
-			self::visitsCheck(true, str_contains($html, 'Contact rate'), 'Rate named unambiguously');
+			Assert::assertSame(true, str_contains($html, 'Link clicks without a previous page visit'), 'Separate section visible');
+			Assert::assertSame(true, str_contains($html, 'Contact rate'), 'Rate named unambiguously');
 		} finally {
 			unset($store);
 			foreach (glob($dir . '/*') as $file) {
@@ -82,15 +80,5 @@ final class VisitsTest extends TestCase
 			}
 			rmdir($dir);
 		}
-	}
-
-	private static function visitsCheck($expected, $actual, string $text): void
-	{
-		global $checks;
-		if ($expected !== $actual) {
-			Assert::fail($text . ': ' . var_export($actual, true));
-		}
-		$checks++;
-		Assert::assertTrue(true);
 	}
 }

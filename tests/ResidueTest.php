@@ -48,16 +48,6 @@ final class ResidueTest extends TestCase
 		$raw->close();
 	}
 
-	private static function same(string $label, mixed $expected, mixed $actual): void
-	{
-		global $checks;
-		if ($expected !== $actual) {
-			throw new RuntimeException($label . ': expected ' . var_export($expected, true) . ', got ' . var_export($actual, true));
-		}
-		++$checks;
-		Assert::assertTrue(true);
-	}
-
 	private static function scalar(string $file, string $sql): mixed
 	{
 		$db = new SQLite3($file);
@@ -68,10 +58,8 @@ final class ResidueTest extends TestCase
 
 	public function testSuite(): void
 	{
-		global $checks;
 		$root = sys_get_temp_dir() . '/kizami-residue-' . bin2hex(random_bytes(8));
 		mkdir($root, 0700);
-		$checks = 0;
 		$failure = null;
 		try {
 			foreach (['wal', 'delete'] as $mode) {
@@ -81,27 +69,23 @@ final class ResidueTest extends TestCase
 
 				// The Store creates the schema; its connection is the one that deletes.
 				$store = new Store($file, $mode);
-				self::same(
-					"$mode: secure_delete is on for a Store connection",
-					1,
-					(int)(new ReflectionProperty($store, 'db'))->getValue($store)->querySingle('PRAGMA secure_delete')
-				);
+				Assert::assertSame(1, (int)(new ReflectionProperty($store, 'db'))->getValue($store)->querySingle('PRAGMA secure_delete'), "$mode: secure_delete is on for a Store connection");
 				$raw = new SQLite3($file);
 				self::insertOld($raw, 200);
 				$raw->close();
-				self::same("$mode: counter-check, the marker is in the file before compact", true, self::hasMarker($file));
+				Assert::assertSame(true, self::hasMarker($file), "$mode: counter-check, the marker is in the file before compact");
 
 				$store->compact();
 				$snapshot = "$dir/snapshot.sqlite";
 				$store->snapshot($snapshot);
 				unset($store); // the last connection closes: the WAL is checkpointed
 
-				self::same("$mode: the old events are gone", 0, self::scalar($file, 'SELECT COUNT(*) FROM kizami_custom_events'));
-				self::same("$mode: marker not in the active database file", false, self::hasMarker($file));
-				self::same("$mode: marker not in the snapshot", false, self::hasMarker($snapshot));
-				self::same("$mode: no free pages after compact", 0, self::scalar($file, 'PRAGMA freelist_count'));
-				self::same("$mode: no free pages in the snapshot", 0, self::scalar($snapshot, 'PRAGMA freelist_count'));
-				self::same("$mode: snapshot is intact", 'ok', self::scalar($snapshot, 'PRAGMA integrity_check'));
+				Assert::assertSame(0, self::scalar($file, 'SELECT COUNT(*) FROM kizami_custom_events'), "$mode: the old events are gone");
+				Assert::assertSame(false, self::hasMarker($file), "$mode: marker not in the active database file");
+				Assert::assertSame(false, self::hasMarker($snapshot), "$mode: marker not in the snapshot");
+				Assert::assertSame(0, self::scalar($file, 'PRAGMA freelist_count'), "$mode: no free pages after compact");
+				Assert::assertSame(0, self::scalar($snapshot, 'PRAGMA freelist_count'), "$mode: no free pages in the snapshot");
+				Assert::assertSame('ok', self::scalar($snapshot, 'PRAGMA integrity_check'), "$mode: snapshot is intact");
 			}
 
 			// A source that still has free pages (deleted without secure_delete,
@@ -111,14 +95,10 @@ final class ResidueTest extends TestCase
 			$file = $dir . '/' . Store::FILE;
 			$store = new Store($file, 'delete');
 			self::leaveResidue($file);
-			self::same(
-				'snapshot source: counter-check, free pages and marker present',
-				[true, true],
-				[self::scalar($file, 'PRAGMA freelist_count') > 0, self::hasMarker($file)]
-			);
+			Assert::assertSame([true, true], [self::scalar($file, 'PRAGMA freelist_count') > 0, self::hasMarker($file)], 'snapshot source: counter-check, free pages and marker present');
 			$store->snapshot("$dir/copy.sqlite");
-			self::same('snapshot of a source with free pages: marker not carried over', false, self::hasMarker("$dir/copy.sqlite"));
-			self::same('snapshot of a source with free pages: no free pages', 0, self::scalar("$dir/copy.sqlite", 'PRAGMA freelist_count'));
+			Assert::assertSame(false, self::hasMarker("$dir/copy.sqlite"), 'snapshot of a source with free pages: marker not carried over');
+			Assert::assertSame(0, self::scalar("$dir/copy.sqlite", 'PRAGMA freelist_count'), 'snapshot of a source with free pages: no free pages');
 			unset($store);
 
 			// Residue from before this version: bytes still in the file. The first
@@ -130,14 +110,14 @@ final class ResidueTest extends TestCase
 				$store = new Store($file, $mode);
 				unset($store);
 				self::leaveResidue($file);
-				self::same("legacy $mode: counter-check, the marker survived the plain delete", true, self::hasMarker($file));
-				self::same("legacy $mode: not yet rebuilt", 0, self::scalar($file, 'PRAGMA user_version'));
+				Assert::assertSame(true, self::hasMarker($file), "legacy $mode: counter-check, the marker survived the plain delete");
+				Assert::assertSame(0, self::scalar($file, 'PRAGMA user_version'), "legacy $mode: not yet rebuilt");
 
 				$store = new Store($file, $mode);
 				$store->compact();
 				unset($store);
-				self::same("legacy $mode: marker gone after compact", false, self::hasMarker($file));
-				self::same("legacy $mode: rebuild recorded", 1, self::scalar($file, 'PRAGMA user_version'));
+				Assert::assertSame(false, self::hasMarker($file), "legacy $mode: marker gone after compact");
+				Assert::assertSame(1, self::scalar($file, 'PRAGMA user_version'), "legacy $mode: rebuild recorded");
 			}
 
 			// Later deletions: the first rebuild has run and no page becomes free,
@@ -156,12 +136,12 @@ final class ResidueTest extends TestCase
 					$raw->exec("INSERT INTO kizami_custom_events (created_at, event, detail, path, session) VALUES ('2999-01-01 10:00:00', 'download', 'recent', '/', 'new')");
 				}
 				$raw->close();
-				self::same("later $mode: counter-check, the marker is in the file", true, self::hasMarker($file));
+				Assert::assertSame(true, self::hasMarker($file), "later $mode: counter-check, the marker is in the file");
 				$store->compact();
 				unset($store);
-				self::same("later $mode: the 3 old events are deleted, the rest stays", 50, self::scalar($file, 'SELECT COUNT(*) FROM kizami_custom_events'));
-				self::same("later $mode: no free page was involved", 0, self::scalar($file, 'PRAGMA freelist_count'));
-				self::same("later $mode: a deletion after the first rebuild leaves no marker", false, self::hasMarker($file));
+				Assert::assertSame(50, self::scalar($file, 'SELECT COUNT(*) FROM kizami_custom_events'), "later $mode: the 3 old events are deleted, the rest stays");
+				Assert::assertSame(0, self::scalar($file, 'PRAGMA freelist_count'), "later $mode: no free page was involved");
+				Assert::assertSame(false, self::hasMarker($file), "later $mode: a deletion after the first rebuild leaves no marker");
 			}
 
 			// Free pages are rebuilt away by the next explicit compact, also after
@@ -175,11 +155,11 @@ final class ResidueTest extends TestCase
 			self::insertOld($raw, 200);
 			$raw->close();
 			$store->compactDaily();
-			self::same('daily: counter-check, compactDaily() leaves free pages behind', true, self::scalar($file, 'PRAGMA freelist_count') > 0);
-			self::same('daily: a deleting roll-up clears the rebuild mark', 0, self::scalar($file, 'PRAGMA user_version'));
+			Assert::assertSame(true, self::scalar($file, 'PRAGMA freelist_count') > 0, 'daily: counter-check, compactDaily() leaves free pages behind');
+			Assert::assertSame(0, self::scalar($file, 'PRAGMA user_version'), 'daily: a deleting roll-up clears the rebuild mark');
 			$store->compact();
 			unset($store);
-			self::same('daily: the next compact() clears the free pages and the marker', [0, false], [self::scalar($file, 'PRAGMA freelist_count'), self::hasMarker($file)]);
+			Assert::assertSame([0, false], [self::scalar($file, 'PRAGMA freelist_count'), self::hasMarker($file)], 'daily: the next compact() clears the free pages and the marker');
 
 			// A fresh file gets the mark too (cheap), and live data survives.
 			$dir = "$root/fresh";
@@ -194,10 +174,10 @@ final class ResidueTest extends TestCase
 			$store->compact();
 			$counter = file_get_contents($dir . '/delete.sqlite', false, null, 24, 4);
 			$store->compact();
-			self::same('delete mode: the second compact() does not rebuild or write again', $counter, file_get_contents($dir . '/delete.sqlite', false, null, 24, 4));
+			Assert::assertSame($counter, file_get_contents($dir . '/delete.sqlite', false, null, 24, 4), 'delete mode: the second compact() does not rebuild or write again');
 			unset($store);
-			self::same('fresh file: marked after the first compact', 1, self::scalar($file, 'PRAGMA user_version'));
-			self::same('fresh file: recent events survive the rebuild', 1, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE path='/keep'"));
+			Assert::assertSame(1, self::scalar($file, 'PRAGMA user_version'), 'fresh file: marked after the first compact');
+			Assert::assertSame(1, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE path='/keep'"), 'fresh file: recent events survive the rebuild');
 		} catch (Throwable $e) {
 			$failure = $e->getMessage();
 		}
