@@ -25,19 +25,14 @@
 			<property name="reportLevel" value="31" />
 		</properties>
 	</rule>
-	<rule ref="rulesets/codesize.xml/ExcessiveMethodLength">
-		<!-- Analysis::data() is about 190 lines: one section per dashboard block. Splitting it is open work, not a behaviour change. -->
-		<properties>
-			<property name="minimum" value="200" />
-		</properties>
-	</rule>
+	<rule ref="rulesets/codesize.xml/ExcessiveMethodLength" />
 	<rule ref="rulesets/codesize.xml/ExcessiveParameterList" />
 
-	<rule ref="rulesets/design.xml">
-		<!-- Store and Analysis collect the queries of the dashboard and report. Their public methods stay until they are split; the exclusion is temporary. -->
-		<exclude name="TooManyPublicMethods" />
-		<exclude name="TooManyMethods" />
-		<exclude name="CouplingBetweenObjects" />
+	<rule ref="rulesets/design.xml/CouplingBetweenObjects">
+		<!-- Routes and Runtime wire the Kirby hooks, routes and page methods to the plugin classes; 21 and 18 classes are the current count, so the limit is 22 (PHPMD reports at the limit). Lowering it means splitting the routes, planned with the removal of the 1.x names in 2.0. -->
+		<properties>
+			<property name="maximum" value="22" />
+		</properties>
 	</rule>
 
 	<rule ref="rulesets/naming.xml">
