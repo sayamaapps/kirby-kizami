@@ -187,25 +187,6 @@ class Routes
 	}
 
 	/**
-	 * The project's extra stylesheet (option extraCss). Read only when it lies
-	 * inside the project root after symlinks are resolved: a path with '..' or
-	 * a link that points out is ignored, as a missing file is.
-	 */
-	private static function extraStylesheet(App $kirby, mixed $option): string
-	{
-		if (!is_string($option) || $option === '' || str_contains($option, '..') || !str_ends_with($option, '.css')) {
-			return '';
-		}
-		$base = realpath((string)$kirby->root('base'));
-		$file = realpath((string)$kirby->root('base') . '/' . ltrim($option, '/'));
-		if ($base === false || $file === false || !str_starts_with($file, $base . DIRECTORY_SEPARATOR) || is_file($file) === false) {
-			return '';
-		}
-
-		return (string)F::read($file);
-	}
-
-	/**
 	 * The same origin and path check as k/image; the dwell-time script sends the
 	 * same request shape as the gallery script. Always 204 — the browser never
 	 * learns whether anything was written.
@@ -274,6 +255,25 @@ class Routes
 			'Cache-Control' => 'public, max-age=86400',
 			'X-Content-Type-Options' => 'nosniff',
 		]);
+	}
+
+	/**
+	 * The project's extra stylesheet (option extraCss). Read only when it lies
+	 * inside the project root after symlinks are resolved: a path with '..' or
+	 * a link that points out is ignored, as a missing file is.
+	 */
+	private static function extraStylesheet(App $kirby, mixed $option): string
+	{
+		if (!is_string($option) || $option === '' || str_contains($option, '..') || !str_ends_with($option, '.css')) {
+			return '';
+		}
+		$base = realpath((string)$kirby->root('base'));
+		$file = realpath((string)$kirby->root('base') . '/' . ltrim($option, '/'));
+		if ($base === false || $file === false || !str_starts_with($file, $base . DIRECTORY_SEPARATOR) || is_file($file) === false) {
+			return '';
+		}
+
+		return (string)F::read($file);
 	}
 
 	/** Only explicitly allowed image IDs and own browser requests; no file paths, cookies or identifiers. */

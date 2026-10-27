@@ -160,11 +160,11 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
 	? Chart::empty(I18n::t('trend.noActions'))
 	: Chart::area($data['trend']['actions'], I18n::t('trend.actions'), $data['trend']['gapMarks']) ?></div>
   <div class="axis"><?php foreach (array_unique([
-	0,
-	(int)round(($days - 1) / 3),
-	(int)round(2 * ($days - 1) / 3),
-	$days - 1,
-]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
+  	0,
+  	(int)round(($days - 1) / 3),
+  	(int)round(2 * ($days - 1) / 3),
+  	$days - 1,
+  ]) as $i): ?><span><?= $shortDate($data['trend']['visits'][$i]['name']) ?></span><?php endforeach; ?></div>
   <?php if ($data['gaps'] !== []): ?>
   <div class="gaps">
     <h3><?= $t('gap.title') ?></h3>
@@ -268,10 +268,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
   </tbody></table>
   <?php foreach ($data['events'] as $ev): ?>
     <?php
-    if (!$ev['detail'] || $ev['count'] === 0) {
-        continue;
-    }
-    ?>
+	if (!$ev['detail'] || $ev['count'] === 0) {
+		continue;
+	}
+	?>
   <h3><?= $t('events.details', ['name' => $ev['name']]) ?></h3>
     <?php if ($ev['details'] === []): ?><p class="empty"><?= $t('events.noDetails') ?></p><?php else: ?>
   <table class="events-table"><thead><tr><th scope="col"><?= $t('events.detail') ?></th><th scope="col" class="num"><?= $t('events.count') ?></th><th scope="col" class="num"><?= $t('events.visits') ?></th></tr></thead><tbody>
