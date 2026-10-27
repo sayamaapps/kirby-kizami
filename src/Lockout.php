@@ -119,10 +119,10 @@ class Lockout
 	private function update(callable $change, int $now): void
 	{
 		$directory = dirname($this->file);
-		if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+		if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
 			throw new \RuntimeException('directory missing');
 		}
-		$handle = @fopen($this->file, 'c+');
+		$handle = fopen($this->file, 'c+');
 		if ($handle === false) {
 			throw new \RuntimeException('cannot open');
 		}

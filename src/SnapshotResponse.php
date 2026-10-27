@@ -64,7 +64,7 @@ class SnapshotResponse extends Response
 		}
 		$this->handle = null;
 		if (is_file($this->path)) {
-			@unlink($this->path);
+			unlink($this->path);
 		}
 	}
 

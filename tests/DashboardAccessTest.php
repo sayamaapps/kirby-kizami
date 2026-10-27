@@ -28,6 +28,9 @@ final class DashboardAccessTest extends TestCase
 
 	public function testSuite(): void
 	{
+		// Failure paths below raise PHP warnings on purpose (read-only directories,
+		// a file where a directory belongs). They are expected, not failures.
+		set_error_handler(static fn (): bool => true, E_WARNING);
 		global $n;
 		$base = dirname(__DIR__);
 		require $base . '/vendor/autoload.php';
@@ -139,6 +142,7 @@ final class DashboardAccessTest extends TestCase
 				rmdir($tmp);
 			}
 		}
+		restore_error_handler();
 		$this->assertFalse($failed ?? false, 'no failure');
 	}
 }

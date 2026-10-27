@@ -39,6 +39,9 @@ final class LockoutTest extends TestCase
 
 	public function testSuite(): void
 	{
+		// Failure paths below raise PHP warnings on purpose (read-only directories,
+		// a file where a directory belongs). They are expected, not failures.
+		set_error_handler(static fn (): bool => true, E_WARNING);
 		global $n;
 		$n = 0;
 		$tmp = sys_get_temp_dir() . '/kizami-lockout-' . bin2hex(random_bytes(6));
@@ -129,6 +132,7 @@ final class LockoutTest extends TestCase
 			}
 			rmdir($tmp);
 		}
+		restore_error_handler();
 		$this->assertFalse($failed ?? false, 'no failure');
 	}
 }

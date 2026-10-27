@@ -216,6 +216,9 @@ final class CoreTest extends TestCase
 
 	public function testSuite(): void
 	{
+		// Failure paths below raise PHP warnings on purpose (read-only directories,
+		// a file where a directory belongs). They are expected, not failures.
+		set_error_handler(static fn (): bool => true, E_WARNING);
 		global $passed, $failures;
 		$logFile = sys_get_temp_dir() . '/kizami-log-' . bin2hex(random_bytes(6)) . '.txt';
 		ini_set('error_log', $logFile);
@@ -1263,6 +1266,7 @@ final class CoreTest extends TestCase
 		self::check('Internal navigation only in the table', true, !in_array('Internal navigation', array_column($extra['sources'], 'name'), true) && in_array('Internal navigation', array_column($extra['sourcesTable'], 'name'), true));
 		array_map('unlink', glob($dirW . '/*'));
 		rmdir($dirW);
+		restore_error_handler();
 		$this->assertSame([], $failures, implode('
 ', $failures));
 	}

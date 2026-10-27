@@ -312,7 +312,7 @@ class Runtime
 			}
 			// Record the versions too, so an old SQLite (3.7.17) can be told apart.
 			$line .= ' [SQLite ' . (\SQLite3::version()['versionString'] ?? '?') . ', PHP ' . PHP_VERSION . ']';
-			@file_put_contents($file, $line . "\n", $mode | LOCK_EX);
+			file_put_contents($file, $line . "\n", $mode | LOCK_EX);
 		} catch (Throwable) {
 			// Logging must never disturb the dashboard on top.
 		}

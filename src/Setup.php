@@ -20,7 +20,7 @@ class Setup
 		$path = rtrim(str_replace('\\', '/', $path), '/');
 		$rest = [];
 		$probe = $path;
-		while ($probe !== '' && ($real = @realpath($probe)) === false) {
+		while ($probe !== '' && ($real = realpath($probe)) === false) {
 			$rest[] = basename($probe);
 			$parent = dirname($probe);
 			if ($parent === $probe) {

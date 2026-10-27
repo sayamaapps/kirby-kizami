@@ -15,8 +15,6 @@
 		<exclude name="IfStatementAssignment" />
 		<!-- Early returns are not enforced; some guards read better with else. -->
 		<exclude name="ElseExpression" />
-		<!-- The @ operator silences warnings that the code checks afterwards (file and SQLite calls). Removing it changes what a visitor or operator sees, so it stays until a behaviour change is planned. -->
-		<exclude name="ErrorControlOperator" />
 		<!-- Global PHP and Kirby classes are written fully qualified in several places; adding imports is cosmetic. -->
 		<exclude name="MissingImport" />
 	</rule>

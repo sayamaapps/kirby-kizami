@@ -48,7 +48,7 @@ class SnapshotService
 	{
 		foreach (self::SUFFIXES as $suffix) {
 			if (is_file($temp . $suffix)) {
-				@unlink($temp . $suffix);
+				unlink($temp . $suffix);
 			}
 		}
 	}
@@ -81,7 +81,7 @@ class SnapshotService
 			// dies while sending. Where unlinking an open file fails (Windows),
 			// SnapshotResponse::send() removes it after sending, and sweep()
 			// at the latest.
-			@unlink($temp);
+			unlink($temp);
 			$context = hash_init('sha256');
 			hash_update_stream($context, $handle);
 			rewind($handle);
@@ -117,7 +117,7 @@ class SnapshotService
 	 */
 	public static function sweep(string $directory): int
 	{
-		$names = @scandir($directory);
+		$names = is_dir($directory) ? scandir($directory) : false;
 		if ($names === false) {
 			return 0;
 		}
@@ -125,7 +125,7 @@ class SnapshotService
 		$removed = 0;
 		foreach ($names as $name) {
 			$file = $directory . '/' . $name;
-			if (str_starts_with($name, '.snapshot-') && is_file($file) && (int)@filemtime($file) < $limit && @unlink($file)) {
+			if (str_starts_with($name, '.snapshot-') && is_file($file) && (int)filemtime($file) < $limit && unlink($file)) {
 				$removed++;
 			}
 		}

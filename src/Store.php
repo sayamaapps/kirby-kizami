@@ -389,7 +389,7 @@ class Store
 			$this->exec(self::DAYS_TABLE);
 			$this->exec('COMMIT');
 		} catch (\Throwable $e) {
-			@$this->db->exec('ROLLBACK');
+			$this->db->exec('ROLLBACK');
 			throw new RuntimeException('Kizami: schema creation failed: ' . $e->getMessage(), 0, $e);
 		}
 	}
@@ -519,7 +519,7 @@ class Store
 			}
 			$this->exec('COMMIT');
 		} catch (\Throwable $e) {
-			@$this->db->exec('ROLLBACK');
+			$this->db->exec('ROLLBACK');
 			throw new RuntimeException('Kizami: discarded counter failed: ' . $e->getMessage(), 0, $e);
 		}
 	}
@@ -618,7 +618,7 @@ class Store
 		// file — outside the try in createSchema(); without this conversion
 		// an SQLite3Exception escaped.
 		try {
-			$ok = @$this->db->exec($sql);
+			$ok = $this->db->exec($sql);
 		} catch (\Throwable $e) {
 			throw new RuntimeException($e->getMessage(), 0, $e);
 		}
@@ -652,7 +652,7 @@ class Store
 	 */
 	public function firstDwellTimeMeasurement(): string|null
 	{
-		$value = @$this->db->querySingle("SELECT MIN(created_at) AS first FROM kizami_events WHERE type='duration'");
+		$value = $this->db->querySingle("SELECT MIN(created_at) AS first FROM kizami_events WHERE type='duration'");
 		return is_string($value) && $value !== '' ? $value : null;
 	}
 
@@ -702,7 +702,7 @@ class Store
 			$sql .= " WHERE NOT EXISTS (SELECT 1 FROM kizami_events WHERE type='image'
                 AND session=:session AND target=:target AND :session <> '')";
 		}
-		$stmt = @$this->db->prepare($sql);
+		$stmt = $this->db->prepare($sql);
 		if ($stmt === false) {
 			throw new RuntimeException('Kizami: INSERT cannot be prepared');
 		}
@@ -723,7 +723,7 @@ class Store
 		}
 		// execute() returns false for a rejected write WITHOUT throwing —
 		// so throw here ourselves.
-		if (@$stmt->execute() === false) {
+		if ($stmt->execute() === false) {
 			throw new RuntimeException('Kizami: INSERT rejected: ' . $this->db->lastErrorMsg());
 		}
 	}
@@ -739,7 +739,7 @@ class Store
 	 */
 	private function insertCustomEvent(array $row): void
 	{
-		$stmt = @$this->db->prepare('INSERT INTO kizami_custom_events (created_at, event, detail, path, session)
+		$stmt = $this->db->prepare('INSERT INTO kizami_custom_events (created_at, event, detail, path, session)
             VALUES (:created_at, :event, :detail, :path, :session)');
 		if ($stmt === false) {
 			throw new RuntimeException('Kizami: INSERT cannot be prepared');
@@ -748,7 +748,7 @@ class Store
 		foreach (['event', 'detail', 'path', 'session'] as $field) {
 			$stmt->bindValue(':' . $field, (string)($row[$field] ?? ''), SQLITE3_TEXT);
 		}
-		if (@$stmt->execute() === false) {
+		if ($stmt->execute() === false) {
 			throw new RuntimeException('Kizami: INSERT rejected: ' . $this->db->lastErrorMsg());
 		}
 	}
@@ -768,7 +768,7 @@ class Store
 	 */
 	public static function journalOfFile(string $dbPath): string
 	{
-		$header = is_file($dbPath) ? @file_get_contents($dbPath, false, null, 0, 20) : false;
+		$header = is_file($dbPath) ? file_get_contents($dbPath, false, null, 0, 20) : false;
 		if (is_string($header) && strlen($header) === 20 && str_starts_with($header, "SQLite format 3\0")) {
 			return ord($header[18]) === 1 ? self::JOURNAL_DELETE : self::JOURNAL_WAL;
 		}
@@ -894,7 +894,7 @@ class Store
 			}
 			$this->exec('COMMIT');
 		} catch (\Throwable $e) {
-			@$this->db->exec('ROLLBACK');
+			$this->db->exec('ROLLBACK');
 			throw new RuntimeException('Kizami: migration of the pre-1.0 schema failed: ' . $e->getMessage(), 0, $e);
 		}
 	}
@@ -1087,7 +1087,7 @@ class Store
 	/** Consistent SQLite snapshot even in WAL mode, without the secret file. */
 	public function snapshot(string $target): void
 	{
-		$file = @fopen($target, 'x');
+		$file = fopen($target, 'x');
 		if ($file === false) {
 			throw new RuntimeException('Snapshot target must be new and writable');
 		}
@@ -1111,13 +1111,17 @@ class Store
 				$backup->close();
 			}
 			foreach (['', '-wal', '-shm', '-journal'] as $suffix) {
-				@unlink($target . $suffix);
+				if (is_file($target . $suffix)) {
+					unlink($target . $suffix);
+				}
 			}
 			throw $e;
 		}
 		$backup->close();
 		foreach (['-wal', '-shm'] as $suffix) {
-			@unlink($target . $suffix);
+			if (is_file($target . $suffix)) {
+				unlink($target . $suffix);
+			}
 		}
 	}
 
@@ -1146,7 +1150,7 @@ class Store
 	private function tables(): array
 	{
 		$names = [];
-		$result = @$this->db->query("SELECT name FROM sqlite_master WHERE type='table'");
+		$result = $this->db->query("SELECT name FROM sqlite_master WHERE type='table'");
 		if ($result) {
 			while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
 				$names[] = $row['name'];
@@ -1311,7 +1315,7 @@ class Store
 			$this->db->exec('ROLLBACK');
 			return $ok ? null : $this->db->lastErrorMsg();
 		} catch (\Throwable $e) {
-			@$this->db->exec('ROLLBACK');
+			$this->db->exec('ROLLBACK');
 			return $e->getMessage();
 		}
 	}

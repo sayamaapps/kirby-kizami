@@ -65,7 +65,7 @@ class Migration
 		}
 
 		$lockFile = $storageRoot . '/.kizami-migration.lock';
-		$lock = @fopen($lockFile, 'c');
+		$lock = fopen($lockFile, 'c');
 		if ($lock === false || !flock($lock, LOCK_EX)) {
 			error_log('Kizami: storage migration lock not available in ' . $storageRoot);
 			return $current;
@@ -74,10 +74,10 @@ class Migration
 			if (is_dir($legacy) && !is_dir($current)) {
 				foreach (self::FILES as $old => $new) {
 					if (is_file($legacy . '/' . $old) && !file_exists($legacy . '/' . $new)) {
-						@rename($legacy . '/' . $old, $legacy . '/' . $new);
+						rename($legacy . '/' . $old, $legacy . '/' . $new);
 					}
 				}
-				if (!@rename($legacy, $current)) {
+				if (!rename($legacy, $current)) {
 					// The files inside already carry their new names, so the
 					// old directory works as it is; the next request tries again.
 					error_log('Kizami: could not move ' . $legacy . ' to ' . $current);
@@ -87,7 +87,9 @@ class Migration
 		} finally {
 			flock($lock, LOCK_UN);
 			fclose($lock);
-			@unlink($lockFile);
+			if (is_file($lockFile)) {
+				unlink($lockFile);
+			}
 		}
 		return $current;
 	}

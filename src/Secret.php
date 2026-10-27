@@ -46,14 +46,16 @@ class Secret
 	public static function expire(string $directory, string $date): bool
 	{
 		$file = $directory . '/' . self::FILE;
-		$existing = @file_get_contents($file);
+		$existing = is_file($file) ? file_get_contents($file) : false;
 		if (is_string($existing) && explode("\n", trim($existing), 2)[0] === $date) {
 			return true;
 		}
 		if (!file_exists($file)) {
 			return true;
 		}
-		@unlink($file);
+		if (is_file($file)) {
+			unlink($file);
+		}
 		return !file_exists($file);
 	}
 
@@ -61,7 +63,7 @@ class Secret
 	{
 		$file = $directory . '/' . self::FILE;
 
-		$existing = @file_get_contents($file);
+		$existing = is_file($file) ? file_get_contents($file) : false;
 		if (is_string($existing) && $existing !== '') {
 			[$stamp, $value] = array_pad(explode("\n", trim($existing), 2), 2, '');
 			if ($stamp === $date && $value !== '') {
@@ -71,7 +73,7 @@ class Secret
 			// rotate. Falls through to the regeneration below.
 		}
 
-		if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+		if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
 			error_log('Kizami: secret directory cannot be created: ' . $directory);
 			return '';
 		}
@@ -83,17 +85,19 @@ class Secret
 		// file behind. rename() replaces the old secret in one step — that is
 		// the rotation.
 		$temp = $file . '.' . bin2hex(random_bytes(4)) . '.tmp';
-		if (@file_put_contents($temp, $date . "\n" . $value, LOCK_EX) === false) {
+		if (file_put_contents($temp, $date . "\n" . $value, LOCK_EX) === false) {
 			error_log('Kizami: secret not writable in ' . $directory);
 			return '';
 		}
-		@chmod($temp, 0600);
+		chmod($temp, 0600);
 
-		if (!@rename($temp, $file)) {
+		if (!rename($temp, $file)) {
 			// A parallel run was faster — its file wins, as long as it is
 			// from the same day.
-			@unlink($temp);
-			$existing = @file_get_contents($file);
+			if (is_file($temp)) {
+				unlink($temp);
+			}
+			$existing = is_file($file) ? file_get_contents($file) : false;
 			if (is_string($existing) && $existing !== '') {
 				[$stamp, $other] = array_pad(explode("\n", trim($existing), 2), 2, '');
 				if ($stamp === $date && $other !== '') {
