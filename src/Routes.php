@@ -123,6 +123,7 @@ class Routes
 			]);
 		} catch (Throwable $e) {
 			error_log('Kizami: dashboard not available: ' . $e->getMessage());
+			Runtime::logError($kirby, $e);
 			$data = ['days' => $days, 'error' => true, 'brand' => Options::brand($kirby)];
 			if ($e instanceof SetupError) {
 				$data['setup'] = $e->getMessage();

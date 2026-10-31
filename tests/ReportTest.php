@@ -501,8 +501,8 @@ final class ReportTest extends TestCase
 			Assert::assertSame(['kizami-snapshot', false], [$kirby->user('snapshot@example.invalid')->role()->name(), $kirby->user('snapshot@example.invalid')->role()->permissions()->for('access', 'panel')], 'Snapshot role created, without Panel');
 			Assert::assertSame(403, $snapshot(options: $on + ['kizami.reportWithoutHttps' => false])[0], 'Snapshot over HTTPS only');
 			Assert::assertSame(403, $snapshot(options: $on + ['kizami.snapshotRoles' => ['admin']])[0], 'Snapshot: own role list');
-			// The report route runs maintenance like the dashboard: free pages with
-			// leftovers of deleted events are rebuilt away, once authenticated.
+			// The report route is read only (IDM-9): free pages with leftovers of
+			// deleted events are rebuilt by maintenance (compact), never by a GET.
 			$dbFile = $tmp . '/storage/kizami/' . Store::FILE;
 			$leave = function () use ($dbFile) {
 				$raw = new SQLite3($dbFile);
@@ -532,12 +532,27 @@ final class ReportTest extends TestCase
 			$request($url, 'report@example.invalid', 'wrong-password-very-long-123');
 			Assert::assertSame([$freeBefore, $markerBefore], $probe(), 'Anonymous /k/report leaves the database file alone');
 			$request($url);
+			Assert::assertSame([$freeBefore, $markerBefore], $probe(), 'Authenticated /k/report does not rebuild the file (IDM-9)');
+			// Old single events: a GET rolls nothing up, compaction does.
+			$oldRows = function () use ($dbFile): int {
+				$raw = new SQLite3($dbFile);
+				$n = (int)$raw->querySingle("SELECT COUNT(*) FROM kizami_events WHERE created_at < '2011-01-01'");
+				$raw->close();
+				return $n;
+			};
+			$raw = new SQLite3($dbFile);
+			$raw->exec("INSERT INTO kizami_events (created_at, type, action, path, target, referrer, utm_source, utm_medium, utm_campaign, session, device, position, seconds) VALUES ('2010-01-01 10:00:00', 'page', 'view', '/old-page', '', '', '', '', '', 'old-session', 'desktop', '', 0)");
+			$raw->close();
+			$request($url);
+			Assert::assertSame(1, $oldRows(), 'Authenticated /k/report leaves old single events alone (IDM-9)');
+			(new Store($dbFile))->compact();
+			Assert::assertSame(0, $oldRows(), 'Compaction (maintenance) rolls old single events up');
 			$after = $probe();
-			Assert::assertSame([0, 1], $after[0], 'Authenticated /k/report rebuilds the file once (no free pages, marked)');
-			Assert::assertSame(false, $after[1], 'Authenticated /k/report: leftovers of deleted events gone from the file');
+			Assert::assertSame([0, 1], $after[0], 'Compaction rebuilds the file once (no free pages, marked)');
+			Assert::assertSame(false, $after[1], 'Compaction: leftovers of deleted events gone from the file');
 
-			// The daily key also rotates through the authenticated operator routes,
-			// never through anonymous requests.
+			// The daily key rotates through the snapshot route (authenticated) and on
+			// counted visits; the report route and anonymous requests never touch it.
 			$keyFile = $tmp . '/storage/kizami/secret.txt';
 			$stale = "2010-01-01\nSTALE-SECRET-VALUE";
 			$today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
@@ -549,7 +564,7 @@ final class ReportTest extends TestCase
 			$request($url, 'report@example.invalid', 'wrong-password-very-long-123');
 			Assert::assertSame($stale, file_get_contents($keyFile), 'Unauthenticated, forbidden and failed logins leave the key alone');
 			$request($url);
-			Assert::assertSame(true, $keyIsFresh(), 'Authenticated /k/report replaces a stale key');
+			Assert::assertSame($stale, file_get_contents($keyFile), 'Authenticated /k/report leaves a stale key alone (IDM-9)');
 			file_put_contents($keyFile, $stale);
 			$snapshot(options: $on);
 			Assert::assertSame(true, $keyIsFresh(), 'Authenticated /k/snapshot replaces a stale key');
@@ -557,6 +572,15 @@ final class ReportTest extends TestCase
 			$snapshot(options: $on);
 			$request($url);
 			Assert::assertSame($currentKey, file_get_contents($keyFile), 'A current key is not touched again');
+			// maintenance.php retires a stale key (removes it, creates none) and keeps a current one.
+			$maintenance = function (string $directory): int {
+				exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/maintenance.php') . ' compact ' . escapeshellarg($directory) . ' 2>&1', $output, $code);
+				return $code;
+			};
+			file_put_contents($keyFile, $stale);
+			Assert::assertSame([0, false], [$maintenance($tmp . '/storage/kizami'), is_file($keyFile)], 'maintenance.php removes a stale daily key');
+			file_put_contents($keyFile, $currentKey);
+			Assert::assertSame([0, $currentKey], [$maintenance($tmp . '/storage/kizami'), file_get_contents($keyFile)], 'maintenance.php keeps a current daily key');
 			unlink($keyFile);
 			$request($url);
 			$snapshot(options: $on);

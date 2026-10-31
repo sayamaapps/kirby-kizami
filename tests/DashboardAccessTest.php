@@ -116,6 +116,13 @@ final class DashboardAccessTest extends TestCase
 			Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", file_get_contents($keyFile), 'Dashboard GET leaves a stale daily key alone');
 			Assert::assertSame(200, $get('k/dashboard', $https)[0], 'Dashboard again');
 			Assert::assertSame($before, $state(), 'Dashboard GET writes nothing to the database');
+			// A failure is still written to the plugin's error log (1.x behaviour, not data).
+			foreach (['kizami.sqlite-wal', 'kizami.sqlite-shm'] as $side) {
+				@unlink($tmp . '/storage/kizami/' . $side);
+			}
+			file_put_contents($db, str_repeat('x', 4096));
+			Assert::assertSame(503, $get('k/dashboard', $https)[0], 'Unreadable database: 503');
+			Assert::assertSame(true, is_file($tmp . '/storage/kizami/errors.log'), 'Dashboard failure is written to errors.log');
 		} finally {
 			if (is_dir($tmp)) {
 				$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($tmp, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
