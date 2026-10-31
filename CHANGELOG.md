@@ -13,7 +13,7 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
-## [Unreleased] — 2.0.0 (dashboard access)
+## [2.0.0] — 2026-10-31 (dashboard access)
 
 Breaking. This entry covers the dashboard only: its login and what its GET request
 does (IDM-8, IDM-9 of the plugin rules). The other 2.0 changes are not in this
