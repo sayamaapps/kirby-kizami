@@ -13,6 +13,58 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [Unreleased] — 2.0.0 (dashboard access)
+
+Breaking. This entry covers the dashboard only: its login and what its GET request
+does (IDM-8, IDM-9 of the plugin rules). The other 2.0 changes are not in this
+release; see README, "Not in the 2.0 dashboard change".
+
+### Changed
+
+- **The dashboard checks Kirby accounts only.** A logged-in Panel user is let in.
+  Anyone else logs in with Basic Auth against a Kirby account whose role is the new
+  `kizami-dashboard` (or a role in the new option `sayamaapps.kizami.dashboardRoles`).
+  Kirby checks the password and counts failed logins (`auth.trials`, `auth.timeout`).
+- Refusals: 401 with a login prompt for a missing login or a wrong password, 403
+  `Not allowed for this account.` for an account without a dashboard role. Over
+  plain HTTP the answer stays 403 `HTTPS only.` before any login check.
+- **`/k/dashboard` and `/k/dashboard.css` do not write.** No compaction, no daily key
+  rotation, and a failed request is not written to `storage/kizami/errors.log`; it goes to
+  the PHP error log only. Compaction still runs once a day when a visit is counted, and
+  in `maintenance.php`. Opening the database still creates a missing table (idempotent).
+- `Runtime::deny()` and `Runtime::loginUnavailable()` take fewer arguments; the 1.x
+  wrappers `kizami_deny()` and `kizami_login_unavailable()` keep their signatures.
+
+### Added
+
+- Role `kizami-dashboard`: no Panel access, no permissions. Registered while
+  `sayamaapps.kizami.active` is on.
+- Option `sayamaapps.kizami.dashboardRoles` (default `['kizami-dashboard']`).
+
+### Removed
+
+- The login file `site/config/kizami.php` and the plugin's own Basic Auth parser.
+- The option `previewAccess` (login during the build phase). The dashboard
+  requires a Kirby account; the site's own build protection is not used for it.
+- The plugin's failed-login counter `storage/kizami/logins.json`, with the internal
+  classes `Kizami\Access` and `Kizami\Lockout` (1.x class names).
+
+### Migration from 1.x
+
+1. Create a Kirby account for each person who used the file login. In the Panel, under
+   Users, give the role "Kizami dashboard" (the role appears while the module is active).
+   The old login stops working at once.
+2. Delete `site/config/kizami.php` and remove `previewAccess` from the configuration.
+3. Panel users need nothing new. `k/report` and `k/snapshot` keep their own roles and
+   their own options.
+4. A site that may go days without visits should run `maintenance.php` daily. The dashboard
+   no longer rotates the daily key, so a stale key stays until the next counted visit or
+   maintenance run. Check the dashboard once over HTTPS with the new login.
+5. `storage/kizami/logins.json` and `storage/kizami/errors.log` are no longer written.
+   Remove them by hand when they are no longer needed. The plugin deletes nothing.
+6. Kirby records failed logins of existing accounts in `site/accounts/.logins`. That is
+   Kirby's log, not the plugin's.
+
 ## [1.9.0] — 2026-10-27
 
 Structure and naming, as a 1.x minor release: counting, output, storage, schema
