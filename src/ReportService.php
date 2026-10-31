@@ -16,9 +16,8 @@ use Throwable;
  * Off by default, twice: without `kizami.active` AND `kizami.report` the
  * route answers with Kirby's real 404, like the dashboard.
  *
- * Read-only for the visitor data, but not free of side effects: after login
- * the route runs maintenance like the dashboard (rolling up old days,
- * rebuilding the file when free pages exist, replacing a stale daily key).
+ * Read only (IDM-9): the route does not compact, rebuild or rotate the key;
+ * maintenance.php does that.
  * Only for Kirby accounts with a role from `kizami.reportRoles`
  * (default: the bundled role `kizami-report` without Panel access and
  * without permissions). An admin account deliberately does NOT get through:
@@ -110,7 +109,6 @@ class ReportService
 		I18n::setLanguage(Options::language($kirby));
 		try {
 			self::authenticate($kirby);
-			Runtime::rotateSecret($kirby);
 			$kind = $kirby->request()->get('kind', 'day');
 			if (!in_array($kind, Report::KINDS, true)) {
 				throw new ReportError('"kind" must be "day" or "week".');
@@ -125,16 +123,9 @@ class ReportService
 				throw new ReportError($e->getMessage());
 			}
 
+			// Read only (IDM-9): no compaction and no key rotation here. Both run on
+			// counting and in maintenance.php.
 			$store = Runtime::store($kirby);
-			// As in the dashboard: a site whose dashboard is rarely opened
-			// still gets its maintenance from the daily script call.
-			// Maintenance must not cost the report: before it existed here, the
-			// report also worked on a read-only database.
-			try {
-				$store->compact();
-			} catch (Throwable $e) {
-				error_log('Kizami: maintenance in report skipped: ' . $e->getMessage());
-			}
 			$names = new Names(
 				(array)Options::get($kirby, 'targetNames', []),
 				(array)Options::get($kirby, 'sourceNames', []),

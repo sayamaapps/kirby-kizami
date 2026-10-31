@@ -12,7 +12,6 @@ use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use PHPUnit\Framework\TestCase;
-use Sayamaapps\Kizami\Access;
 use Sayamaapps\Kizami\Analysis;
 use Sayamaapps\Kizami\Capture;
 use Sayamaapps\Kizami\Comparison;
@@ -75,7 +74,6 @@ use Sayamaapps\Kizami\I18n;
 // here, not as google.com: utm_source wins, because a campaign is the more
 // precise answer than the domain it was clicked through. The same row must
 // never count twice.
-// === Access: file check (bcrypt) ========================================
 // === Redirect: names and targets ========================================
 // The target may come from a content field (the phone number is maintained
 // in ONE place). If the closure throws, the route must not die with it.
@@ -159,7 +157,6 @@ use Sayamaapps\Kizami\Redirect;
 use Sayamaapps\Kizami\Secret;
 use Sayamaapps\Kizami\Store;
 
-#[CoversClass(\Sayamaapps\Kizami\Access::class)]
 #[CoversClass(\Sayamaapps\Kizami\Analysis::class)]
 #[CoversClass(\Sayamaapps\Kizami\Capture::class)]
 #[CoversClass(\Sayamaapps\Kizami\Comparison::class)]
@@ -420,14 +417,6 @@ final class CoreTest extends TestCase
 		$rest = (int)$db4->querySingle("SELECT COUNT(*) FROM kizami_events WHERE path='/ancient'");
 		$db4->close();
 		Assert::assertSame(0, $rest, 'The ancient row is gone');
-		$hash  = password_hash('secret123', PASSWORD_DEFAULT);
-		$creds = ['user' => 'client', 'hash' => $hash];
-		Assert::assertSame(true, Access::checkFile($creds, 'client', 'secret123'), 'Right user + right password → granted');
-		Assert::assertSame(false, Access::checkFile($creds, 'client', 'wrong'), 'Right user + wrong password → denied');
-		Assert::assertSame(false, Access::checkFile($creds, 'stranger', 'secret123'), 'Wrong user → denied');
-		Assert::assertSame(false, Access::checkFile(null, 'client', 'secret123'), 'Missing configuration → denied (fail closed, unlike a preview guard)');
-		Assert::assertSame(false, Access::checkFile(['user' => 'client', 'hash' => ''], 'client', 'secret123'), 'Empty hash → denied');
-		Assert::assertSame(false, Access::checkFile($creds, null, null), 'Missing input → denied');
 		Assert::assertSame('call', Redirect::cleanName('Call'), 'Name is lower-cased and cleaned');
 		Assert::assertSame('call', Redirect::cleanName('ca<>ll'), 'Special characters are dropped from the name');
 		Assert::assertSame('plan-route_2', Redirect::cleanName('Plan-Route_2'), 'Hyphen and underscore stay');
@@ -511,7 +500,6 @@ final class CoreTest extends TestCase
 		Assert::assertSame('', Capture::cleanPath([['x']]), 'Nested path is ignored');
 		Assert::assertSame('(internal)', Capture::cleanReferrer('https://EXAMPLE.org./x', ['example.org']), 'Internal referrer stays separate from direct access');
 		Assert::assertSame('other.org', Capture::cleanReferrer('https://other.org/x', ['example.org']), 'Foreign referrer stays external');
-		Assert::assertSame(false, Access::checkFile(['user' => [], 'hash' => []], 'x', 'x'), 'Array in the access file is rejected');
 		$dst = new Store($dbDir . '/dst.sqlite');
 		$dstDb = new SQLite3($dbDir . '/dst.sqlite');
 		foreach (['2025-03-29 23:30:00', '2025-03-30 22:30:00', '2025-10-25 22:30:00', '2025-10-26 23:30:00'] as $time) {

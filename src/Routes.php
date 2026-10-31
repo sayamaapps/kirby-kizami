@@ -97,9 +97,9 @@ class Routes
 
 		I18n::setLanguage(Options::language($kirby));
 		try {
+			// Read only (IDM-9): no compaction and no key rotation here. Both run on
+			// counting (Store::write(), Runtime::write()) and in maintenance.php.
 			$store = Runtime::store($kirby);
-			$store->compact();
-			Runtime::rotateSecret($kirby);
 			$names = new Names(
 				(array)Runtime::option($kirby, 'targetNames', []),
 				(array)Runtime::option($kirby, 'sourceNames', []),

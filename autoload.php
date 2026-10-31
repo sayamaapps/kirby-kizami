@@ -7,7 +7,6 @@
  */
 
 return [
-	'sayamaapps\\kizami\\access' => 'src/Access.php',
 	'sayamaapps\\kizami\\analysis' => 'src/Analysis.php',
 	'sayamaapps\\kizami\\capture' => 'src/Capture.php',
 	'sayamaapps\\kizami\\chart' => 'src/Chart.php',
@@ -17,7 +16,6 @@ return [
 	'sayamaapps\\kizami\\gaps' => 'src/Gaps.php',
 	'sayamaapps\\kizami\\hooks' => 'src/Hooks.php',
 	'sayamaapps\\kizami\\i18n' => 'src/I18n.php',
-	'sayamaapps\\kizami\\lockout' => 'src/Lockout.php',
 	'sayamaapps\\kizami\\migration' => 'src/Migration.php',
 	'sayamaapps\\kizami\\names' => 'src/Names.php',
 	'sayamaapps\\kizami\\options' => 'src/Options.php',

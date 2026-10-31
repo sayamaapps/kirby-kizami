@@ -13,7 +13,6 @@
 // eagerly: instanceof and catch do not trigger autoloading, so an alias that is only
 // created on first use would not match there. class_alias() loads each target
 // class. SetupError and ReportError keep their 1.x names and are not listed.
-class_alias(\Sayamaapps\Kizami\Access::class, 'Kizami\\Access');
 class_alias(\Sayamaapps\Kizami\Analysis::class, 'Kizami\\Analysis');
 class_alias(\Sayamaapps\Kizami\Capture::class, 'Kizami\\Capture');
 class_alias(\Sayamaapps\Kizami\Chart::class, 'Kizami\\Chart');
@@ -22,7 +21,6 @@ class_alias(\Sayamaapps\Kizami\Events::class, 'Kizami\\Events');
 class_alias(\Sayamaapps\Kizami\Fonts::class, 'Kizami\\Fonts');
 class_alias(\Sayamaapps\Kizami\Gaps::class, 'Kizami\\Gaps');
 class_alias(\Sayamaapps\Kizami\I18n::class, 'Kizami\\I18n');
-class_alias(\Sayamaapps\Kizami\Lockout::class, 'Kizami\\Lockout');
 class_alias(\Sayamaapps\Kizami\Migration::class, 'Kizami\\Migration');
 class_alias(\Sayamaapps\Kizami\Names::class, 'Kizami\\Names');
 class_alias(\Sayamaapps\Kizami\Options::class, 'Kizami\\Options');
@@ -151,7 +149,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_login_unavailable') === false) {
 	/** @deprecated Use Sayamaapps\Kizami\Runtime::loginUnavailable(). Removal planned for 2.0. */
 	function kizami_login_unavailable(string $text): \Kirby\Http\Response
 	{
-		return Sayamaapps\Kizami\Runtime::loginUnavailable(Kirby\Cms\App::instance(), $text);
+		return Sayamaapps\Kizami\Runtime::loginUnavailable($text);
 	}
 }
 
@@ -159,7 +157,7 @@ if (Kirby\Cms\Helpers::hasOverride('kizami_deny') === false) {
 	/** @deprecated Use Sayamaapps\Kizami\Runtime::deny(). Removal planned for 2.0. */
 	function kizami_deny(): \Kirby\Http\Response
 	{
-		return Sayamaapps\Kizami\Runtime::deny(Kirby\Cms\App::instance());
+		return Sayamaapps\Kizami\Runtime::deny();
 	}
 }
 

@@ -70,7 +70,18 @@ final class HttpTest extends TestCase
 			mkdir($tmp . '/content/book');
 			file_put_contents($tmp . '/content/book/book.txt', "Title: Book\n");
 			file_put_contents($tmp . '/site/templates/book.php', '<?php snippet("kizami/events"); echo "Book";');
-			file_put_contents($tmp . '/site/config/kizami.php', '<?php return ' . var_export([
+			// Dashboard login: Kirby accounts. The role kizami-dashboard exists while the module is active.
+			$accounts = new Kirby\Cms\App([
+				'roots' => ['index' => $tmp . '/public', 'base' => $tmp, 'content' => $tmp . '/content', 'site' => $tmp . '/site', 'storage' => $tmp . '/storage', 'accounts' => $tmp . '/site/accounts'],
+				// Kirby reads blueprints once per process: the report role has to be
+				// registered by this first App, the later Apps of this file need it too.
+				'options' => ['url' => 'http://127.0.0.1', 'kizami.active' => true, 'kizami.report' => true],
+			]);
+			$accounts->impersonate('kirby');
+			$accounts->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
+			$accounts->users()->create(['email' => 'dashboard@example.invalid', 'role' => 'kizami-dashboard', 'password' => 'dashboard-password-very-long-123']);
+			// A file with a hash, for the K8 check below (extraCss only delivers .css).
+			file_put_contents($tmp . '/site/config/secrets.php', '<?php return ' . var_export([
 				'user' => 'fixture', 'hash' => password_hash('fixture-password', PASSWORD_DEFAULT),
 			], true) . ';');
 			$config = [
@@ -92,7 +103,7 @@ final class HttpTest extends TestCase
 				// K8: extraCss may only include .css files. If it points (by mistake
 				// or with intent) at the access file itself, its content (the bcrypt
 				// hash) must NOT end up in the delivered CSS.
-				'kizami.extraCss' => 'site/config/kizami.php',
+				'kizami.extraCss' => 'site/config/secrets.php',
 			];
 			self::writeConfig($config);
 			$router = '<?php $_SERVER["SCRIPT_NAME"] = "/index.php"; require ' . var_export($repo . '/vendor/autoload.php', true) . '; '
@@ -124,7 +135,7 @@ final class HttpTest extends TestCase
 			}
 			Assert::assertTrue($ready, 'Test server not reachable; ' . file_get_contents($tmp . '/server.log'));
 			// Report route: without kizami.report the real 404, despite the active module.
-			[$status, $body] = self::requestHttp('/k/report', ['Authorization: Basic ' . base64_encode('fixture:fixture-password')]);
+			[$status, $body] = self::requestHttp('/k/report', ['Authorization: Basic ' . base64_encode('dashboard@example.invalid:dashboard-password-very-long-123')]);
 			Assert::assertTrue($status === 404 && $body === 'Fixture 404', 'Report route off by default');
 			Assert::assertTrue(self::requestHttp('/?utm_source=test&utm_medium=email&utm_campaign=autumn')[0] === 200, 'Scalar UTM');
 			foreach (['utm_source[]=test', 'utm_medium[]=test', 'utm_campaign[a][b]=test'] as $query) {
@@ -388,7 +399,7 @@ final class HttpTest extends TestCase
 			Assert::assertTrue(!str_contains($html, 'class="tiles"'), 'Dashboard without login has no content');
 			Assert::assertTrue(self::requestHttp('/k/dashboard', ['Authorization: Basic ' . base64_encode('fixture:wrong')])[0] === 401, 'Wrong dashboard password asked again');
 			Assert::assertTrue(self::requestHttp('/k/dashboard.css')[0] === 401, 'Dashboard CSS without login rejected');
-			$auth = ['Authorization: Basic ' . base64_encode('fixture:fixture-password')];
+			$auth = ['Authorization: Basic ' . base64_encode('dashboard@example.invalid:dashboard-password-very-long-123')];
 			// Kirby keeps percent-encoding in the path; it must not be interpreted
 			// as HTML afterwards when rendering.
 			self::requestHttp('/contact%3Cscript%3Ealert(1)%3C/script%3E');
@@ -398,8 +409,7 @@ final class HttpTest extends TestCase
 			self::requestHttp('/k/dashboard');
 			Assert::assertTrue(file_get_contents($keyFile) === "2010-01-01\nSTALE-SECRET-VALUE", 'Dashboard without login leaves a stale key alone');
 			self::requestHttp('/k/dashboard', $auth);
-			Assert::assertTrue(str_starts_with((string)file_get_contents($keyFile), (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d') . "\n") &&
-				!str_contains((string)file_get_contents($keyFile), 'STALE-SECRET-VALUE'), 'Dashboard with login replaces a stale daily key');
+			Assert::assertTrue(file_get_contents($keyFile) === "2010-01-01\nSTALE-SECRET-VALUE", 'Dashboard with login leaves a stale daily key alone (GET writes nothing, IDM-9)');
 			// A filtered request (DNT, bot) removes a stale key without counting and
 			// without making a new one; a current key stays; a counted visit still
 			// replaces it.
@@ -439,7 +449,7 @@ final class HttpTest extends TestCase
 			Assert::assertTrue(str_contains($filterHtml, 'aria-current="page">7 days'), 'Period selection marks 7 days');
 			[$cssStatus, $cssBody] = self::requestHttp('/k/dashboard.css', $auth);
 			Assert::assertTrue($cssStatus === 200, 'Dashboard CSS with login');
-			Assert::assertTrue(!str_contains($cssBody, 'hash'), 'K8: extraCss only delivers .css, not the PHP access file with the password hash');
+			Assert::assertTrue(!str_contains($cssBody, 'hash'), 'K8: extraCss only delivers .css, not a PHP file with a password hash');
 
 			// Language from Kirby's locale option when kizami.language is not set.
 			self::writeConfig($config + ['locale' => 'de_DE.utf8']);
@@ -451,28 +461,7 @@ final class HttpTest extends TestCase
 			Assert::assertTrue($status === 200 && str_contains($html, '<html lang="en">') && !str_contains($html, 'Besuche'), 'kizami.language overrides the locale');
 			self::writeConfig($config);
 
-			// Preview (kizami.previewAccess): being in preview must never act as a
-			// credential, and the kizami.php login must not get in during preview —
-			// the plugin enforces exactly the preview credentials.
-			self::writeConfig($config, "'kizami.previewAccess' => function () { return []; }");
-			Assert::assertTrue(self::requestHttp('/k/dashboard')[0] === 404, 'Empty preview credentials grant no access');
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 404, 'Broken preview closed even with the live login');
-			$previewHash = password_hash('preview-password', PASSWORD_DEFAULT);
-			self::writeConfig($config, "'kizami.previewAccess' => function () { return ['user' => 'preview', 'hash' => " . var_export($previewHash, true) . ']; }');
-			$previewAuth = ['Authorization: Basic ' . base64_encode('preview:preview-password')];
-			Assert::assertTrue(self::requestHttp('/k/dashboard')[0] === 404, 'Valid preview credentials without password closed');
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $previewAuth)[0] === 200, 'Valid preview login');
-			Assert::assertTrue(self::requestHttp('/k/dashboard', ['Authorization: Basic ' . base64_encode('preview:wrong')])[0] === 404, 'Wrong preview password rejected');
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 404, 'kizami.php login rejected during preview');
-			// Live again: the closure returns null, the kizami.php login works again.
-			self::writeConfig($config, "'kizami.previewAccess' => function () { return null; }");
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200, 'previewAccess null: kizami.php login works again');
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $previewAuth)[0] === 401, 'previewAccess null: preview login no longer accepted');
-			self::writeConfig($config);
-
 			// Dashboard over plain HTTP: refused before any challenge or check.
-			$loginsFile = $tmp . '/storage/kizami/logins.json';
-			@unlink($loginsFile);
 			$noHttps = ['kizami.reportWithoutHttps' => false] + $config;
 			self::writeConfig($noHttps);
 			foreach (['/k/dashboard', '/k/dashboard.css'] as $route) {
@@ -482,9 +471,8 @@ final class HttpTest extends TestCase
 				Assert::assertTrue(preg_grep('/^Cache-Control: no-store/i', $headers) !== [] && preg_grep('/^X-Robots-Tag: noindex/i', $headers) !== [], "$route refusal not cached or indexed");
 				[$status, $body, $headers] = self::requestHttp($route);
 				Assert::assertTrue($status === 403 && $body === 'HTTPS only.' && preg_grep('/^WWW-Authenticate:/i', $headers) === [], "$route without login over HTTP: 403, not 401");
-				Assert::assertTrue(self::requestHttp($route, ['Authorization: Basic ' . base64_encode('fixture:wrong')])[0] === 403, "$route with wrong login over HTTP: 403");
+				Assert::assertTrue(self::requestHttp($route, ['Authorization: Basic ' . base64_encode('nobody@example.invalid:wrong')])[0] === 403, "$route with wrong login over HTTP: 403");
 			}
-			Assert::assertTrue(!is_file($loginsFile), 'Refusal over HTTP counts no failed login');
 			// The escape hatch is the same option as for report and snapshot.
 			self::writeConfig($config);
 			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200 && self::requestHttp('/k/dashboard.css', $auth)[0] === 200, 'reportWithoutHttps lets the dashboard work over HTTP');
@@ -496,44 +484,27 @@ final class HttpTest extends TestCase
 			}
 			self::writeConfig($config);
 
-			// Failed-login limit (default 10 within an hour), per address and per user name.
+			// Kirby's own failed-login limit (auth.trials, default 10 per address and per account).
+			$kirbyLog = $tmp . '/site/accounts/.logins';
+			@unlink($kirbyLog);
 			$wrongAuth = ['Authorization: Basic ' . base64_encode('fixture:wrong')];
-			@unlink($loginsFile);
 			for ($i = 1; $i <= 15; $i++) {
 				Assert::assertTrue(self::requestHttp('/k/dashboard')[0] === 401, "Request $i without credentials asks for login");
 			}
-			Assert::assertTrue(!is_file($loginsFile), 'Requests without credentials count nothing');
+			Assert::assertTrue(!is_file($kirbyLog), 'Requests without credentials count nothing');
 			for ($i = 1; $i <= 9; $i++) {
 				Assert::assertTrue(self::requestHttp('/k/dashboard', $wrongAuth)[0] === 401, "Wrong password $i: 401");
 			}
 			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200, 'Right password after 9 failures still works');
 			Assert::assertTrue(self::requestHttp('/k/dashboard', $wrongAuth)[0] === 401, 'Wrong password 10: 401');
-			[$status, $body, $headers] = self::requestHttp('/k/dashboard', $auth);
-			Assert::assertTrue($status === 429 && $body === 'Too many failed logins. Try again later.', 'Right password after 10 failures: 429');
-			$retry = array_values(preg_grep('/^Retry-After:/i', $headers));
-			Assert::assertTrue(count($retry) === 1 && (int)trim(substr($retry[0], 12)) > 3500 && (int)trim(substr($retry[0], 12)) <= 3600, 'Blocked login says how long to wait');
-			Assert::assertTrue(preg_grep('/^WWW-Authenticate:/i', $headers) === [] && preg_grep('/^Cache-Control: no-store/i', $headers) !== [], 'Block sends no challenge and is not cached');
-			[$status, , $headers] = self::requestHttp('/k/dashboard.css', $auth);
-			Assert::assertTrue($status === 429 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'The stylesheet is blocked the same way');
-			Assert::assertTrue(self::requestHttp('/k/dashboard')[0] === 401, 'Without credentials a blocked address still gets the usual challenge');
-			Assert::assertTrue(is_file($loginsFile), 'Lockout file is written to storage/kizami');
-			$logins = (string)file_get_contents($loginsFile);
-			Assert::assertTrue(is_array(json_decode($logins, true)) && !str_contains($logins, 'fixture') && !str_contains($logins, '127.0.0.1'), 'Lockout file holds neither user name nor address');
-			// Counter-check: the block lives in the file, not in the code.
-			unlink($loginsFile);
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200, 'Without the lockout file the right password works again');
-			// Blocking by user name alone: another address (here: the counter reset to a
-			// file that only knows the name) is blocked as well.
-			$key = substr(hash('sha256', 'fixture'), 0, 50);
-			file_put_contents($loginsFile, json_encode(['ip' => [], 'user' => [$key => ['time' => time(), 'trials' => 10]]]));
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 429, 'A blocked user name is refused from any address');
-			// A damaged file fails closed.
-			file_put_contents($loginsFile, 'not json');
 			[$status, , $headers] = self::requestHttp('/k/dashboard', $auth);
-			Assert::assertTrue($status === 503 && preg_grep('/^WWW-Authenticate:/i', $headers) === [], 'Unusable lockout file: 503 without challenge, no access even with the right password');
-			unlink($loginsFile);
-			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200, 'Lockout file removed: access again');
-			@unlink($loginsFile); // a successful login writes nothing
+			Assert::assertTrue($status === 401 && preg_grep('/^WWW-Authenticate:/i', $headers) !== [], 'Right password after 10 failures: refused by Kirby\'s limit');
+			[$status] = self::requestHttp('/k/dashboard.css', $auth);
+			Assert::assertTrue($status === 401, 'The stylesheet is refused the same way');
+			Assert::assertTrue(is_file($kirbyLog), 'Kirby writes its failed-login log to site/accounts/.logins');
+			unlink($kirbyLog);
+			Assert::assertTrue(self::requestHttp('/k/dashboard', $auth)[0] === 200, 'Without Kirby\'s log the right password works again');
+			@unlink($kirbyLog);
 
 			// Campaign tag: utm_campaign wins; kizami.campaignParam names one more
 			// parameter, used only while utm_campaign is empty after cleaning.
@@ -611,8 +582,6 @@ final class HttpTest extends TestCase
 				'options' => ['url' => 'http://127.0.0.1:' . $port] + $config,
 			]);
 			$setup->impersonate('kirby');
-			// The admin first: Kirby 6 refuses any other role for the first account.
-			$setup->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
 			$setup->users()->create(['email' => 'report@example.invalid', 'role' => 'kizami-report', 'password' => 'report-password-very-long-123']);
 			Kirby\Cms\App::destroy();
 			$reportAuth = ['Authorization: Basic ' . base64_encode('report@example.invalid:report-password-very-long-123')];
