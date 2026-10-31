@@ -36,7 +36,7 @@ web address only domain and path are kept, without query or fragment; e-mail
 addresses and phone numbers from `mailto:`/`tel:` links are not stored.
 
 The day identifier is a hash of the IP address and user agent the server
-receives, the date, and a secret key that is **replaced every day**: on the first counted visit of a day, and also when the dashboard, the report or snapshot route is opened. A key from an earlier day is also deleted, without a replacement, on every page request, a filtered one (Do Not Track, Global Privacy Control, bot) included, and by the maintenance job. Without any of these (a site nobody visits) the previous key can stay on disk. The raw IP
+receives, the date, and a secret key that is **replaced every day**: on the first counted visit of a day, and also when the snapshot route is opened. Opening the dashboard or the report does not change the key. A key from an earlier day is also deleted, without a replacement, on every page request, a filtered one (Do Not Track, Global Privacy Control, bot) included, and by the maintenance job. Without any of these (a site nobody visits) the previous key can stay on disk. The raw IP
 address and user agent are not stored in the statistics database. Rotating the
 key reduces linkability between days. It does not guarantee anonymity.
 
@@ -49,7 +49,7 @@ total with no other data**.
 
 ## Retention
 
-Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months); the deleted contents are no longer contained in the database file at the latest at the next maintenance run (dashboard, report route or the job), and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
+Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months); the deleted contents are no longer contained in the database file at the latest at the next counted visit of a day or the maintenance job, and new snapshots are rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
 that, full days are condensed into daily totals (page views, redirect clicks,
 estimated devices). Actions and their details are deleted after the same period as
 well and are not part of the daily totals. Backups need their own limited retention and must not

@@ -89,7 +89,7 @@ A cached page never runs the call, so count in a route or exclude that page from
 - any logged-in Panel user, without further setup;
 - or a Kirby account with the role `kizami-dashboard` (Basic Auth). Create it in the Panel under Users with that role. The role has no Panel access and no permissions; it appears while `sayamaapps.kizami.active` is on. Other roles can be named in `dashboardRoles`.
 
-Passwords are checked by Kirby itself, so Kirby's `auth.trials` and `auth.timeout` limit failed logins. The dashboard only reads: counting, compaction and key rotation run when pages are counted and in `maintenance.php`. There is no password file of the plugin.
+Passwords are checked by Kirby itself, so Kirby's `auth.trials` and `auth.timeout` limit failed logins. The dashboard and the report only read: compaction and key rotation run when pages are counted and in `maintenance.php`. There is no password file of the plugin. One known exception: opening the database creates a missing table or migrates an old schema (idempotent).
 
 **JSON report.** Set `'sayamaapps.kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
 

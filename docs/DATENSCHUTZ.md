@@ -65,7 +65,7 @@ Browserkennung mit dem Datum und einem geheimen, täglich erneuerten Schlüssel
 verrechnet. Die unveränderte IP-Adresse und Browserkennung werden in der
 Kennzahlen-Datenbank nicht gespeichert. Der Schlüssel des Vortags wird in der
 aktiven Installation überschrieben: beim ersten erfassten Aufruf eines Tages
-und zusätzlich beim Öffnen von Dashboard, Report und Snapshot. Ohne Ersatz
+und beim Abruf des Snapshots. Das Öffnen von Dashboard und Report ändert den Schlüssel nicht. Ohne Ersatz
 gelöscht wird er bei jedem Seitenaufruf, auch bei einem ausgefilterten (Do Not
 Track, Global Privacy Control, Bot), und durch den Wartungsjob. Ohne einen
 dieser Anlässe, etwa bei einer Seite ohne Aufrufe, kann der bisherige Schlüssel
@@ -79,7 +79,7 @@ entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
 Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `sayamaapps.kizami.retentionMonths`) aus der aktiven
 Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
-nächsten Wartung (Dashboard, Report, Wartungsjob) nicht mehr in der
+nächsten erfassten Aufruf eines Tages oder beim Wartungsjob nicht mehr in der
 Datenbankdatei enthalten, und neue Snapshots werden ohne solche Reste neu aufgebaut.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
@@ -90,8 +90,7 @@ Geräteklassen, Fehlseiten, Bildöffnungen, Aktionen und ihre Zusatzangaben, Lin
 werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nach
 derselben Frist ohne Zusammenfassung gelöscht.
 
-Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages, beim Öffnen
-des Dashboards, beim Abruf des Reports und optional über einen separat eingerichteten Wartungsjob.
+Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages und optional über einen separat eingerichteten Wartungsjob (`maintenance.php`). Das Öffnen von Dashboard und Report bereinigt nicht.
 Ohne solche Aufrufe kann sich die Bereinigung verzögern. Sicherungen brauchen
 eine eigene, begrenzte Aufbewahrungsfrist und dürfen die täglichen Schlüssel
 nicht archivieren.

@@ -28,10 +28,12 @@ release; see README, "Not in the 2.0 dashboard change".
 - Refusals: 401 with a login prompt for a missing login or a wrong password, 403
   `Not allowed for this account.` for an account without a dashboard role. Over
   plain HTTP the answer stays 403 `HTTPS only.` before any login check.
-- **`/k/dashboard` and `/k/dashboard.css` do not write.** No compaction, no daily key
-  rotation, and a failed request is not written to `storage/kizami/errors.log`; it goes to
-  the PHP error log only. Compaction still runs once a day when a visit is counted, and
-  in `maintenance.php`. Opening the database still creates a missing table (idempotent).
+- **`/k/dashboard`, `/k/dashboard.css` and `/k/report` do not write on GET.** No
+  compaction, no rebuild of the database file, no daily key rotation. Compaction runs once a
+  day when a visit is counted, and in `maintenance.php`, which also removes a stale daily key.
+  A failure is still written to `storage/kizami/errors.log`, as in 1.x.
+- Known exception: opening the database creates a missing table or migrates an old schema.
+  This is idempotent and stays on purpose; it is the only write a read route makes.
 - `Runtime::deny()` and `Runtime::loginUnavailable()` take fewer arguments; the 1.x
   wrappers `kizami_deny()` and `kizami_login_unavailable()` keep their signatures.
 
@@ -58,10 +60,10 @@ release; see README, "Not in the 2.0 dashboard change".
 3. Panel users need nothing new. `k/report` and `k/snapshot` keep their own roles and
    their own options.
 4. A site that may go days without visits should run `maintenance.php` daily. The dashboard
-   no longer rotates the daily key, so a stale key stays until the next counted visit or
-   maintenance run. Check the dashboard once over HTTPS with the new login.
-5. `storage/kizami/logins.json` and `storage/kizami/errors.log` are no longer written.
-   Remove them by hand when they are no longer needed. The plugin deletes nothing.
+   and the report no longer rotate the daily key or compact, so a stale key stays until the
+   next counted visit or maintenance run. Check the dashboard once over HTTPS with the new login.
+5. `storage/kizami/logins.json` is no longer written; remove it by hand when it is no longer
+   needed. The plugin deletes nothing. `storage/kizami/errors.log` is still written.
 6. Kirby records failed logins of existing accounts in `site/accounts/.logins`. That is
    Kirby's log, not the plugin's.
 
