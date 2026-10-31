@@ -84,11 +84,12 @@ $page->kizamiEvent('download', 'prices.pdf');
 
 A cached page never runs the call, so count in a route or exclude that page from the cache. In the browser, use `data-kizami-event="download"` on links or media, with `<?php snippet('kizami/events') ?>` in the `<head>`.
 
-**Dashboard.** The Panel menu entry **Statistics** opens `/k/dashboard`. It is HTTPS only, and failed file logins are limited by Kirby's `auth.trials` and `auth.timeout`. Access: any logged-in Panel user, or the login in `site/config/kizami.php` (keep it out of git):
+**Dashboard.** The Panel menu entry **Statistics** opens `/k/dashboard`. HTTPS only. Access:
 
-```php
-<?php return ['user' => 'client', 'hash' => '$2y$10$…']; // password_hash('…', PASSWORD_DEFAULT)
-```
+- any logged-in Panel user, without further setup;
+- or a Kirby account with the role `kizami-dashboard` (Basic Auth). Create it in the Panel under Users with that role. The role has no Panel access and no permissions; it appears while `sayamaapps.kizami.active` is on. Other roles can be named in `dashboardRoles`.
+
+Passwords are checked by Kirby itself, so Kirby's `auth.trials` and `auth.timeout` limit failed logins. The dashboard only reads: counting, compaction and key rotation run when pages are counted and in `maintenance.php`. There is no password file of the plugin.
 
 **JSON report.** Set `'sayamaapps.kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
 
@@ -112,6 +113,7 @@ The defaults are not written into the plugin's option block (`config/options.php
 | `sourceNames` | array | `[]` | `['newsletter' => 'Newsletter']` | Display names for referrer hosts and `utm_source` values. |
 | `pageNames` | array | `[]` | `['/' => 'Home']` | Display names for paths (default: page title). |
 | `contactTargets` | array | `[]` | `['contact']` | Redirects that count as contacts for the contact rate. |
+| `dashboardRoles` | array | `['kizami-dashboard']` | `['kizami-dashboard', 'editor']` | Roles of Kirby accounts that may open the dashboard with Basic Auth. Logged-in Panel users need no role. |
 | `tiles` | array | first two redirects | `['contact', 'download']` | Redirects shown as dashboard tiles. |
 | `tileNames` | array | `[]` | `['contact' => 'Contacts']` | Tile headings, `name => label`. |
 | `positionNames` | array | `[]` | `['header' => 'Header']` | Allowed link positions (for example `header`) with labels; others are dropped. |
@@ -127,7 +129,6 @@ The defaults are not written into the plugin's option block (`config/options.php
 | `color` | string | `#2f4f2a` | `'#2f4f2a'` | Dashboard accent colour (`#rrggbb`). |
 | `fonts` | array\|null | `null` | `['serif' => ['name' => 'Merriweather', 'file' => 'assets/fonts/merriweather.woff2']]` | Dashboard fonts: `['serif' => ['name' => …, 'file' => …], 'sans' => …]`. |
 | `extraCss` | string\|null | `null` | `'site/config/kizami-extra.css'` | Extra dashboard CSS file, relative to the project root. |
-| `previewAccess` | closure\|null | `null` | `fn () => ['user' => 'client', 'hash' => '…']` | Closure returning `['user' => …, 'hash' => …]` while a build password protects the site; `null` once live. |
 | `report` | bool | `false` | `true` | Enable `/k/report` (needs `active`) and register the role `kizami-report`. |
 | `reportRoles` | array | `['kizami-report']` | `['kizami-report']` | Roles allowed to read the report. |
 | `journal` | string | `'wal'` | `'delete'` | SQLite journal mode, `'wal'` or `'delete'` (use `'delete'` where WAL fails). |
@@ -153,9 +154,9 @@ Templates and snippets that call `kizami_option()` or `redirectLink()` keep work
 
 The 1.x public test helpers and the 1.x read methods of `Store` are kept as `@deprecated @internal` for the same reason. They are not part of the stable API.
 
-### Planned for 2.0
+### Not in the 2.0 dashboard change
 
-The following changes break existing code, so they wait for the next major version:
+The dashboard change (Kirby accounts, no login file, no writes on GET) is in 2.0.0. The following changes also break existing code and are **not** part of that release. They wait for a later decision on 2.0:
 
 - Removal of all names in the table above.
 - Moving `SetupError` and `ReportError` into `Sayamaapps\Kizami\`.

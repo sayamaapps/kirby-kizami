@@ -1,0 +1,24 @@
+title: Kizami dashboard (reader)
+description: Account for reading the statistics dashboard without Panel access. Cannot log in to the Panel or change anything, only open /k/dashboard.
+
+# Account for the dashboard (README.md, section Dashboard). Every permission is
+# off: no Panel, no Kirby API, no pages, files or users. The only way in is the
+# dashboard route; it checks password and role itself (src/Runtime.php).
+# Panel users need no such role: a logged-in Panel user is let in.
+#
+# The role only exists while sayamaapps.kizami.active is switched on.
+
+permissions:
+  access:
+    panel: false
+    site: false
+    account: false
+    users: false
+    system: false
+    languages: false
+  pages: false
+  files: false
+  site: false
+  users: false
+  user: false
+  languages: false
