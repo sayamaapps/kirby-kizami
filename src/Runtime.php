@@ -5,6 +5,7 @@ namespace Sayamaapps\Kizami;
 use Kirby\Cms\App;
 use Kirby\Cms\Page;
 use Kirby\Http\Response;
+use Kizami\ReportError;
 use Kizami\SetupError;
 use Throwable;
 
@@ -20,119 +21,42 @@ use Throwable;
  */
 class Runtime
 {
+	/** Role of the Kirby accounts that open the dashboard with Basic Auth (since 2.0). */
+	public const DASHBOARD_ROLE = 'kizami-dashboard';
+
 	/**
-	 * Build phase vs. live:
-	 * - Build phase (`sayamaapps.kizami.previewAccess` returns credentials, the site sits
-	 *   behind its own preview protection): check the same preview credentials
-	 *   again, independently. Being in preview alone is no proof of access. This
-	 *   resolves the Basic Auth realm collision (one Authorization header, two
-	 *   secrets).
-	 * - Live (`sayamaapps.kizami.previewAccess` unset or null): own bcrypt auth from
-	 *   site/config/kizami.php OR Panel login.
+	 * Access to the dashboard (`k/dashboard` and `k/dashboard.css`). Since 2.0
+	 * Kirby's own accounts only, no password file of the plugin:
 	 *
-	 * Returns null when access is granted, otherwise the response to send: the
-	 * usual denial (Runtime::deny()), or 429 once the failed-login limit is reached
-	 * (src/Lockout.php). Only submitted credentials that turn out wrong count;
-	 * a request without credentials (the browser's first visit) does not.
+	 * - A logged-in Panel user is let in. The Panel login is Kirby's, with its
+	 *   own failed-login limit (`auth.trials`, `auth.timeout`).
+	 * - Otherwise Basic Auth against a Kirby account whose role is listed in
+	 *   `sayamaapps.kizami.dashboardRoles` (default: the bundled role
+	 *   `kizami-dashboard`). The password is checked by
+	 *   `$kirby->auth()->validatePassword()`, so the same limit applies.
+	 *
+	 * Returns null when access is granted, otherwise the response to send: a 401
+	 * with a login prompt when no login was given or it failed, a 403 when the
+	 * account has no dashboard role. Nothing is written here.
 	 */
 	public static function accessDenied(App $kirby): Response|null
 	{
-		try {
-			$preview = Options::previewCredentials($kirby);
-			if ($preview === null && $kirby->user()) {
-				return null;
-			}
-			$file = Options::accessFile($kirby);
-			$credentials = $preview ?? (file_exists($file) ? require $file : null);
-		} catch (Throwable $e) {
-			error_log('Kizami: access configuration unusable');
-			return self::deny($kirby);
-		}
-
-		[$user, $password] = self::basicCredentials($kirby);
-		if ($user === null || $password === null) {
-			return self::deny($kirby);
-		}
-
-		// Kirby's own limit would only fit Kirby accounts (see src/Lockout.php),
-		// but its two options stay the one place to configure it.
-		$ip = (string)$kirby->visitor()->ip();
-		try {
-			$directory = self::directory($kirby);
-		} catch (SetupError $e) {
-			// No usable storage, so no counters and no login: deny without
-			// checking the password.
-			error_log($e->getMessage());
-			return self::loginUnavailable($kirby, 'Kizami: setup error, see the error log.');
-		} catch (Throwable $e) {
-			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-			return self::loginUnavailable($kirby, 'Kizami: login limit unavailable, see the error log.');
-		}
-		try {
-			$lockout = new Lockout(
-				$directory . '/' . Lockout::FILE,
-				max(1, (int)$kirby->option('auth.trials', 10)),
-				max(1, (int)$kirby->option('auth.timeout', 3600))
-			);
-			// Checked before password_verify(): a blocked request costs the same
-			// whatever it sends.
-			$wait = $lockout->retryAfter($ip, $user);
-		} catch (Throwable $e) {
-			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-			return self::loginUnavailable($kirby, 'Kizami: login limit unavailable, see the error log.');
-		}
-		if ($wait > 0) {
-			// Where the module hides behind Kirby's 404 (preview, no access file),
-			// a 429 would give it away.
-			$denial = self::deny($kirby);
-			if ($denial->code() !== 401) {
-				return $denial;
-			}
-			// Not another 401: the browser would ask again and never say why.
-			return new Response('Too many failed logins. Try again later.', 'text/plain', 429, [
-				'Retry-After'   => (string)max(1, $wait),
-				'Cache-Control' => 'no-store',
-			]);
-		}
-
-		if (Access::checkFile(is_array($credentials) ? $credentials : null, $user, $password)) {
+		if ($kirby->user() !== null) {
 			return null;
 		}
 		try {
-			$lockout->fail($ip, $user);
-		} catch (Throwable $e) {
-			error_log('Kizami: login lockout file not usable: ' . $e->getMessage());
-		}
-		return self::deny($kirby);
-	}
+			// The same check as the report and snapshot routes: Kirby's password
+			// check and the role. HTTPS is checked before, in dashboardRefused().
+			ReportService::authenticate($kirby, self::dashboardRoles($kirby));
+		} catch (ReportError $e) {
+			if ($e->status === 403) {
+				return new Response('Not allowed for this account.', 'text/plain', 403, ['Cache-Control' => 'no-store']);
+			}
 
-	/**
-	 * Basic Auth credentials of the request. PHP_AUTH_USER and PHP_AUTH_PW come
-	 * first (mod_php, as in 1.x). Without PHP_AUTH_USER the Authorization header
-	 * counts (FastCGI; Kirby's header() also reads REDIRECT_HTTP_AUTHORIZATION).
-	 *
-	 * @return array{string|null, string|null} username and password, or nulls
-	 */
-	private static function basicCredentials(App $kirby): array
-	{
-		$environment = $kirby->environment();
-		$user = $environment->get('PHP_AUTH_USER');
-		if ($user !== null) {
-			$password = $environment->get('PHP_AUTH_PW');
-
-			return [(string)$user, $password === null ? null : (string)$password];
+			return self::deny();
 		}
 
-		$header = (string)$kirby->request()->header('Authorization', '');
-		if (stripos($header, 'basic ') !== 0) {
-			return [null, null];
-		}
-		$decoded = base64_decode(substr($header, 6), true);
-		if ($decoded === false || str_contains($decoded, ':') === false) {
-			return [null, null];
-		}
-
-		return explode(':', $decoded, 2);
+		return null;
 	}
 
 	/** Origin check for the beacons /k/image, /k/duration and /k/event, and the page they report. */
@@ -171,65 +95,46 @@ class Runtime
 	 * The dashboard's gate for /k/dashboard and /k/dashboard.css, after the check
 	 * that the module is on: null = let in, otherwise the response to send.
 	 *
-	 * HTTPS first and before any challenge: a Basic Auth password sent over plain
-	 * HTTP travels in the clear, and a 401 with WWW-Authenticate would make the
-	 * browser ask for exactly that. So over HTTP nobody is prompted and nobody is
-	 * checked — the Panel cookie included; the dashboard is HTTPS only for
-	 * everyone. Same rule and same escape hatch (`sayamaapps.kizami.reportWithoutHttps`) as
-	 * /k/report and /k/snapshot. Where the dashboard would answer Kirby's 404
-	 * anyway (preview, no access file), that 404 stays: a 403 would give away
-	 * that the module runs here.
+	 * HTTPS first and before any login check: a Basic Auth password sent over
+	 * plain HTTP travels in the clear, and a 401 with WWW-Authenticate would make
+	 * the browser ask for exactly that. So over HTTP nobody is prompted and nobody
+	 * is checked, the Panel login included. Same rule and same escape hatch
+	 * (`sayamaapps.kizami.reportWithoutHttps`) as /k/report and /k/snapshot.
 	 */
 	public static function dashboardRefused(App $kirby): Response|null
 	{
 		if ($kirby->request()->ssl() === false && self::option($kirby, 'reportWithoutHttps', false) !== true) {
-			$denial = self::deny($kirby);
-			if ($denial->code() !== 401) {
-				return $denial;
-			}
 			return new Response('HTTPS only.', 'text/plain', 403, [
 				'Cache-Control' => 'no-store',
 				'X-Robots-Tag'  => 'noindex, nofollow, noarchive',
 			]);
 		}
+
 		return self::accessDenied($kirby);
 	}
 
 	/**
-	 * Denial without access.
+	 * Roles of Kirby accounts that may open the dashboard with Basic Auth
+	 * (`sayamaapps.kizami.dashboardRoles`).
 	 *
-	 * Once live with a valid site/config/kizami.php: a real 401 with a
-	 * challenge. Browsers ignore a 404 with a WWW-Authenticate header — no login
-	 * dialog would ever appear, the dashboard's own access would be unusable in a
-	 * normal browser. That reveals that something sits at /k/dashboard; content
-	 * still only comes with a valid login.
-	 *
-	 * Otherwise (preview, no own access set up, broken file): Kirby's real 404.
-	 * The preview asks for its credentials itself.
+	 * @return list<string>
 	 */
-	public static function deny(App $kirby): Response
+	public static function dashboardRoles(App $kirby): array
 	{
-		$access = Options::accessFile($kirby);
-		try {
-			$preview = Options::previewCredentials($kirby);
-		} catch (Throwable) {
-			$preview = [];
-		}
-		if ($preview === null && file_exists($access)) {
-			try {
-				$credentials = require $access;
-			} catch (Throwable $e) {
-				$credentials = null;
-			}
-			if (is_array($credentials) && is_string($credentials['user'] ?? null) && $credentials['user'] !== '' &&
-				is_string($credentials['hash'] ?? null) && password_get_info($credentials['hash'])['algoName'] !== 'unknown') {
-				return new Response('Authentication required.', 'text/plain', 401, [
-					'WWW-Authenticate' => 'Basic realm="Kizami", charset="UTF-8"',
-					'Cache-Control'    => 'no-store',
-				]);
-			}
-		}
-		return self::notFound($kirby);
+		return array_values(array_map('strval', (array)Options::get($kirby, 'dashboardRoles', [self::DASHBOARD_ROLE])));
+	}
+
+	/**
+	 * The login prompt: the answer to every request that is not let in. Browsers
+	 * show a login dialog only on a 401 with a challenge, so this is a real 401
+	 * and not a 404.
+	 */
+	public static function deny(): Response
+	{
+		return new Response('Authentication required.', 'text/plain', 401, [
+			'WWW-Authenticate' => 'Basic realm="Kizami", charset="UTF-8"',
+			'Cache-Control'    => 'no-store',
+		]);
 	}
 
 	/**
@@ -320,19 +225,13 @@ class Runtime
 	}
 
 	/**
-	 * No login possible right now (storage not set up, lockout file unusable):
-	 * where the file login would challenge (401), a 503 with a pointer to the
-	 * error log instead — a 401 would make the browser ask again for ever and
-	 * never say why; no path in the text, the visitor is not authenticated.
-	 * Where the module hides behind Kirby's 404 anyway (preview, no access
-	 * file), that 404 stays.
+	 * A 503 with a pointer to the error log, for a broken setup. The dashboard no
+	 * longer calls it; kept for the 1.x wrapper kizami_login_unavailable().
+	 *
+	 * @deprecated Removal planned for 2.0.
 	 */
-	public static function loginUnavailable(App $kirby, string $text): Response
+	public static function loginUnavailable(string $text): Response
 	{
-		$denial = self::deny($kirby);
-		if ($denial->code() !== 401) {
-			return $denial;
-		}
 		return new Response($text, 'text/plain', 503, ['Cache-Control' => 'no-store']);
 	}
 

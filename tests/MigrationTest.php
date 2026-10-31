@@ -110,6 +110,8 @@ final class MigrationTest extends TestCase
 		$base = dirname(__DIR__);
 		require $base . '/vendor/autoload.php';
 		$tmp = sys_get_temp_dir() . '/kizami-migration-' . bin2hex(random_bytes(6));
+		// Kirby logs each failed login to the error log; keep it out of the test output.
+		ini_set('error_log', $tmp . '-error.log');
 		$failed = false;
 		try {
 			self::fixtureSite($tmp);
@@ -154,9 +156,8 @@ final class MigrationTest extends TestCase
 			self::expect('Shop', Options::brand($app(['kizami.brand' => 'Shop'])), 'brand string');
 			self::expect('Shop 2', Options::brand($app(['kizami.brand' => fn () => 'Shop 2'])), 'brand closure');
 
-			// Access file: site/config/kizami.php with user/hash. kennzahlen.php is ignored.
-			$config = $tmp . '/site/config';
-			self::expect($config . '/kizami.php', Options::accessFile($app()), 'access file name');
+			// Dashboard login: a Kirby account with the role kizami-dashboard. No file of the plugin.
+			$kirby->users()->create(['email' => 'dashboard@example.invalid', 'role' => 'kizami-dashboard', 'password' => 'dashboard-password-very-long-123']);
 			$dashboard = function (string $user, string $password, array $options) use ($app) {
 				$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode($user . ':' . $password);
 				try {
@@ -165,13 +166,12 @@ final class MigrationTest extends TestCase
 					unset($_SERVER['HTTP_AUTHORIZATION']);
 				}
 			};
-			file_put_contents($config . '/kennzahlen.php', '<?php return ' . var_export(['benutzer' => 'old', 'hash' => password_hash('old-pw', PASSWORD_DEFAULT)], true) . ';');
-			self::expect(404, $dashboard('old', 'old-pw', ['kizami.active' => true]), 'old access file alone: real 404, not used');
-			file_put_contents($config . '/kizami.php', '<?php return ' . var_export(['user' => 'new', 'hash' => password_hash('new-pw', PASSWORD_DEFAULT)], true) . ';');
-			self::expect(200, $dashboard('new', 'new-pw', ['kizami.active' => true]), 'dashboard with kizami.php');
-			self::expect(401, $dashboard('old', 'old-pw', ['kizami.active' => true]), 'old credentials rejected');
-			self::expect(404, $dashboard('new', 'new-pw', []), 'without active: real 404');
-			$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('new' . ':' . 'new-pw');
+			self::expect(true, isset($kirby->extensions('blueprints')['users/kizami-dashboard']), 'role kizami-dashboard via kizami.active');
+			self::expect(200, $dashboard('dashboard@example.invalid', 'dashboard-password-very-long-123', ['kizami.active' => true]), 'dashboard with a Kirby account of role kizami-dashboard');
+			self::expect(401, $dashboard('dashboard@example.invalid', 'wrong-password-123', ['kizami.active' => true]), 'wrong password rejected');
+			self::expect(401, $dashboard('old', 'old-pw', ['kizami.active' => true]), 'unknown account rejected (a 1.x access file is not read)');
+			self::expect(404, $dashboard('dashboard@example.invalid', 'dashboard-password-very-long-123', []), 'without active: real 404');
+			$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode('dashboard@example.invalid:dashboard-password-very-long-123');
 			$css = $app(['kizami.active' => true, 'kizami.fonts' => ['sans' => ['name' => 'Karla', 'file' => '/assets/fonts/karla.woff2']]])->call('k/dashboard.css');
 			unset($_SERVER['HTTP_AUTHORIZATION']);
 			self::expect([200, true], [$css->code(), str_contains($css->body(), '--sans: "Karla"')], 'kizami.fonts ends up in dashboard.css');

@@ -11,9 +11,8 @@ use Sayamaapps\Kizami\Runtime;
  * Kirby's menu takes `link` and `target` straight from the area, so the
  * entry opens the dashboard in a new tab like any external menu link.
  * Every Panel role sees it: a logged-in Panel user already passes the
- * dashboard's access check (Panel user, see config/routes.php). During the build
- * phase (`sayamaapps.kizami.previewAccess`) the dashboard still asks for the
- * preview login.
+ * dashboard's access check (see Runtime::accessDenied()). Other visitors get
+ * the login prompt and need a Kirby account with the dashboard role.
  *
  * `menu` is a closure, so switching `sayamaapps.kizami.active` off removes the entry
  * without a cache clear. Sites with their own `panel.menu` list must add
