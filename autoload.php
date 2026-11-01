@@ -8,6 +8,7 @@
 
 return [
 	'sayamaapps\\kizami\\analysis' => 'src/Analysis.php',
+	'sayamaapps\\kizami\\campaign' => 'src/Campaign.php',
 	'sayamaapps\\kizami\\capture' => 'src/Capture.php',
 	'sayamaapps\\kizami\\chart' => 'src/Chart.php',
 	'sayamaapps\\kizami\\comparison' => 'src/Comparison.php',

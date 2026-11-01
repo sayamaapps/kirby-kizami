@@ -64,7 +64,7 @@ final class HttpTest extends TestCase
 			symlink($repo, $tmp . '/site/plugins/kizami');
 			file_put_contents($tmp . '/content/home/home.txt', "Title: Test\n");
 			file_put_contents($tmp . '/content/error/error.txt', "Title: Error\n");
-			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } echo isset($_GET["links"]) ? $page->kizamiRedirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
+			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } if (isset($_GET["campaign-snippet"])) { snippet("kizami/campaign"); return; } if (isset($_GET["campaign-url"])) { echo Sayamaapps\\Kizami\\Runtime::campaignUrl(kirby(), (string)$_GET["campaign-url"]); return; } echo isset($_GET["links"]) ? $page->kizamiRedirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
 			file_put_contents($tmp . '/site/templates/error.php', '<?php echo "Fixture 404";');
 			// A page that a route of the site's own also serves under a short code (/EEAQ77).
 			mkdir($tmp . '/content/book');
@@ -521,12 +521,37 @@ final class HttpTest extends TestCase
 			Assert::assertTrue(self::requestHttp('/?cam[]=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: array value stored empty, page 200');
 			Assert::assertTrue(self::requestHttp('/?cam=' . str_repeat('a', 60))[0] === 200 && strlen($lastCampaign()) === 50, 'campaignParam: capped at 50 characters');
 			Assert::assertTrue(self::requestHttp('/?cam=' . rawurlencode('<b>x y</b>'))[0] === 200 && $lastCampaign() === 'bxyb', 'campaignParam: cleaned like utm values');
+			// The carry (2.1.0): script and snippet exist while the parameter is set;
+			// Runtime::campaignUrl() tags links with the tag of the request.
+			[$status, $js, $headers] = self::requestHttp('/k/campaign.js');
+			Assert::assertTrue($status === 200 && $js === file_get_contents($repo . '/views/campaign.js'), 'campaign.js delivered from the own server');
+			Assert::assertTrue(preg_grep('#^Content-Type: text/javascript#i', $headers) !== [] && in_array('X-Content-Type-Options: nosniff', $headers, true), 'campaign.js as JavaScript, nosniff');
+			Assert::assertTrue(preg_grep('#^Cache-Control: public, max-age=86400#i', $headers) !== [], 'campaign.js cached for one day');
+			foreach (['localStorage', 'sessionStorage', 'document.cookie', 'indexedDB', 'eval(', 'new Function', 'fetch(', 'sendBeacon', 'XMLHttpRequest'] as $needle) {
+				Assert::assertTrue(!str_contains($js, $needle), 'campaign.js without ' . $needle);
+			}
+			[$status, $tag] = self::requestHttp('/?campaign-snippet=1', ['DNT: 1']);
+			Assert::assertTrue($status === 200 && preg_match('#^\s*<script src="http://127\.0\.0\.1:' . $port . '/k/campaign\.js\?v=' . substr(md5_file($repo . '/views/campaign.js'), 0, 8) . '" data-kizami-campaign="cam" defer></script>\s*$#', $tag) === 1, 'Campaign snippet: one external script tag naming the parameter: ' . $tag);
+			$campaignUrl = fn (string $url, string $query = '&cam=social-tg-test'): string => self::requestHttp('/?campaign-url=' . rawurlencode($url) . $query, ['DNT: 1'])[1];
+			Assert::assertSame('https://www.digistore24.com/product/123456?ds24tr=social-tg-test', $campaignUrl('https://www.digistore24.com/product/123456?cam=old'), 'campaignUrl: an order link takes the request tag as ds24tr, the own cam goes');
+			Assert::assertSame('https://www.digistore24.com/product/123456?aff=p&cam=k', $campaignUrl('https://www.digistore24.com/product/123456?aff=p&cam=k'), 'campaignUrl: an affiliate link stays');
+			Assert::assertSame('/events?cam=social-tg-test', $campaignUrl('/events'), 'campaignUrl: an own link takes the parameter');
+			Assert::assertSame('http://127.0.0.1/events?cam=social-tg-test', $campaignUrl('http://127.0.0.1/events'), 'campaignUrl: the index host is an own host');
+			Assert::assertSame('https://other.example.org/x', $campaignUrl('https://other.example.org/x'), 'campaignUrl: another host stays');
+			Assert::assertSame('/events?cam=autumn', $campaignUrl('/events', '&cam=social-tg-test&utm_campaign=autumn'), 'campaignUrl: utm_campaign wins');
+			Assert::assertSame('/events', $campaignUrl('/events', ''), 'campaignUrl: no tag, no change');
+			self::writeConfig(array_merge($config, ['kizami.campaignParam' => 'cam', 'kizami.active' => false]));
+			Assert::assertTrue(self::requestHttp('/k/campaign.js')[0] === 404 && trim(self::requestHttp('/?campaign-snippet=1', ['DNT: 1'])[1]) === '', 'Switched off: no campaign script, the snippet prints nothing');
 			self::writeConfig($config + ['kizami.campaignParam' => ['cam']]);
+			Assert::assertTrue(self::requestHttp('/k/campaign.js')[0] === 404 && trim(self::requestHttp('/?campaign-snippet=1', ['DNT: 1'])[1]) === '', 'Unusable campaignParam: no campaign script, the snippet prints nothing');
 			Assert::assertTrue(self::requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: non-string option is not set');
 			self::writeConfig($config + ['kizami.campaignParam' => '']);
 			Assert::assertTrue(self::requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'campaignParam: empty option is not set');
 			self::writeConfig($config);
 			Assert::assertTrue(self::requestHttp('/?cam=x')[0] === 200 && $lastCampaign() === '', 'Without campaignParam, cam is ignored');
+			Assert::assertTrue(self::requestHttp('/k/campaign.js')[0] === 404 && trim(self::requestHttp('/?campaign-snippet=1', ['DNT: 1'])[1]) === '', 'Without campaignParam: /k/campaign.js is a real 404, the snippet prints nothing');
+			Assert::assertSame('/events', $campaignUrl('/events'), 'Without campaignParam: campaignUrl() leaves an own link alone');
+			Assert::assertSame('https://www.digistore24.com/product/123456', $campaignUrl('https://www.digistore24.com/product/123456'), 'Without campaignParam: the request has no tag, the order link stays');
 
 			// Invalid UTF-8. An anonymous request can send any bytes in
 			// Referer and in the redirect's ?from=. They must not reach kizami_events
