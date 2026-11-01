@@ -84,6 +84,18 @@ $page->kizamiEvent('download', 'prices.pdf');
 
 A cached page never runs the call, so count in a route or exclude that page from the cache. In the browser, use `data-kizami-event="download"` on links or media, with `<?php snippet('kizami/events') ?>` in the `<head>`.
 
+**Campaigns.** Links in newsletters and posts carry a tag, for example `?cam=newsletter-11`. Name the parameter in `campaignParam`; the page view is then counted with that tag (`utm_campaign` wins when both are present). To carry the tag on from the page, add `<?php snippet('kizami/campaign') ?>` to the `<head>`: the script `/k/campaign.js` gives every link of the site's own the parameter, every Digistore24 order link (`digistore24.com/product/…`, `checkout-ds24.com/product/…`) the tag as `ds24tr`, the vendor's tracking key, and fills `<input data-kizami-campaign>` (the hidden field of a newsletter form) while it is empty. Links inserted later are handled too. An order link with `aff=` belongs to an affiliate and stays as it is; an existing `ds24tr` is never replaced; an own `cam` without `aff` is dropped, because Digistore24 reads `cam` only as the campaign of an affiliate. The same rules in PHP, for links in templates and mails:
+
+```php
+use Sayamaapps\Kizami\Runtime;
+
+Runtime::campaignUrl($kirby, 'https://www.digistore24.com/product/123456?voucher=CODE'); // tag of this request
+Runtime::campaignUrl($kirby, '/events', 'newsletter-11');                                // ?cam=newsletter-11
+Runtime::campaignUrl($kirby, 'https://www.example.com/events', 'mail-thanks', ['www.example.com']);
+```
+
+Without a tag the link comes back unchanged; `hosts` names the hosts that count as the site's own (default: the site's index URL and `ownHosts`). Nothing is stored in the browser.
+
 **Dashboard.** The Panel menu entry **Statistics** opens `/k/dashboard`. HTTPS only. Access:
 
 - any logged-in Panel user, without further setup;
@@ -123,7 +135,7 @@ The defaults are not written into the plugin's option block (`config/options.php
 | `retentionMonths` | int | `13` | `13` | Months single events and actions are kept (1 to 600). |
 | `gaps` | array | `[]` | `[['from' => '2026-01-01 00:00', 'to' => '2026-01-02 00:00', 'reason' => 'Migration']]` | Measurement gaps `['from' => 'Y-m-d H:i', 'to' => …, 'reason' => …]`, marked in dashboard and report. |
 | `ownHosts` | array | `[]` | `['shop.example.com']` | Further own domains whose referrers count as internal. |
-| `campaignParam` | string\|null | `null` | `'cam'` | Second campaign parameter (for example `cam`), used as `utm_campaign` when that is missing. |
+| `campaignParam` | string\|null | `null` | `'cam'` | Second campaign parameter (for example `cam`; letters, digits, `_`, `-`), used as `utm_campaign` when that is missing. Also the parameter the campaign carry writes (snippet `kizami/campaign`, `Runtime::campaignUrl()`). |
 | `language` | string | site language | `'de'` | `en` or `de` for the dashboard and report text. |
 | `brand` | string\|closure | site title | `'Example Studio'` | Name in the dashboard title and report (string or closure). |
 | `color` | string | `#2f4f2a` | `'#2f4f2a'` | Dashboard accent colour (`#rrggbb`). |

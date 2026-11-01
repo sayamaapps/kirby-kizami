@@ -91,6 +91,28 @@ class Runtime
 		return Capture::cleanId(get($param));
 	}
 
+	/** The campaign parameter (sayamaapps.kizami.campaignParam); null unless it is a usable name (since 2.1.0). */
+	public static function campaignParam(App $kirby): string|null
+	{
+		return Campaign::param(self::option($kirby, 'campaignParam'));
+	}
+
+	/**
+	 * A link with the campaign tag (since 2.1.0), see Campaign::link(): an order
+	 * link takes it as ds24tr, a link of the site's own as the campaign parameter.
+	 * $campaign null: the tag of this request (utm_campaign, else the campaign
+	 * parameter). $hosts null: the site's own hosts (the index URL and
+	 * sayamaapps.kizami.ownHosts).
+	 *
+	 * @param list<string>|null $hosts
+	 */
+	public static function campaignUrl(App $kirby, string $url, string|null $campaign = null, array|null $hosts = null): string
+	{
+		$hosts ??= array_values(array_filter(self::ownHosts($kirby), 'is_string'));
+
+		return Campaign::link($url, $campaign ?? self::campaign($kirby), self::campaignParam($kirby), $hosts);
+	}
+
 	/**
 	 * The dashboard's gate for /k/dashboard and /k/dashboard.css, after the check
 	 * that the module is on: null = let in, otherwise the response to send.

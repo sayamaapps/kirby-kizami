@@ -13,6 +13,28 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [2.1.0] — 2026-11-01
+
+### Added
+
+- **Campaign carry.** The tag of a visit (`utm_campaign`, else the parameter in
+  `campaignParam`) can be carried on into the links of the site: the snippet
+  `kizami/campaign` embeds `/k/campaign.js`, which gives every link of the site's
+  own that parameter, every Digistore24 order link (`digistore24.com/product/…`,
+  `checkout-ds24.com/product/…`) the tag as `ds24tr`, the vendor's tracking key,
+  and fills `<input data-kizami-campaign>` while it is empty; links and fields
+  inserted later are handled too. An order link with `aff=` belongs to an
+  affiliate and stays as it is, an existing `ds24tr` is never replaced, and an
+  own `cam` without `aff` is dropped: Digistore24 reads `cam` only as the
+  campaign of an affiliate, so an own tag there never reaches the vendor's
+  purchase data. `Runtime::campaignUrl($kirby, $url, $campaign = null, $hosts =
+  null)` applies the same rules in PHP (templates, mails); `Campaign::link()` is
+  the Kirby-free core. Nothing is stored in the browser, nothing is sent
+  anywhere; the counting is unchanged. Both the route and the snippet exist
+  only while `active` is on and `campaignParam` is a usable name (letters,
+  digits, `_`, `-`, up to 32 characters); `Runtime::campaignParam()` returns
+  that name or `null`. No schema change.
+
 ## [2.0.0] — 2026-10-31 (dashboard access)
 
 Breaking. This entry covers the dashboard only: its login and what its GET request
