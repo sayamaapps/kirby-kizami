@@ -42,6 +42,8 @@ class Routes
 			// even with the module off. This way the file only exists while actions
 			// are configured. Public, unlike dashboard.css: visitors load it.
 			['pattern' => 'k/event.js', 'method' => 'GET', 'action' => fn () => Routes::eventScript($kirby)],
+			// The campaign carry script, the same way: only while a campaign parameter is set.
+			['pattern' => 'k/campaign.js', 'method' => 'GET', 'action' => fn () => Routes::campaignScript($kirby)],
 			['pattern' => 'k/dashboard', 'method' => 'GET', 'action' => fn () => Routes::dashboard($kirby)],
 			// Short report as JSON for scripts; switch, login and format in src/ReportService.php.
 			['pattern' => 'k/report', 'method' => 'GET', 'action' => fn () => ReportService::respond(
@@ -74,6 +76,19 @@ class Routes
 		}
 
 		return $routes;
+	}
+
+	/** The campaign carry script (since 2.1.0), only while a campaign parameter is set; otherwise Kirby's real 404. */
+	public static function campaignScript(App $kirby): Response
+	{
+		if (Runtime::option($kirby, 'active', false) !== true || Runtime::campaignParam($kirby) === null) {
+			return Runtime::notFound($kirby);
+		}
+
+		return new Response((string)file_get_contents(dirname(__DIR__) . '/views/campaign.js'), 'text/javascript', 200, [
+			'Cache-Control' => 'public, max-age=86400',
+			'X-Content-Type-Options' => 'nosniff',
+		]);
 	}
 
 	/**

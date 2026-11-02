@@ -32,7 +32,7 @@ final class AutoloadTest extends TestCase
 				continue;
 			}
 			$short = substr($class, strlen('sayamaapps\\kizami\\'));
-			if (in_array($short, ['hooks', 'pagemethods', 'routes', 'runtime'], true)) {
+			if (in_array($short, ['campaign', 'hooks', 'pagemethods', 'routes', 'runtime'], true)) {
 				// Added after the 1.x API; no 1.x class name to alias.
 				continue;
 			}
@@ -67,7 +67,7 @@ final class AutoloadTest extends TestCase
 				continue;
 			}
 			$short = substr($class, strlen('sayamaapps\\kizami\\'));
-			if (in_array($short, ['hooks', 'pagemethods', 'routes', 'runtime'], true)) {
+			if (in_array($short, ['campaign', 'hooks', 'pagemethods', 'routes', 'runtime'], true)) {
 				// Added after the 1.x API; no 1.x name to keep.
 				continue;
 			}
