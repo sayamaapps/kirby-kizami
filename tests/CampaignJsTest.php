@@ -101,6 +101,8 @@ const cases = {
   cleaned: run('?cam=%3Cb%3Ea%20b', ['/termine'], 'cam'),
   none: run('?x=1', links, 'cam'),
   badParam: run('?cam=social-x', links, 'c m'),
+  partner: run('?aff=partner&cam=pkampagne', links, 'cam'),
+  partnerUtm: run('?aff=partner&utm_campaign=pkampagne', links, 'cam'),
 };
 process.stdout.write(JSON.stringify(cases));
 JS;
@@ -155,7 +157,9 @@ JS;
 			Assert::assertTrue($tagged['observed']);
 			Assert::assertSame(['/termine?cam=autumn'], $cases['utm']['hrefs'], 'utm_campaign wins');
 			Assert::assertSame(['/termine?cam=bab'], $cases['cleaned']['hrefs'], 'cleaned like on the server');
-			foreach (['none', 'badParam'] as $case) {
+			// A partner's visit (aff in the page address) carries nothing: the
+			// partner's tag must not reach the shop as the site's own ds24tr.
+			foreach (['none', 'badParam', 'partner', 'partnerUtm'] as $case) {
 				Assert::assertSame($links, $cases[$case]['hrefs'], $case . ': links untouched');
 				Assert::assertSame(['', 'keep'], $cases[$case]['fields'], $case . ': fields untouched');
 				Assert::assertNull($cases[$case]['campaign'], $case . ': no window.kizami');

@@ -15,6 +15,8 @@
  *     example) takes it as value while the field is empty.
  *
  * Links and fields inserted later (a form loaded on click) are handled too.
+ * A page address with aff is a partner's visit: nothing is carried on, the
+ * partner's tag (cam) is theirs and must not reach the shop as ds24tr.
  * Nothing is stored in the browser and nothing is sent anywhere: the server
  * counts the page view with the tag, the next page or the shop reads it from
  * the address. window.kizami.campaign holds the tag for the site's own code.
@@ -35,6 +37,7 @@
   var campaign = '';
   try {
     var search = new URLSearchParams(location.search);
+    if (search.has('aff')) { return; }
     campaign = clean(search.get('utm_campaign')) || clean(search.get(param));
   } catch (e) {
     return;

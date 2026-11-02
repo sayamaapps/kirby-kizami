@@ -27,9 +27,12 @@ All notable changes to this project are documented here. Versions follow
   affiliate and stays as it is, an existing `ds24tr` is never replaced, and an
   own `cam` without `aff` is dropped: Digistore24 reads `cam` only as the
   campaign of an affiliate, so an own tag there never reaches the vendor's
-  purchase data. `Runtime::campaignUrl($kirby, $url, $campaign = null, $hosts =
-  null)` applies the same rules in PHP (templates, mails); `Campaign::link()` is
-  the Kirby-free core. Nothing is stored in the browser, nothing is sent
+  purchase data. A page address with `aff=` is a partner's visit: nothing is
+  carried on, so the partner's tag never reaches the vendor's purchase data as
+  the site's own; the page view is still counted with it.
+  `Runtime::campaignUrl($kirby, $url, $campaign = null, $hosts = null)` applies
+  the same rules in PHP (templates, mails), the partner rule included while
+  `$campaign` is null; `Campaign::link()` is the Kirby-free core. Nothing is stored in the browser, nothing is sent
   anywhere; the counting is unchanged. Both the route and the snippet exist
   only while `active` is on and `campaignParam` is a usable name (letters,
   digits, `_`, `-`, up to 32 characters); `Runtime::campaignParam()` returns

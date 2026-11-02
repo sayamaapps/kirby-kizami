@@ -64,7 +64,7 @@ final class HttpTest extends TestCase
 			symlink($repo, $tmp . '/site/plugins/kizami');
 			file_put_contents($tmp . '/content/home/home.txt', "Title: Test\n");
 			file_put_contents($tmp . '/content/error/error.txt', "Title: Error\n");
-			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } if (isset($_GET["campaign-snippet"])) { snippet("kizami/campaign"); return; } if (isset($_GET["campaign-url"])) { echo Sayamaapps\\Kizami\\Runtime::campaignUrl(kirby(), (string)$_GET["campaign-url"]); return; } echo isset($_GET["links"]) ? $page->kizamiRedirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
+			file_put_contents($tmp . '/site/templates/home.php', '<?php if (isset($_GET["snippet"])) { snippet("kizami/events"); return; } if (isset($_GET["campaign-snippet"])) { snippet("kizami/campaign"); return; } if (isset($_GET["campaign-url"])) { echo Sayamaapps\\Kizami\\Runtime::campaignUrl(kirby(), (string)$_GET["campaign-url"], isset($_GET["campaign-tag"]) ? (string)$_GET["cam"] : null); return; } echo isset($_GET["links"]) ? $page->kizamiRedirectLink("call", "tel:+498000000", "header") : "Fixture OK";');
 			file_put_contents($tmp . '/site/templates/error.php', '<?php echo "Fixture 404";');
 			// A page that a route of the site's own also serves under a short code (/EEAQ77).
 			mkdir($tmp . '/content/book');
@@ -540,6 +540,11 @@ final class HttpTest extends TestCase
 			Assert::assertSame('https://other.example.org/x', $campaignUrl('https://other.example.org/x'), 'campaignUrl: another host stays');
 			Assert::assertSame('/events?cam=autumn', $campaignUrl('/events', '&cam=social-tg-test&utm_campaign=autumn'), 'campaignUrl: utm_campaign wins');
 			Assert::assertSame('/events', $campaignUrl('/events', ''), 'campaignUrl: no tag, no change');
+			// A partner's visit (aff in the request) carries nothing, but is counted with its tag.
+			Assert::assertSame('/events', $campaignUrl('/events', '&aff=partner&cam=pkampagne'), 'campaignUrl: a partner\'s visit carries nothing on an own link');
+			Assert::assertSame('https://www.digistore24.com/product/123456', $campaignUrl('https://www.digistore24.com/product/123456', '&aff=partner&cam=pkampagne'), 'campaignUrl: a partner\'s visit gives no ds24tr');
+			Assert::assertSame('/events?cam=pkampagne', $campaignUrl('/events', '&aff=partner&cam=pkampagne&campaign-tag=1'), 'campaignUrl: an explicit tag is the caller\'s and is applied anyway');
+			Assert::assertTrue(self::requestHttp('/?aff=partner&cam=pkampagne')[0] === 200 && $lastCampaign() === 'pkampagne', 'a partner\'s visit is still counted with its tag');
 			self::writeConfig(array_merge($config, ['kizami.campaignParam' => 'cam', 'kizami.active' => false]));
 			Assert::assertTrue(self::requestHttp('/k/campaign.js')[0] === 404 && trim(self::requestHttp('/?campaign-snippet=1', ['DNT: 1'])[1]) === '', 'Switched off: no campaign script, the snippet prints nothing');
 			self::writeConfig($config + ['kizami.campaignParam' => ['cam']]);
