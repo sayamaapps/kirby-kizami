@@ -39,7 +39,9 @@ final class AbortingConnection extends SQLite3
 			return parent::exec($query);
 		}
 		parent::exec('ROLLBACK');
-		throw new SQLite3Exception('database or disk is full', 13);
+		// SQLite3Exception exists since PHP 8.3; before, SQLite3 threw a plain Exception.
+		$class = class_exists('SQLite3Exception') ? 'SQLite3Exception' : 'Exception';
+		throw new $class('database or disk is full', 13);
 	}
 }
 
