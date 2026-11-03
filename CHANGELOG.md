@@ -13,6 +13,21 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [2.1.1] — 2026-11-03
+
+### Fixed
+
+- **An open measurement gap that starts later today is no longer marked
+  before its start.** An open gap (`kizami.gaps` entry without `to`) ends at
+  the current time. One configured to start at 18:00 was already shown at
+  12:00 as an existing gap ("since … 18:00") in the dashboard and flagged in
+  the report, because only the overlap with the day was tested and not that
+  the interval from its start to now is empty at that point. An empty
+  interval, which an open gap is before and exactly at its start, now touches
+  no day or range, in the dashboard and in the report alike. Closed gaps and
+  open gaps that have begun are unchanged. No schema change, counting
+  unchanged.
+
 ## [2.1.0] — 2026-11-01
 
 ### Added
