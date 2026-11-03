@@ -168,7 +168,7 @@ The 1.x public test helpers and the 1.x read methods of `Store` are kept as `@de
 
 ### Not in the 2.0 dashboard change
 
-The dashboard change (Kirby accounts, no login file, no writes on GET) is in 2.0.0. The following changes also break existing code and are **not** part of that release. They wait for a later decision on 2.0:
+The dashboard change (Kirby accounts, no login file, no counted data written on GET; the dashboard only commits the storage check, which adds no data) is in 2.0.0. The following changes also break existing code and are **not** part of that release. They wait for a later decision on 2.0:
 
 - Removal of all names in the table above.
 - Moving `SetupError` and `ReportError` into `Sayamaapps\Kizami\`.

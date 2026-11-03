@@ -14,6 +14,11 @@
  * frame appended to the -wal file, or the change counter in the header of the
  * database file. A failing write is simulated with a lock, a read-only
  * connection and a connection that aborts the transaction by itself.
+ *
+ * The commit alone does not touch the events table, though. So the probe also
+ * inserts a test row inside a savepoint and rolls back to it: a damaged table
+ * or index ("database disk image is malformed") is reported, and no row, no
+ * sequence value and no page stays behind.
  */
 use PHPUnit\Framework\Assert;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -84,6 +89,32 @@ final class WriteProbeTest extends TestCase
 		return $state;
 	}
 
+	/** Zeroes the header of the root page of a table or an index: what a torn write leaves, a b-tree SQLite no longer recognises. */
+	private static function destroyRootPage(string $file, string $name): void
+	{
+		$db = new SQLite3($file, SQLITE3_OPEN_READONLY);
+		$root = (int)$db->querySingle("SELECT rootpage FROM sqlite_master WHERE name = '$name'");
+		$pageSize = (int)$db->querySingle('PRAGMA page_size');
+		$db->close();
+		Assert::assertGreaterThan(1, $root, "counter-check, $name has a root page of its own");
+		$handle = fopen($file, 'r+b');
+		fseek($handle, ($root - 1) * $pageSize);
+		fwrite($handle, str_repeat("\0", 8));
+		fclose($handle);
+	}
+
+	/** Writes $rows events straight into the file (one transaction, no Store), with enough variety to give every index several pages. */
+	private static function fillEvents(string $file, int $rows): void
+	{
+		$db = new SQLite3($file);
+		$db->exec('BEGIN');
+		for ($i = 0; $i < $rows; $i++) {
+			$db->exec("INSERT INTO kizami_events (type, action, path, session, target) VALUES ('page', 'view', '/page-" . ($i % 40) . "', 'session-$i', 'target-" . ($i % 7) . "')");
+		}
+		$db->exec('COMMIT');
+		$db->close();
+	}
+
 	private static function replaceConnection(Store $store, SQLite3 $db): void
 	{
 		(new ReflectionProperty($store, 'db'))->setValue($store, $db);
@@ -129,6 +160,54 @@ final class WriteProbeTest extends TestCase
 		$aborting->enableExceptions(true);
 		self::replaceConnection($store, $aborting);
 		Assert::assertSame('database or disk is full', $store->writeProbe(), "$mode: the error of the failed write comes back although SQLite already ended the transaction");
+	}
+
+	/** @return array<string,array{string,string}> */
+	public static function damage(): array
+	{
+		$cases = [];
+		foreach (['wal', 'delete'] as $mode) {
+			foreach (['idx_kizami_events_image', 'idx_kizami_events_created_at', 'kizami_events'] as $object) {
+				$cases["$mode, $object"] = [$mode, $object];
+			}
+		}
+		return $cases;
+	}
+
+	/**
+	 * A database whose events table or index is damaged: a real write fails with
+	 * "database disk image is malformed", so the probe must not say "healthy".
+	 * It did, once it only rewrote the first page.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('damage')]
+	public function testDamagedEventsTableOrIndexIsReported(string $mode, string $object): void
+	{
+		$file = "$this->root/$mode.sqlite";
+		$store = $this->store($mode);
+		self::fillEvents($file, 300);
+		Assert::assertSame(null, $store->writeProbe(), "$mode: counter-check, the probe passes before the damage");
+		unset($store);
+		gc_collect_cycles();
+		Assert::assertSame(false, file_exists("$file-wal"), "$mode: counter-check, the last connection is closed, so the damage is in the file the next connection reads");
+		self::destroyRootPage($file, $object);
+
+		$store = new Store($file, $mode);
+		$error = $store->writeProbe();
+		Assert::assertIsString($error, "$mode, $object: damage in the events table or an index is not healthy");
+		Assert::assertStringContainsString('malformed', $error, "$mode, $object: the reason of SQLite is returned");
+		Assert::assertStringNotContainsString('cannot rollback', $error, "$mode, $object: the rollback does not replace it");
+		try {
+			$store->write(['type' => 'page', 'action' => 'view', 'path' => '/after', 'session' => 'visitor']);
+			$failed = false;
+		} catch (RuntimeException) {
+			$failed = true;
+		}
+		Assert::assertTrue($failed, "$mode, $object: counter-check, a real write fails on this database, the probe agrees with it");
+		$other = new SQLite3($file);
+		$other->busyTimeout(0);
+		Assert::assertTrue($other->exec('BEGIN IMMEDIATE'), "$mode, $object: the failed probe ended its transaction and holds no lock");
+		$other->exec('ROLLBACK');
+		$other->close();
 	}
 
 	#[\PHPUnit\Framework\Attributes\DataProvider('modes')]
@@ -193,6 +272,34 @@ final class WriteProbeTest extends TestCase
 		}
 	}
 
+	/**
+	 * A test row that needs a new page (the last page of the table or of an
+	 * index is full) must not leave that page behind, neither in the file nor
+	 * on the free list.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('modes')]
+	public function testProbeLeavesNoPageBehindAtAPageBoundary(string $mode): void
+	{
+		$file = "$this->root/$mode.sqlite";
+		$store = new Store($file, $mode);
+		$raw = new SQLite3($file);
+		$raw->busyTimeout(5000);
+		$boundaries = 0;
+		for ($i = 0; $i < 200; $i++) {
+			$raw->exec("INSERT INTO kizami_events (type, action, path, session, target) VALUES ('page', 'view', '/" . str_repeat('p', 30 + $i % 53) . "', 'session-$i', 'target-" . ($i % 7) . "')");
+			// Would the test row need a new page right now?
+			$pages = $raw->querySingle('PRAGMA page_count');
+			$raw->exec('BEGIN');
+			$raw->exec("INSERT INTO kizami_events (type, action) VALUES ('page', 'view')");
+			$boundaries += $raw->querySingle('PRAGMA page_count') > $pages ? 1 : 0;
+			$raw->exec('ROLLBACK');
+			$before = self::content($file);
+			Assert::assertSame(null, $store->writeProbe());
+			Assert::assertSame($before, self::content($file), "$mode: row $i, no row, no page, no sequence value changed");
+		}
+		Assert::assertGreaterThan(0, $boundaries, "$mode: counter-check, the fixture reached a point where the test row needs a new page");
+	}
+
 	#[\PHPUnit\Framework\Attributes\DataProvider('modes')]
 	public function testProbeLeavesNothingBehind(string $mode): void
 	{
@@ -205,12 +312,30 @@ final class WriteProbeTest extends TestCase
 		$before = self::content($file);
 		Assert::assertSame(7, $before['user_version'], "$mode: counter-check, the user version is set");
 		Assert::assertCount(1, $before['kizami_events'], "$mode: counter-check, the fixture holds one event");
+		Assert::assertSame('kizami_events=1', $before['sequence'], "$mode: counter-check, kizami_events counts with AUTOINCREMENT and the test row would raise it to 2");
 		for ($i = 0; $i < 3; $i++) {
 			Assert::assertSame(null, $store->writeProbe());
 		}
 		Assert::assertSame($before, self::content($file), "$mode: no row, no page, no user version, no sequence changed");
 		$store->write(['type' => 'page', 'action' => 'view', 'path' => '/next', 'session' => 'visitor']);
-		Assert::assertCount(2, self::content($file)['kizami_events'], "$mode: the database is writable after the probe, no transaction stays open");
+		$after = self::content($file);
+		Assert::assertCount(2, $after['kizami_events'], "$mode: the database is writable after the probe, no transaction stays open");
+		Assert::assertSame(2, $after['kizami_events'][1]['id'], "$mode: the next real event gets the next id, the probe used none");
+		Assert::assertSame('kizami_events=2', $after['sequence'], "$mode: the sequence moved by the real event only");
+	}
+
+	#[\PHPUnit\Framework\Attributes\DataProvider('modes')]
+	public function testProbeOnAnEmptyTableLeavesTheSequenceEmpty(string $mode): void
+	{
+		$file = "$this->root/$mode.sqlite";
+		$store = new Store($file, $mode);
+		$before = self::content($file);
+		Assert::assertSame([], $before['kizami_events'], "$mode: counter-check, no event yet");
+		Assert::assertSame(null, $before['sequence'], "$mode: counter-check, no sequence value yet");
+		Assert::assertSame(null, $store->writeProbe());
+		Assert::assertSame($before, self::content($file), "$mode: the test row did not create a sequence value");
+		$store->write(['type' => 'page', 'action' => 'view', 'path' => '/first', 'session' => 'visitor']);
+		Assert::assertSame(1, self::content($file)['kizami_events'][0]['id'], "$mode: the first real event gets id 1");
 	}
 
 	#[\PHPUnit\Framework\Attributes\DataProvider('modes')]

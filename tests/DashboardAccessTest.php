@@ -3,7 +3,7 @@
 /**
  * Dashboard access with real Kirby, in-process: Kirby accounts with the
  * dashboard role, a logged-in Panel user, HTTPS only, Kirby's own failed-login
- * limit (auth.trials), and a GET that writes nothing.
+ * limit (auth.trials), and a GET that writes no data.
  *   php tests/DashboardAccessTest.php
  */
 
@@ -106,25 +106,74 @@ final class DashboardAccessTest extends TestCase
 			Assert::assertSame(true, is_file($logins), 'Kirby keeps the failed logins in its own log (accounts/.logins)');
 			@unlink($logins);
 
-			// GET writes nothing: a stale daily key stays, and the database is unchanged.
-			// The storage check on the page commits a write that changes no content
-			// (Store::writeProbe()); the only bytes it moves are the two change
-			// counters in the file header (24-27 and 92-95), so they are left out.
+			// GET writes no data: a stale daily key stays, and the database says the
+			// same about itself afterwards. The storage check on the page commits a
+			// write that changes no content (Store::writeProbe()), so the proof is
+			// not a comparison of file bytes: that would have to leave out the
+			// change counters in the header, and would then let any other header
+			// field through. The state is compared by what SQLite reports instead:
+			// every header field it exposes (user version, application id, schema
+			// version, page size and counts, journal mode), the schema, and every
+			// row of every table including the AUTOINCREMENT sequence.
 			$keyFile = $tmp . '/storage/kizami/secret.txt';
 			file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
 			$db = $tmp . '/storage/kizami/kizami.sqlite';
 			$state = function () use ($db) {
-				$bytes = is_file($db) ? (string)file_get_contents($db) : null;
-				if ($bytes !== null) {
-					$bytes = substr_replace(substr_replace($bytes, "\0\0\0\0", 24, 4), "\0\0\0\0", 92, 4);
+				if (!is_file($db)) {
+					return null;
 				}
-				return [$bytes === null ? null : hash('sha256', $bytes), is_file($db . '-wal') ? filesize($db . '-wal') : 0];
+				$state = ['wal' => is_file($db . '-wal') ? filesize($db . '-wal') : 0];
+				$raw = new SQLite3($db);
+				$raw->busyTimeout(5000);
+				foreach (['journal_mode', 'user_version', 'application_id', 'schema_version', 'page_size', 'page_count', 'freelist_count', 'auto_vacuum', 'encoding'] as $pragma) {
+					$state[$pragma] = $raw->querySingle("PRAGMA $pragma");
+				}
+				$objects = $raw->query('SELECT type, name, tbl_name, rootpage, sql FROM sqlite_master ORDER BY type, name');
+				while ($object = $objects->fetchArray(SQLITE3_ASSOC)) {
+					$state['schema'][] = $object;
+					if ($object['type'] === 'table') {
+						$rows = $raw->query('SELECT rowid AS rowid_, * FROM "' . $object['name'] . '" ORDER BY rowid');
+						$state['rows'][$object['name']] = [];
+						while ($row = $rows->fetchArray(SQLITE3_ASSOC)) {
+							$state['rows'][$object['name']][] = $row;
+						}
+					}
+				}
+				$raw->close();
+				return $state;
 			};
 			Assert::assertSame(200, $get('k/dashboard', $https)[0], 'Dashboard with a login');
-			$before = $state();
-			Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", file_get_contents($keyFile), 'Dashboard GET leaves a stale daily key alone');
-			Assert::assertSame(200, $get('k/dashboard', $https)[0], 'Dashboard again');
-			Assert::assertSame($before, $state(), 'Dashboard GET writes nothing to the database');
+			foreach (['wal', 'delete'] as $journal) {
+				$options = ['kizami.journal' => $journal];
+				// A new database, made in this mode and given one counted visit by the Store
+				// itself: the request under test has nothing to create or convert, no earlier
+				// request has touched it (a constant write would otherwise already be in the
+				// state before), and the comparison has a row and a sequence value to protect.
+				foreach (['', '-wal', '-shm', '-journal'] as $suffix) {
+					@unlink($db . $suffix);
+				}
+				$store = new Sayamaapps\Kizami\Store($db, $journal);
+				$store->write(['type' => 'page', 'action' => 'view', 'path' => '/', 'session' => 'visitor']);
+				unset($store);
+				gc_collect_cycles();
+				file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
+				$before = $state();
+				Assert::assertSame($journal, $before['journal_mode'], "$journal: counter-check, the database is in the mode under test");
+				Assert::assertCount(1, $before['rows']['kizami_events'] ?? [], "$journal: counter-check, the comparison has the visit to compare");
+				Assert::assertSame(200, $get('k/dashboard', $https, self::DASHBOARD, $options)[0], "Dashboard with journal $journal");
+				Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", file_get_contents($keyFile), "$journal: dashboard GET leaves a stale daily key alone");
+				Assert::assertSame(200, $get('k/dashboard', $https, self::DASHBOARD, $options)[0], "Dashboard again with journal $journal");
+				Assert::assertSame($before, $state(), "$journal: dashboard GET writes no data to the database: no header field, no schema, no row, no page changed");
+				// Counter-check: the comparison sees a change that touches nothing but the header.
+				$raw = new SQLite3($db);
+				$raw->exec('PRAGMA application_id = 7');
+				$raw->close();
+				Assert::assertNotSame($before, $state(), "$journal: counter-check, a changed application id does not go unnoticed");
+				$raw = new SQLite3($db);
+				$raw->exec('PRAGMA application_id = 0');
+				$raw->close();
+				Assert::assertSame($before, $state(), "$journal: counter-check, the state is back to what it was");
+			}
 			// A failure is still written to the plugin's error log (1.x behaviour, not data).
 			foreach (['kizami.sqlite-wal', 'kizami.sqlite-shm'] as $side) {
 				@unlink($tmp . '/storage/kizami/' . $side);

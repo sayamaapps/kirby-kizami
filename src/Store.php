@@ -1317,18 +1317,34 @@ class Store
 	}
 
 	/**
-	 * Tests whether writing really works — a silently unwritable database
-	 * (full, read-only) must not pass itself off as healthy.
+	 * Tests whether writing really works — a silently unwritable or damaged
+	 * database (full, read-only, malformed table or index) must not pass
+	 * itself off as healthy.
 	 *
-	 * A test row that is rolled back is not enough: in WAL mode it never
-	 * leaves the page cache, so a full file system still passed while real
-	 * writes failed with SQLITE_FULL. The probe therefore COMMITs a write:
-	 * the header field `user_version` is set to the value it already has.
-	 * That rewrites the first page, which makes SQLite append a frame to the
-	 * WAL file or write the journal and the database file, exactly as a real
-	 * write does, but changes no content and allocates no page. No table, no
-	 * row and no migration are involved; the value is read inside the
-	 * transaction, so a concurrent change of the mark (purgeResidue) is kept.
+	 * Two parts, both inside one BEGIN IMMEDIATE transaction:
+	 *
+	 * 1. A test row is inserted into kizami_events and taken back with
+	 *    ROLLBACK TO a savepoint. The insert walks the table and all its
+	 *    indexes, so damage there ("database disk image is malformed") comes
+	 *    back as the probe's error. Nothing of it remains: the rollback to the
+	 *    savepoint also restores the AUTOINCREMENT sequence and every page the
+	 *    insert allocated.
+	 * 2. The transaction is COMMITted after the header field `user_version` is
+	 *    set to the value it already has. That rewrites the first page, so
+	 *    SQLite appends a frame to the WAL file or writes the journal and the
+	 *    database file. A rolled-back test row alone never gets there: in WAL
+	 *    mode it stays in the page cache, so a full file system still passed
+	 *    while real writes failed with SQLITE_FULL. No content changes and no
+	 *    migration is involved; the value is read inside the transaction, so a
+	 *    concurrent change of the mark (purgeResidue) is kept.
+	 *
+	 * This tests the commit path, it does not reproduce a real write byte for
+	 * byte: the commit needs less space than a real insert (one WAL frame
+	 * against several), so on a file system that has almost no room left the
+	 * probe can pass while the next real write still fails. In rollback-journal
+	 * mode the COMMIT needs an exclusive lock and waits up to the busy timeout
+	 * for running readers (a snapshot, a report), and a reader that is still
+	 * there then makes the probe report "database is locked".
 	 *
 	 * Returns null when it works, otherwise the message of the first error.
 	 */
@@ -1338,6 +1354,10 @@ class Store
 			$ok = $this->db->exec('BEGIN IMMEDIATE');
 			$version = $ok ? $this->db->querySingle('PRAGMA user_version') : null;
 			$ok = is_int($version) &&
+				$this->db->exec('SAVEPOINT kizami_probe') &&
+				$this->db->exec("INSERT INTO kizami_events (type, action) VALUES ('page', 'view')") &&
+				$this->db->exec('ROLLBACK TO kizami_probe') &&
+				$this->db->exec('RELEASE kizami_probe') &&
 				$this->db->exec('PRAGMA user_version = ' . $version) &&
 				$this->db->exec('COMMIT');
 			$error = $ok ? null : $this->db->lastErrorMsg();
