@@ -13,6 +13,38 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [2.1.3] — 2026-11-03
+
+### Fixed
+
+- **The dashboard reports a damaged events table or index again.** Since 2.1.2
+  the storage check (`Store::writeProbe()`) only rewrote the first page of the
+  database file and no longer touched `kizami_events`. A torn write that left
+  the table or one of its indexes unreadable ("database disk image is
+  malformed", for example after an I/O error on a shared host) made every real
+  write fail while the dashboard still said "Storage: OK". The check now also
+  inserts a test row inside a savepoint and rolls back to it, before it commits
+  the unchanged `user_version` as in 2.1.2. Both parts run in one transaction:
+  the insert walks the table and its indexes, the commit still reaches the WAL
+  file or the journal, so a full file system is reported as in 2.1.2. The
+  rollback to the savepoint leaves no row, no page and no change of the
+  `AUTOINCREMENT` sequence. It works on SQLite 3.7.17 as before.
+- **Wording about the storage check corrected.** 2.1.2 said the commit writes
+  "like a real write". It tests the commit path, but it needs less room than a
+  real insert (one WAL frame against several), so on a file system with almost
+  no space left the check can pass while the next real write still fails. In
+  rollback-journal mode the commit waits up to the busy timeout (5 seconds) for
+  readers that are still running and then reports "database is locked"; this is
+  unchanged and now stated in the code comment.
+- **`GET /k/dashboard` writes no counted data, but it commits the storage
+  check.** That is one transaction that adds no row and no page and sets
+  `user_version` to the value it already has. The code comment and the README said "read
+  only" or "no writes"; they now say what happens. The access test no longer
+  masks bytes of the file header: it compares every header field SQLite
+  reports, the schema and every row, so a change that touches only the first
+  page is caught. No schema change, counting unchanged, no change to the
+  privacy text.
+
 ## [2.1.2] — 2026-11-03
 
 ### Fixed
@@ -105,7 +137,9 @@ release; see README, "Not in the 2.0 dashboard change".
 - **`/k/dashboard`, `/k/dashboard.css` and `/k/report` do not write on GET.** No
   compaction, no rebuild of the database file, no daily key rotation. Compaction runs once a
   day when a visit is counted, and in `maintenance.php`, which also removes a stale daily key.
-  A failure is still written to `storage/kizami/errors.log`, as in 1.x.
+  A failure is still written to `storage/kizami/errors.log`, as in 1.x. Since
+  2.1.2 the dashboard page also commits the storage check (`Store::writeProbe()`),
+  which changes no counted data and adds no row; see 2.1.3.
 - Known exception: opening the database creates a missing table or migrates an old schema.
   This is idempotent and stays on purpose; it is the only write a read route makes.
 - `Runtime::deny()` and `Runtime::loginUnavailable()` take fewer arguments; the 1.x

@@ -112,8 +112,10 @@ class Routes
 
 		I18n::setLanguage(Options::language($kirby));
 		try {
-			// Read only (IDM-9): no compaction and no key rotation here. Both run on
+			// No data is written (IDM-9): no compaction and no key rotation here. Both run on
 			// counting (Store::write(), Runtime::write()) and in maintenance.php.
+			// The one write is the storage check on the page (Store::writeProbe()):
+			// it commits a transaction that adds no row, no counted data and no page.
 			$store = Runtime::store($kirby);
 			$names = new Names(
 				(array)Runtime::option($kirby, 'targetNames', []),
