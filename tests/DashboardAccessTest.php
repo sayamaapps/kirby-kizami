@@ -107,10 +107,19 @@ final class DashboardAccessTest extends TestCase
 			@unlink($logins);
 
 			// GET writes nothing: a stale daily key stays, and the database is unchanged.
+			// The storage check on the page commits a write that changes no content
+			// (Store::writeProbe()); the only bytes it moves are the two change
+			// counters in the file header (24-27 and 92-95), so they are left out.
 			$keyFile = $tmp . '/storage/kizami/secret.txt';
 			file_put_contents($keyFile, "2010-01-01\nSTALE-SECRET-VALUE");
 			$db = $tmp . '/storage/kizami/kizami.sqlite';
-			$state = fn () => [is_file($db) ? hash_file('sha256', $db) : null, is_file($db . '-wal') ? filesize($db . '-wal') : 0];
+			$state = function () use ($db) {
+				$bytes = is_file($db) ? (string)file_get_contents($db) : null;
+				if ($bytes !== null) {
+					$bytes = substr_replace(substr_replace($bytes, "\0\0\0\0", 24, 4), "\0\0\0\0", 92, 4);
+				}
+				return [$bytes === null ? null : hash('sha256', $bytes), is_file($db . '-wal') ? filesize($db . '-wal') : 0];
+			};
 			Assert::assertSame(200, $get('k/dashboard', $https)[0], 'Dashboard with a login');
 			$before = $state();
 			Assert::assertSame("2010-01-01\nSTALE-SECRET-VALUE", file_get_contents($keyFile), 'Dashboard GET leaves a stale daily key alone');

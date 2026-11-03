@@ -13,6 +13,28 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [2.1.2] — 2026-11-03
+
+### Fixed
+
+- **The dashboard no longer says "Storage: OK" for a full database in WAL
+  mode.** The storage check (`Store::writeProbe()`) inserted a test row and
+  rolled it back. In WAL mode that never leaves the page cache, so on a full
+  file system the check passed while every real write failed with "database or
+  disk is full". The check now commits a write: it sets the header field
+  `user_version` to the value it already has. That makes SQLite write to the
+  WAL file or the journal and the database file like a real write, and a full
+  or read-only database is reported with SQLite's own message. It adds no
+  table, no row and no page, so no migration is needed and nothing is left
+  behind; it works on SQLite 3.7.17 as before.
+- **A failed check keeps its error message in rollback-journal mode
+  (`journal` set to `delete`).** When SQLite had already ended the transaction
+  itself, the `ROLLBACK` after the error was refused with "cannot rollback - no
+  transaction is active" and replaced the real reason (or escaped the check as
+  an exception). The rollback is now optional and the original message is
+  returned. No schema change, counting unchanged, no change to the privacy
+  text.
+
 ## [2.1.1] — 2026-11-03
 
 ### Fixed
