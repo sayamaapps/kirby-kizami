@@ -1319,20 +1319,41 @@ class Store
 	/**
 	 * Tests whether writing really works — a silently unwritable database
 	 * (full, read-only) must not pass itself off as healthy.
-	 * BEGIN IMMEDIATE → test INSERT → ROLLBACK, so no row remains.
+	 *
+	 * A test row that is rolled back is not enough: in WAL mode it never
+	 * leaves the page cache, so a full file system still passed while real
+	 * writes failed with SQLITE_FULL. The probe therefore COMMITs a write:
+	 * the header field `user_version` is set to the value it already has.
+	 * That rewrites the first page, which makes SQLite append a frame to the
+	 * WAL file or write the journal and the database file, exactly as a real
+	 * write does, but changes no content and allocates no page. No table, no
+	 * row and no migration are involved; the value is read inside the
+	 * transaction, so a concurrent change of the mark (purgeResidue) is kept.
+	 *
+	 * Returns null when it works, otherwise the message of the first error.
 	 */
 	public function writeProbe(): string|null
 	{
 		try {
-			$this->db->exec('BEGIN IMMEDIATE');
-			$ok = $this->db->exec(
-				"INSERT INTO kizami_events (type, action) VALUES ('page', 'view')"
-			);
-			$this->db->exec('ROLLBACK');
-			return $ok ? null : $this->db->lastErrorMsg();
+			$ok = $this->db->exec('BEGIN IMMEDIATE');
+			$version = $ok ? $this->db->querySingle('PRAGMA user_version') : null;
+			$ok = is_int($version) &&
+				$this->db->exec('PRAGMA user_version = ' . $version) &&
+				$this->db->exec('COMMIT');
+			$error = $ok ? null : $this->db->lastErrorMsg();
 		} catch (\Throwable $e) {
-			$this->db->exec('ROLLBACK');
-			return $e->getMessage();
+			$error = $e->getMessage();
 		}
+		if ($error !== null) {
+			// SQLite may have ended the transaction itself (BEGIN refused, I/O
+			// error, full disk). Then ROLLBACK is refused too ("cannot rollback -
+			// no transaction is active") and must not hide the original error.
+			try {
+				$this->db->exec('ROLLBACK');
+			} catch (\Throwable) {
+				// Nothing left to roll back.
+			}
+		}
+		return $error;
 	}
 }
