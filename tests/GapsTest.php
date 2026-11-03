@@ -129,6 +129,20 @@ final class GapsTest extends TestCase
 			Assert::assertSame(['Open'], array_map(fn ($g) => $g['reason'], Gaps::onDay($gaps, '2026-10-10', $at('2026-10-10 20:00'))), 'Day: an open gap is touched on its first day as far as it had run');
 			Assert::assertSame([], Gaps::onDay($gaps, '2026-10-11', $at('2026-10-10 20:00')), 'Day: an open gap seen before the day has nothing to touch');
 
+			// An open gap that starts later the same day has not begun: it ends now,
+			// so [from, now) is empty before the start and exactly at the start.
+			$evening = Gaps::config([['from' => '2026-10-14 18:00', 'reason' => 'Starts this evening']]);
+			$reasonsOnDay = fn (string $time) => array_map(fn ($g) => $g['reason'], Gaps::onDay($evening, '2026-10-14', $at($time)));
+			Assert::assertSame([], $reasonsOnDay('2026-10-14 12:00'), 'Open gap later today: before its start it touches nothing');
+			Assert::assertSame([], $reasonsOnDay('2026-10-14 17:59'), 'Open gap later today: a minute before its start it touches nothing');
+			Assert::assertSame([], $reasonsOnDay('2026-10-14 18:00'), 'Open gap later today: exactly at its start it is still empty');
+			Assert::assertSame(['Starts this evening'], $reasonsOnDay('2026-10-14 18:01'), 'Open gap later today: after its start it touches the day');
+			Assert::assertSame([], Gaps::overlapping($evening, $at('2026-10-13 00:00'), $at('2026-10-15 00:00'), $at('2026-10-14 12:00')), 'Open gap later today: no range touches it before its start');
+			Assert::assertSame(['Starts this evening'], array_map(fn ($g) => $g['reason'], Gaps::overlapping($evening, $at('2026-10-13 00:00'), $at('2026-10-15 00:00'), $at('2026-10-14 18:01'))), 'Open gap later today: a range touches it after its start');
+			Assert::assertSame([], Gaps::onDay($evening, '2026-10-15', $at('2026-10-14 12:00')), 'Open gap later today: not the next day either');
+			// A closed gap is never empty (the entry check refuses "to" at or before "from"), so it is unaffected.
+			Assert::assertSame(['Server outage'], array_map(fn ($g) => $g['reason'], Gaps::onDay([$outage], '2026-10-13', $at('2026-10-13 12:00'))), 'Closed gap: still touches its day, whatever now is');
+
 			// Range overlap, half-open.
 			Assert::assertSame(['Open'], array_map(
 				fn ($g) => $g['reason'],
@@ -191,6 +205,16 @@ final class GapsTest extends TestCase
 			Assert::assertSame(true, str_contains($de, '<h3>Zählpausen</h3>') && str_contains($de, 'Zählpause ' . Gaps::period($gapYesterday, $now)), 'Dashboard: German heading and tooltip');
 			I18n::setLanguage('en');
 
+			// An open gap that starts later today is no gap yet: neither the band, nor
+			// the note, nor the "since" text in the dashboard (now is injected).
+			$evening = Gaps::config([['from' => $today->format('Y-m-d') . ' 18:00', 'reason' => 'Starts this evening']]);
+			$beforeStart = self::render(Analysis::data($store, $names, 7, ['gaps' => $evening, 'now' => $today->setTime(12, 0)]));
+			Assert::assertSame(false, str_contains($beforeStart, 'gap-band') || str_contains($beforeStart, 'gap-notes') || str_contains($beforeStart, 'Starts this evening'), 'Dashboard: an open gap starting later today is not marked at 12:00');
+			$atStart = self::render(Analysis::data($store, $names, 7, ['gaps' => $evening, 'now' => $today->setTime(18, 0)]));
+			Assert::assertSame(false, str_contains($atStart, 'gap-band') || str_contains($atStart, 'gap-notes'), 'Dashboard: an open gap is not marked exactly at its start');
+			$afterStart = self::render(Analysis::data($store, $names, 7, ['gaps' => $evening, 'now' => $today->setTime(18, 1)]));
+			Assert::assertSame([2, true], [substr_count($afterStart, 'class="gap-band"'), str_contains($afterStart, 'Starts this evening')], 'Dashboard: an open gap is marked after its start');
+
 			// Report: flags for the period and its comparison (one period earlier,
 			// seven days back), a flag per day of a week, the gaps list, text lines.
 			$reportStore = new Store("$tmp/report.sqlite");
@@ -214,6 +238,16 @@ final class GapsTest extends TestCase
 			Assert::assertSame(false, str_contains($quiet['text'], 'Measurement gap'), 'Report: no gap line for a clean day');
 			Assert::assertSame(false, str_contains(Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test'])['text'], 'Measurement gap'), 'Report: no gaps configured, no line');
 			Assert::assertSame(['gaps' => [], 'gap' => false], array_intersect_key(Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test']), ['gap' => 1, 'gaps' => 1]), 'Report: fields present without gaps');
+			// The same for the report, which covers the day before $today: an open gap
+			// starting at 18:00 of that day flags nothing while now lies at or before 18:00.
+			$eveningReport = Gaps::config([['from' => $dayAt(-1, 18)->format('Y-m-d H:i'), 'reason' => 'Starts this evening']]);
+			$reportAt = fn (DateTimeImmutable $time) => Report::data($reportStore, $names, 'day', $today, ['brand' => 'Test', 'gaps' => $eveningReport, 'now' => $time]);
+			$before = $reportAt($dayAt(-1, 12));
+			Assert::assertSame([false, []], [$before['gap'], $before['gaps']], 'Report: an open gap that has not begun is not flagged');
+			Assert::assertSame(false, str_contains($before['text'], 'Starts this evening') || str_contains($before['text'], 'Measurement gap'), 'Report: no gap line before the start');
+			Assert::assertSame(false, $reportAt($dayAt(-1, 18))['gap'], 'Report: not flagged exactly at the start');
+			Assert::assertSame(true, $reportAt($dayAt(-1, 18, 1))['gap'], 'Report: flagged after the start');
+			Assert::assertSame(true, $reportAt($today->setTime(12, 0))['gap'], 'Report: flagged once the day is over');
 			// Week: the gap on a Wednesday of the last full week flags that day only.
 			$thisMonday = $today->modify('-' . ((int)$today->format('N') - 1) . ' days');
 			$wednesday = $thisMonday->modify('-5 days');

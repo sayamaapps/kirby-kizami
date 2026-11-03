@@ -116,7 +116,10 @@ class Gaps
 	}
 
 	/**
-	 * The gaps that touch the half-open interval [$start, $end).
+	 * The gaps that touch the half-open interval [$start, $end). Every caller
+	 * (days, the dashboard's range, the report's periods) goes through here.
+	 * An empty gap touches nothing: an open gap ends now, so one that starts
+	 * later (or exactly now) has not begun yet.
 	 *
 	 * @return list<array{from:string,to:?string,reason:string}>
 	 */
@@ -125,7 +128,7 @@ class Gaps
 		$hits = [];
 		foreach ($gaps as $gap) {
 			[$from, $to] = self::span($gap, $now);
-			if ($from < $end && $to > $start) {
+			if ($from < $to && $from < $end && $to > $start) {
 				$hits[] = $gap;
 			}
 		}
@@ -169,7 +172,8 @@ class Gaps
 	}
 
 	/**
-	 * Start (inclusive) and end (exclusive) of a gap. An open gap ends now.
+	 * Start (inclusive) and end (exclusive) of a gap. An open gap ends now, so
+	 * the end lies before the start while the gap has not begun.
 	 *
 	 * @return array{0:DateTimeImmutable,1:DateTimeImmutable}
 	 */
