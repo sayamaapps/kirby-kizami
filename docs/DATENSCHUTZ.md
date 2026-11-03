@@ -78,9 +78,12 @@ Sendet der Browser Do Not Track oder Global Privacy Control mit dem Wert 1,
 entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 
 Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `sayamaapps.kizami.retentionMonths`) aus der aktiven
-Datenbank entfernt; die gelöschten Inhalte werden spätestens bei der
-nächsten erfassten Aufruf eines Tages oder beim Wartungsjob nicht mehr in der
-Datenbankdatei enthalten, und neue Snapshots werden ohne solche Reste neu aufgebaut.
+Datenbank entfernt. Die Zeilen werden beim ersten erfassten Aufruf eines Tages
+und im Wartungsjob entfernt. Reste gelöschter Inhalte in freien Seiten der
+Datenbankdatei, auch aus früheren Versionen, werden erst entfernt, wenn der
+Wartungsjob (`maintenance.php compact`) die Datei neu aufbaut; er muss dafür
+regelmäßig laufen, ein erfasster Aufruf baut die Datei nicht neu auf. Neue
+Snapshots werden stets ohne solche Reste neu aufgebaut.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe
@@ -90,7 +93,7 @@ Geräteklassen, Fehlseiten, Bildöffnungen, Aktionen und ihre Zusatzangaben, Lin
 werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nach
 derselben Frist ohne Zusammenfassung gelöscht.
 
-Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages und optional über einen separat eingerichteten Wartungsjob (`maintenance.php`). Das Öffnen von Dashboard und Report bereinigt nicht.
+Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages und über einen separat eingerichteten Wartungsjob (`maintenance.php`). Der Aufruf fasst nur zusammen und löscht die Zeilen; die Datenbankdatei baut allein der Wartungsjob neu auf. Das Öffnen von Dashboard und Report bereinigt nicht.
 Ohne solche Aufrufe kann sich die Bereinigung verzögern. Sicherungen brauchen
 eine eigene, begrenzte Aufbewahrungsfrist und dürfen die täglichen Schlüssel
 nicht archivieren.
@@ -100,9 +103,12 @@ nicht archivieren.
 - Die Aufbewahrung von 13 Monaten (Standard von `sayamaapps.kizami.retentionMonths`) ist ein technischer Standard, keine rechtliche
   Begründung; die notwendige Dauer muss der Betreiber festlegen.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
-  kann zusätzlich täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
+  sollte täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
   Wartungsfehler. Ist `sayamaapps.kizami.retentionMonths` gesetzt, muss derselbe Wert als
-  `--retention-months=N` angegeben werden, sonst gelten 13 Monate. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen.
+  `--retention-months=N` angegeben werden, sonst gelten 13 Monate. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen,
+  wohl aber zum Entfernen von Resten gelöschter Inhalte aus der Datenbankdatei (freie
+  Seiten, auch aus früheren Versionen): das tut nur dieser Job. Läuft er nicht, den
+  Absatz zur Aufbewahrung im Datenschutztext entsprechend anpassen.
   Der Job löscht außerdem einen veralteten Tagesschlüssel (er erzeugt keinen,
   damit keine Datei mit dem Cron-Benutzer als Eigentümer entsteht) und meldet
   `stale daily key removed` bzw. `daily key current`; er ist dann nötig, wenn

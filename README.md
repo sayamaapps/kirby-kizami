@@ -192,7 +192,7 @@ php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami
 php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite
 ```
 
-Run `compact` daily if the site may go days without visits; it also removes the previous day's salt key. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
+Run `compact` daily. A counted visit only rolls up old events and deletes their rows; `compact` also rebuilds the database file, which removes leftover bytes of deleted events from free pages (also from older versions). It also removes the previous day's salt key, which matters if the site may go days without visits. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
 
 Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](CHANGELOG.md).
 

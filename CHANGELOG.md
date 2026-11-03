@@ -27,6 +27,18 @@ All notable changes to this project are documented here. Versions follow
   no day or range, in the dashboard and in the report alike. Closed gaps and
   open gaps that have begun are unchanged. No schema change, counting
   unchanged.
+- **The retention text no longer promises that deleted contents leave the
+  database file at the first counted visit of a day** **[privacy text]**: the
+  counted visit (`Store::compactDaily()`) only rolls up old days and deletes
+  the rows; it never rebuilds the file, because `VACUUM` rewrites the whole
+  file and stays out of the visitor's request. Leftover bytes in free pages of
+  the file, including those left by older versions, are removed only by
+  `maintenance.php compact`. `PRIVACY.md` and `docs/DATENSCHUTZ.md` now say
+  that: the rows go at the first counted visit of a day and in the maintenance
+  job, the file is rebuilt only by the job, and new snapshots are always
+  rebuilt without leftovers. `DATENSCHUTZ.md` (Betrieb) and the README
+  recommend the daily `compact` job for that purpose; a site without it should
+  set it up or adjust its retention paragraph. The code is unchanged.
 
 ## [2.1.0] — 2026-11-01
 
