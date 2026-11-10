@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 final class PackageTest extends TestCase
 {
 	/** @var list<string>|null */
-	private static ?array $archive = null;
+	private static array|null $archive = null;
 
 	/** @return list<string> paths in the archive, folders without the trailing slash */
 	private function archive(): array
