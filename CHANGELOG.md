@@ -13,6 +13,17 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## Unreleased
+
+### Fixed
+
+- **The German privacy text is part of the installed package again.** `docs/`
+  was export-ignored, so Composer and ZIP installs lacked
+  `docs/DATENSCHUTZ.md`, which `README.md` and `PRIVACY.md` link to. The README
+  links to the changelog on GitHub (the changelog is not shipped) and to
+  `LICENSE.md`. A test builds `git archive HEAD` and checks that every relative
+  Markdown link resolves inside it. The privacy text itself is unchanged.
+
 ## [2.1.3] — 2026-11-03
 
 ### Fixed

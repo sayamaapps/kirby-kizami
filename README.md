@@ -1,6 +1,6 @@
 # Kizami
 
-**Versions:** Kirby 5 · PHP 8.2 to 8.5 · MIT · [Changes](CHANGELOG.md)
+**Versions:** Kirby 5 · PHP 8.2 to 8.5 · MIT · [Changes](https://github.com/sayamaapps/kirby-kizami/blob/main/CHANGELOG.md)
 
 Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com).
 
@@ -194,7 +194,7 @@ php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/ne
 
 Run `compact` daily. A counted visit only rolls up old events and deletes their rows; `compact` also rebuilds the database file, which removes leftover bytes of deleted events from free pages (also from older versions). It also removes the previous day's salt key, which matters if the site may go days without visits. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
 
-Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](CHANGELOG.md).
+Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](https://github.com/sayamaapps/kirby-kizami/blob/main/CHANGELOG.md).
 
 ## Repository layout
 
@@ -202,8 +202,8 @@ The layout follows the Kirby plugin structure with these exceptions:
 
 - `views/` holds the dashboard template, its stylesheet and the action script. Routes and snippets load these files from this path, so they stay at the root.
 - `maintenance.php` stays at the root. Site cron jobs call that path.
-- `docs/` holds the German privacy text. It is excluded from the archive.
+- `docs/` holds the German privacy text. It is part of the archive.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE.md).
