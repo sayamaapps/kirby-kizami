@@ -211,6 +211,34 @@ final class CoreTest extends TestCase
 		Assert::assertSame(true, Capture::isBot('Mozilla/5.0 (compatible; Googlebot/2.1)'), 'Known bot UA counts as a bot');
 		Assert::assertSame(true, Capture::isBot(''), 'Empty UA counts as a bot — no real browser omits it');
 		Assert::assertSame(false, Capture::isBot('Mozilla/5.0 (Macintosh) Firefox/130.0'), 'Normal browser is not a bot');
+		// Retired browsers: user agents a form-spam bot sent in November 2026.
+		foreach ([
+			'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0; Acoo Browser; SLCC1; .NET CLR 2.0.50727)',
+			'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.1; Trident/6.0)',
+			'Mozilla/5.0 (Windows NT 10.0; Trident/7.0; rv:11.0) like Gecko',
+			'Mozilla/5.0 (Macintosh; U; PPC Mac OS X; pl-PL; rv:1.0.1) Gecko/20021111 Chimera/0.6',
+			'Mozilla/5.0 (X11; U; Linux; en-US) AppleWebKit/527+ (KHTML, like Gecko, Safari/419.3) Arora/0.6',
+			'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.9.0.1) Gecko/2008070208 Firefox/3.0.1',
+			'Mozilla/5.0 (X11; Linux i686; rv:55.0.3) Gecko/20100101 Firefox/55.0.3',
+			'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.80 Safari/537.36',
+			'Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1',
+		] as $old) {
+			Assert::assertSame(true, Capture::isOutdated($old), 'Retired browser counts as outdated: ' . $old);
+		}
+		foreach ([
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36',
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 Edg/152.0.0.0',
+			'Mozilla/5.0 (X11; Linux x86_64; rv:159.0) Gecko/20100101 Firefox/159.0',
+			'Mozilla/5.0 (Android 15; Mobile; rv:159.0) Gecko/159.0 Firefox/159.0',
+			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
+			'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1 Safari/605.1.15',
+			'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/28.0 Chrome/130.0.0.0 Mobile Safari/537.36',
+			'Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/140.0.0.0 Mobile Safari/537.36',
+			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/22B83 [FBAN/FBIOS;FBAV/490.0]',
+			'Mozilla/5.0 (Linux; U; Android 10; en-US; CPH2015) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/123.0.6312.80 UCBrowser/13.5.8.1311 Mobile Safari/537.36',
+		] as $current) {
+			Assert::assertSame(false, Capture::isOutdated($current), 'Current browser is not outdated: ' . $current);
+		}
 		Assert::assertSame(true, Capture::optedOut(['HTTP_DNT' => '1']), 'DNT: 1 suppresses capture');
 		Assert::assertSame(true, Capture::optedOut(['HTTP_SEC_GPC' => '1']), 'Sec-GPC: 1 suppresses capture');
 		Assert::assertSame(false, Capture::optedOut(['HTTP_USER_AGENT' => 'Firefox']), 'Without DNT/GPC the request counts');

@@ -125,6 +125,7 @@ The defaults are not written into the plugin's option block (`config/options.php
 | `sourceNames` | array | `[]` | `['newsletter' => 'Newsletter']` | Display names for referrer hosts and `utm_source` values. |
 | `pageNames` | array | `[]` | `['/' => 'Home']` | Display names for paths (default: page title). |
 | `contactTargets` | array | `[]` | `['contact']` | Redirects that count as contacts for the contact rate. |
+| `countOutdatedBrowsers` | bool | `false` | `true` | Count visits from retired browsers (Internet Explorer, Chrome or Firefox before 90, Safari before 12, user agents with the old `U` token or a dated Gecko build). By default they count as bots: form-spam bots fake such user agents. |
 | `dashboardRoles` | array | `['kizami-dashboard']` | `['kizami-dashboard', 'editor']` | Roles of Kirby accounts that may open the dashboard with Basic Auth. Logged-in Panel users need no role. |
 | `tiles` | array | first two redirects | `['contact', 'download']` | Redirects shown as dashboard tiles. |
 | `tileNames` | array | `[]` | `['contact' => 'Contacts']` | Tile headings, `name => label`. |
