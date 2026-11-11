@@ -372,7 +372,7 @@ class Runtime
 				return;
 			}
 			$ua = $server['HTTP_USER_AGENT'] ?? '';
-			if (Capture::isBot($ua)) {
+			if (Capture::isBot($ua) || (self::option($kirby, 'countOutdatedBrowsers', false) !== true && Capture::isOutdated($ua))) {
 				Secret::expire($directory, $now->format('Y-m-d'));
 				return;
 			}

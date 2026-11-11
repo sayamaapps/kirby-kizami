@@ -194,6 +194,38 @@ class Capture
 	}
 
 	/**
+	 * A browser nobody uses any more (since 3.0.0): bots that fake a browser
+	 * pick user agents from old lists, so a retired browser in the user agent
+	 * is a reliable bot signal. Counted as a bot unless the site sets
+	 * `countOutdatedBrowsers`.
+	 *
+	 *  - Internet Explorer (`MSIE`, `Trident/`), retired in 2022;
+	 *  - the security token `U` (`; U;`), dropped around 2011, except in UC Browser,
+	 *    which still sends it;
+	 *  - a dated Gecko build (`Gecko/20021111`): Firefox has sent the fixed
+	 *    `Gecko/20100101` since version 4;
+	 *  - Chrome or Firefox before 90 (2021), Safari before 12 (2018).
+	 */
+	public static function isOutdated(string $ua): bool
+	{
+		if (preg_match('~\bMSIE \d|Trident/~', $ua) === 1) {
+			return true;
+		}
+		if (preg_match('~;\s*U\s*[;)]~', $ua) === 1 && stripos($ua, 'UCBrowser') === false) {
+			return true;
+		}
+		if (preg_match('~\bGecko/20(?!100101)\d{6}\b~', $ua) === 1) {
+			return true;
+		}
+		foreach (['Chrome' => 90, 'Firefox' => 90] as $name => $minimum) {
+			if (preg_match('~\b' . $name . '/(\d+)~', $ua, $m) === 1 && (int)$m[1] < $minimum) {
+				return true;
+			}
+		}
+		return preg_match('~\bVersion/(\d+)[.\d]* (?:Mobile/\S+ )?Safari/~', $ua, $m) === 1 && (int)$m[1] < 12;
+	}
+
+	/**
 	 * The 1.x signature: takes the server array instead of the flag. Kept for
 	 * callers of the class alias Kizami\Capture; the redirect route uses
 	 * countsLinkClick().

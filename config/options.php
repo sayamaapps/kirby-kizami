@@ -9,6 +9,7 @@ return [
 	'campaignParam' => null,
 	'color' => null,
 	'contactTargets' => null,
+	'countOutdatedBrowsers' => null,
 	'dashboardRoles' => null,
 	'dwellTime' => null,
 	'events' => null,

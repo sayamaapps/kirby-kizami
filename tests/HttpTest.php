@@ -416,7 +416,7 @@ final class HttpTest extends TestCase
 			$today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
 			$stale = "2010-01-01\nSTALE-SECRET-VALUE";
 			$rowsBeforeFiltered = self::rowCount();
-			foreach (['DNT' => 'DNT: 1', 'GPC' => 'Sec-GPC: 1', 'bot' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)'] as $what => $header) {
+			foreach (['DNT' => 'DNT: 1', 'GPC' => 'Sec-GPC: 1', 'bot' => 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)', 'outdated browser' => 'User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)'] as $what => $header) {
 				file_put_contents($keyFile, $stale);
 				self::requestHttp('/', [$header]);
 				Assert::assertTrue(!file_exists($keyFile), "A filtered visit ($what) removes a stale daily key");

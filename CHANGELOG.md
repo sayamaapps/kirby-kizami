@@ -13,6 +13,26 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [3.0.0] — 2026-11-11
+
+### Changed — counting definition (2026-11-11)
+
+- **Retired browsers count as bots.** A request whose user agent names a
+  browser nobody uses any more is not counted: Internet Explorer (`MSIE`,
+  `Trident/`), the old security token `U` (`; U;`, except UC Browser), a dated
+  Gecko build (`Gecko/20021111`; Firefox sends `Gecko/20100101`), Chrome or
+  Firefox before 90, Safari before 12 (`Capture::isOutdated()`). Like a bot, it
+  is neither stored nor added to the discarded counter. Reason: a form-spam bot
+  loaded a contact page with a newsletter form several hundred times a day with
+  user agents from an old list (Internet Explorer 4 to 8, Gecko builds from
+  2002 to 2008), and each attempt counted as a visit with two page views. In
+  that site's access log the rule removed 713 of 799 contact-page views of one
+  day and 103 of 862 other page views; no current browser was affected.
+  Expect lower visit and page-view numbers from the switch-over day on.
+  Earlier data is not filtered retroactively.
+- New option `countOutdatedBrowsers` (default `false`) restores the old
+  behaviour.
+
 ## [2.1.4] — 2026-11-10
 
 ### Fixed
