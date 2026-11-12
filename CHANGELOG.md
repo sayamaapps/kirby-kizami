@@ -34,20 +34,26 @@ All notable changes to this project are documented here. Versions follow
   seconds.
 - **Spool file instead of lost hits.** The rebuild holds the write lock of the
   database while it runs. While the database is locked, for example during a
-  rebuild, a hit (page view, click, action) waits at most 5 seconds, as
-  before. If it is still locked then, the hit goes to a spool file next to the
-  database (`storage/kizami/spool.jsonl`, the same fields as in the database,
-  nothing more) and is written at the next successful write or at the end of
-  the rebuild; a click that needs a page view of the same visit is decided
-  then. Only if the spool file cannot be written either is the hit lost; the
-  error log then contains `database is locked`. The spool file sits outside
-  the web root like the database and is readable by its owner only; it is
-  emptied when it is read, and lines older than the retention period are
-  dropped then. Snapshots do not contain it; leave it out of file backups like
-  `secret.txt`, and delete it together with the database when counting is
-  switched off for good. (`Spool`, `Store::readSpool()`, `LinkFilter`; the
-  database's write lock is taken before the file's `flock()`, so two readers
-  never count a line twice.)
+  rebuild, a hit (page view, click, action) waits up to 5 seconds for each
+  lock, as before; in rare cases, when a lock is released and taken again
+  while the hit is being written, these waits add up. If the database is still
+  locked then, the hit goes to a spool file next to the database
+  (`storage/kizami/spool.jsonl`, the same fields as in the database, nothing
+  more) and is written at the next successful writes and at the end of the
+  rebuild, at most 1,000 lines each time; a click that needs a page view of
+  the same visit is decided then. The spool file holds at most 5 MB; while it
+  is full, further hits are lost, and the error log says so when it fills up
+  and then at most once a day. If the spool file cannot be written, the hit is
+  lost as well; the error log then contains `database is locked`. The spool
+  file sits outside the web root like the database and is readable by its
+  owner only; it is emptied once it has been read to its end, and lines older
+  than the retention period are dropped when it is read. How far it has been
+  read is recorded in the database, so no hit is counted twice. Snapshots do
+  not contain it; leave it out of file backups like `secret.txt`, and delete
+  it together with the database when counting is switched off for good.
+  (`Spool`, `Store::readSpool()`, `LinkFilter`, new table `kizami_spool` with
+  the batch name and the position read, written in the same transaction as the
+  lines; the database's write lock is taken before the file's `flock()`.)
 - A rebuild needs free disk space of up to twice the file size for a moment: a
   copy in the temporary directory (often another partition) plus the journal
   or WAL next to the file.

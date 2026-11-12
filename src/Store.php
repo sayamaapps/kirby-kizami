@@ -102,6 +102,13 @@ class Store
 	/** Upper bound of `sayamaapps.kizami.retentionMonths`: 50 years. Daily totals are kept forever anyway. */
 	public const RETENTION_MONTHS_MAX = 600;
 
+	/**
+	 * How far the spool file has been read (since 3.1.0, see Spool): its batch
+	 * name and the byte position after the last line read, recorded in the
+	 * same transaction as the lines. Created when the spool is first read.
+	 */
+	private const SPOOL_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_spool (id INTEGER PRIMARY KEY CHECK (id=1), batch TEXT NOT NULL, read_to INTEGER NOT NULL)';
+
 	/** Closed by PHP when the last Store or view that holds it is destroyed, so SQLite can checkpoint and remove -wal/-shm. */
 	private SQLite3 $db;
 
@@ -1080,12 +1087,14 @@ class Store
 	}
 
 	/**
-	 * Writes the hits waiting in the spool file (Spool) into the database
-	 * and empties the file; returns the number of lines read. The database's
+	 * Writes up to Spool::READ_LINES hits waiting in the spool file (Spool)
+	 * into the database; returns the number of lines read. The database's
 	 * write lock comes first, then the file's flock(): appending never waits
-	 * for the database, and a second reader finds the file already empty, so
-	 * nothing is counted twice. All lines go in one transaction; the file is
-	 * emptied only after the COMMIT. A click that needs a page view of the
+	 * for the database. The lines and how far the file has been read (batch
+	 * name and position, kizami_spool) go in one transaction, so a second
+	 * reader, or a reader after a process that died before emptying the file,
+	 * starts after them and nothing is counted twice. The file is emptied
+	 * after the COMMIT once it has been read to its end. A click that needs a page view of the
 	 * same day identifier (check 'pageview', see LinkFilter) is decided now,
 	 * against the page views in the database, spooled ones written before it
 	 * included; without one it adds to the discarded counter. Unreadable
@@ -1113,7 +1122,17 @@ class Store
 			if ($handle === false || !flock($handle, LOCK_EX)) {
 				throw new RuntimeException('Kizami: spool file cannot be opened');
 			}
-			foreach (explode("\n", (string)stream_get_contents($handle)) as $line) {
+			$this->exec(self::SPOOL_TABLE);
+			$batch = Spool::batch($handle);
+			$mark = $this->db->querySingle('SELECT batch, read_to FROM kizami_spool WHERE id=1', true);
+			if (is_array($mark) && ($mark['batch'] ?? null) === $batch) {
+				fseek($handle, max((int)ftell($handle), (int)$mark['read_to']));
+			}
+			for ($lines = 0; $lines < Spool::READ_LINES && ($line = Spool::line($handle)) !== null; $lines++) {
+				if ($line === false) {
+					$skipped++;
+					continue;
+				}
 				if (trim($line) === '') {
 					continue;
 				}
@@ -1134,8 +1153,18 @@ class Store
 				}
 				$this->insert($row);
 			}
+			$position = (int)ftell($handle);
+			$stmt = $this->db->prepare('INSERT OR REPLACE INTO kizami_spool (id, batch, read_to) VALUES (1, :batch, :read_to)');
+			$stmt->bindValue(':batch', $batch, SQLITE3_TEXT);
+			$stmt->bindValue(':read_to', $position, SQLITE3_INTEGER);
+			$stmt->execute()->finalize();
 			$this->exec('COMMIT');
-			ftruncate($handle, 0);
+			// Read to its end: empty it. If that fails, the position recorded
+			// above keeps the lines from being read again.
+			$stat = fstat($handle);
+			if ($stat !== false && $position >= $stat['size'] && !ftruncate($handle, 0)) {
+				error_log('Kizami: spool file read but not emptied');
+			}
 		} catch (\Throwable $e) {
 			try {
 				$this->db->exec('ROLLBACK');

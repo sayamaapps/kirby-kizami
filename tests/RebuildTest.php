@@ -199,6 +199,16 @@ final class RebuildTest extends TestCase
 		mkdir($this->root, 0700);
 	}
 
+	/** Hits in the spool file (lines with a row; not the batch name, not broken lines). */
+	private static function spooled(string $file): int
+	{
+		$hits = 0;
+		foreach (file(Spool::path($file), FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+			$hits += is_array(json_decode($line, true)['row'] ?? null) ? 1 : 0;
+		}
+		return $hits;
+	}
+
 	protected function tearDown(): void
 	{
 		$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($this->root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
@@ -206,6 +216,45 @@ final class RebuildTest extends TestCase
 			$file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
 		}
 		rmdir($this->root);
+	}
+
+	/**
+	 * A spool far beyond its limit (written by something else, or by an older
+	 * build) under a tight memory_limit: the page comes, the hit is counted,
+	 * one block of lines is read, an overlong line is skipped without being
+	 * held in memory, and the rest waits for the next request.
+	 */
+	public function testBigSpoolKeepsThePage(): void
+	{
+		[$root, $file] = $this->kirbyRoot('spool-big');
+		$at = gmdate('Y-m-d H:i:s');
+		$handle = fopen(Spool::path($file), 'w');
+		// A line longer than the memory_limit below, in the first block.
+		fwrite($handle, '{"spool":"0123456789abcdef"}' . "\n");
+		for ($i = 0; $i < 40; $i++) {
+			fwrite($handle, str_repeat('x', 1_000_000));
+		}
+		fwrite($handle, "\n");
+		$line = json_encode(['row' => ['type' => 'page', 'action' => 'view', 'path' => '/big', 'session' => 's', 'created_at' => $at]]) . "\n";
+		$chunk = str_repeat($line, (int)(1_000_000 / strlen($line)));
+		for ($i = 0; $i < 60; $i++) {
+			fwrite($handle, $chunk);
+		}
+		fclose($handle);
+		$size = self::bytes(Spool::path($file));
+		Assert::assertGreaterThan(99_000_000, $size, 'counter-check: a spool of almost 100 MB, one line of 40 MB');
+		$process = proc_open([PHP_BINARY, '-d', 'memory_limit=32M', dirname(__DIR__) . '/tests/helpers/count-request.php', json_encode(['root' => $root, 'log' => "$root/php-errors.log", 'finished' => "$root/finished", 'path' => '/visitor'])], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+		$start = microtime(true);
+		$out = (string)stream_get_contents($pipes[1]) . (string)stream_get_contents($pipes[2]);
+		proc_close($process);
+		$took = microtime(true) - $start;
+		$logged = (string)@file_get_contents("$root/php-errors.log");
+		Assert::assertSame("PAGE\n", $out, 'the whole page under memory_limit=32M; log: ' . $logged);
+		Assert::assertSame(['/visitor'], self::column($file, "SELECT path FROM kizami_events WHERE path = '/visitor'"), 'the hit is counted');
+		Assert::assertSame(Spool::READ_LINES - 1, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE path = '/big'"), 'one block read: the overlong line and 999 hits');
+		Assert::assertStringContainsString('Kizami: 1 unreadable spool line(s) skipped', $logged, 'the overlong line is skipped and logged');
+		Assert::assertSame($size, self::bytes(Spool::path($file)), 'the rest waits for the next request');
+		Assert::assertLessThan(5.0, $took, 'the visitor does not wait for the whole file');
 	}
 
 	/**
@@ -272,12 +321,12 @@ final class RebuildTest extends TestCase
 	 */
 	public function testDocsSayTheSame(): void
 	{
-		Assert::assertSame([48, 5000, 'spool.jsonl'], [Rebuild::OVERDUE_HOURS, Store::BUSY_TIMEOUT_MS, Spool::FILE], 'the numbers and the name the texts use');
+		Assert::assertSame([48, 5000, 'spool.jsonl', 5_000_000, 1000], [Rebuild::OVERDUE_HOURS, Store::BUSY_TIMEOUT_MS, Spool::FILE, Spool::MAX_BYTES, Spool::READ_LINES], 'the numbers and the name the texts use');
 		$read = fn (string $file): string => preg_replace('/\s+/u', ' ', (string)file_get_contents(dirname(__DIR__) . '/' . $file));
 		$english = [
 			'promise' => 'Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed when the file is rebuilt: as a rule daily, after a page has been delivered, at the latest at the first counted visit once the last successful rebuild is more than two days old, provided the rebuild succeeds; if it keeps failing, the dashboard shows a warning.',
-			'spool' => 'While the database is locked, for example during a rebuild, a hit (page view, click, action) waits at most 5 seconds, as before. If it is still locked then, the hit goes to a spool file next to the database (`storage/kizami/spool.jsonl`, the same fields as in the database, nothing more) and is written at the next successful write or at the end of the rebuild; a click that needs a page view of the same visit is decided then. Only if the spool file cannot be written either is the hit lost; the error log then contains `database is locked`.',
-			'protection' => 'The spool file sits outside the web root like the database and is readable by its owner only; it is emptied when it is read, and lines older than the retention period are dropped then. Snapshots do not contain it; leave it out of file backups like `secret.txt`, and delete it together with the database when counting is switched off for good.',
+			'spool' => 'While the database is locked, for example during a rebuild, a hit (page view, click, action) waits up to 5 seconds for each lock, as before; in rare cases, when a lock is released and taken again while the hit is being written, these waits add up. If the database is still locked then, the hit goes to a spool file next to the database (`storage/kizami/spool.jsonl`, the same fields as in the database, nothing more) and is written at the next successful writes and at the end of the rebuild, at most 1,000 lines each time; a click that needs a page view of the same visit is decided then. The spool file holds at most 5 MB; while it is full, further hits are lost, and the error log says so when it fills up and then at most once a day. If the spool file cannot be written, the hit is lost as well; the error log then contains `database is locked`.',
+			'protection' => 'The spool file sits outside the web root like the database and is readable by its owner only; it is emptied once it has been read to its end, and lines older than the retention period are dropped when it is read. How far it has been read is recorded in the database, so no hit is counted twice. Snapshots do not contain it; leave it out of file backups like `secret.txt`, and delete it together with the database when counting is switched off for good.',
 		];
 		foreach (['README.md', 'PRIVACY.md', 'CHANGELOG.md'] as $file) {
 			foreach ($english as $what => $sentence) {
@@ -286,8 +335,8 @@ final class RebuildTest extends TestCase
 		}
 		foreach ([
 			'promise' => 'Reste gelöschter Inhalte in freien Seiten der Datenbankdatei, auch aus früheren Versionen, werden entfernt, wenn die Datei neu aufgebaut wird: in der Regel täglich, nachdem eine Seite ausgeliefert ist, spätestens beim ersten erfassten Aufruf, nachdem der letzte gelungene Neuaufbau mehr als zwei Tage zurückliegt, sofern der Neuaufbau gelingt; scheitert er wiederholt, zeigt das Dashboard eine Warnung.',
-			'spool' => 'Solange die Datenbank gesperrt ist, etwa während eines Neuaufbaus, wartet ein Aufruf (Seitenaufruf, Klick, Aktion) wie bisher höchstens 5 Sekunden. Ist sie dann noch gesperrt, kommt der Aufruf in eine Zwischendatei neben der Datenbank (`storage/kizami/spool.jsonl`, dieselben Angaben wie in der Datenbank, nichts weiter) und wird beim nächsten gelungenen Schreiben oder am Ende des Neuaufbaus gespeichert; ein Klick, der einen Seitenaufruf desselben Besuchs braucht, wird erst dann entschieden. Nur wenn auch die Zwischendatei nicht geschrieben werden kann, geht der Aufruf verloren; das Error-Log enthält dann `database is locked`.',
-			'protection' => 'Die Zwischendatei liegt wie die Datenbank außerhalb des Web-Verzeichnisses und ist nur für ihren Eigentümer lesbar; sie wird beim Einlesen geleert, Zeilen älter als die Aufbewahrungsfrist werden dabei verworfen. Snapshots enthalten sie nicht; aus Dateisicherungen wie `secret.txt` ausschließen und zusammen mit der Datenbank löschen, wenn die Erfassung dauerhaft abgeschaltet wird.',
+			'spool' => 'Solange die Datenbank gesperrt ist, etwa während eines Neuaufbaus, wartet ein Aufruf (Seitenaufruf, Klick, Aktion) wie bisher bis zu 5 Sekunden je Sperre; in seltenen Fällen, wenn eine Sperre frei und wieder genommen wird, während der Aufruf geschrieben wird, addieren sich diese Wartezeiten. Ist die Datenbank dann noch gesperrt, kommt der Aufruf in eine Zwischendatei neben der Datenbank (`storage/kizami/spool.jsonl`, dieselben Angaben wie in der Datenbank, nichts weiter) und wird bei den nächsten gelungenen Schreibvorgängen und am Ende des Neuaufbaus gespeichert, jeweils höchstens 1.000 Zeilen; ein Klick, der einen Seitenaufruf desselben Besuchs braucht, wird erst dann entschieden. Die Zwischendatei fasst höchstens 5 MB; solange sie voll ist, gehen weitere Aufrufe verloren, und das Error-Log meldet das, wenn sie voll wird, und danach höchstens einmal am Tag. Kann die Zwischendatei nicht geschrieben werden, geht der Aufruf ebenfalls verloren; das Error-Log enthält dann `database is locked`.',
+			'protection' => 'Die Zwischendatei liegt wie die Datenbank außerhalb des Web-Verzeichnisses und ist nur für ihren Eigentümer lesbar; sie wird geleert, sobald sie bis zum Ende eingelesen ist, Zeilen älter als die Aufbewahrungsfrist werden beim Einlesen verworfen. Wie weit sie eingelesen ist, steht in der Datenbank, so wird kein Aufruf doppelt gezählt. Snapshots enthalten sie nicht; aus Dateisicherungen wie `secret.txt` ausschließen und zusammen mit der Datenbank löschen, wenn die Erfassung dauerhaft abgeschaltet wird.',
 		] as $what => $sentence) {
 			Assert::assertStringContainsString($sentence, $read('docs/DATENSCHUTZ.md'), "DATENSCHUTZ.md: $what");
 		}
@@ -295,7 +344,7 @@ final class RebuildTest extends TestCase
 			Assert::assertStringContainsString($space, $read($file), "$file: disk space");
 		}
 		foreach (['README.md', 'PRIVACY.md', 'CHANGELOG.md', 'docs/DATENSCHUTZ.md'] as $file) {
-			Assert::assertDoesNotMatchRegularExpression('/space the size of the file|Speicherplatz in der Größe der Datei|keep their count|fehlt ihr Zähler|60 seconds|60 Sekunden|WRITE_WAIT|written after the response|nach der Antwort geschrieben|error log: `Kizami: database is locked`/u', $read($file), "$file: nothing of the earlier drafts");
+			Assert::assertDoesNotMatchRegularExpression('/space the size of the file|Speicherplatz in der Größe der Datei|keep their count|fehlt ihr Zähler|60 seconds|60 Sekunden|WRITE_WAIT|written after the response|nach der Antwort geschrieben|error log: `Kizami: database is locked`|waits at most 5 seconds|wie bisher höchstens 5 Sekunden|cannot be written either|Nur wenn auch die Zwischendatei|emptied when it is read|beim Einlesen geleert|bis zum nächsten Speichern/u', $read($file), "$file: nothing of the earlier drafts");
 		}
 	}
 
@@ -393,6 +442,54 @@ final class RebuildTest extends TestCase
 	}
 
 	/**
+	 * The spool holds at most Spool::MAX_BYTES. The hit that fills it is
+	 * kept and logs that the file is full; later hits are dropped without
+	 * growing the file, and the log says so at most once a day.
+	 */
+	public function testFullSpoolDropsAndLogsOnceADay(): void
+	{
+		$file = $this->kirbyRoot('spool-full')[1];
+		$log = "$this->root/spool-full.log";
+		ini_set('error_log', $log);
+		$row = ['type' => 'page', 'action' => 'view', 'path' => '/full', 'session' => 's', 'created_at' => gmdate('Y-m-d H:i:s')];
+		file_put_contents(Spool::path($file), '{"spool":"0123456789abcdef"}' . "\n" . str_repeat("{}\n", (int)((5_000_000 - 100) / 3)));
+		$full = fn (): int => substr_count((string)@file_get_contents($log), 'Kizami: spool file full (5000000 bytes), hits are dropped until it has been read');
+
+		Assert::assertTrue(Spool::add($file, $row), 'the last hit that fits');
+		Assert::assertGreaterThanOrEqual(5_000_000, $size = self::bytes(Spool::path($file)), 'the file is full now');
+		Assert::assertSame(1, $full(), 'and the log says so');
+		Assert::assertTrue(Spool::add($file, $row), 'a hit on a full file: dropped, not an error');
+		Assert::assertTrue(Spool::add($file, $row), 'and another');
+		Assert::assertSame($size, self::bytes(Spool::path($file)), 'the file does not grow');
+		Assert::assertSame(1, $full(), 'no log line per dropped hit');
+
+		touch(Spool::path($file), time() - 86400 - 60);
+		Assert::assertTrue(Spool::add($file, $row), 'a day later');
+		Assert::assertTrue(Spool::add($file, $row), 'and again');
+		Assert::assertSame($size, self::bytes(Spool::path($file)), 'still not growing');
+		Assert::assertSame(2, $full(), 'one more log line for the new day');
+		Assert::assertSame(5_000_000, Spool::MAX_BYTES, 'the limit the texts name');
+	}
+
+	/**
+	 * An append that broke off left half a line without a newline: the next
+	 * hit starts on a line of its own and is counted; the broken one is
+	 * skipped.
+	 */
+	public function testHalfLineKeepsTheNextHit(): void
+	{
+		$file = $this->kirbyRoot('spool-half')[1];
+		ini_set('error_log', "$this->root/spool-half.log");
+		$at = gmdate('Y-m-d H:i:s');
+		Assert::assertTrue(Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => '/before', 'session' => 's', 'created_at' => $at]), 'a whole line');
+		file_put_contents(Spool::path($file), '{"row":{"type":"page","action":"vi', FILE_APPEND);
+		Assert::assertTrue(Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => '/after', 'session' => 's', 'created_at' => $at]), 'the next hit');
+		(new Store($file, 'wal'))->readSpool();
+		Assert::assertSame(['/after', '/before'], self::column($file, "SELECT path FROM kizami_events WHERE path IN ('/before', '/after') ORDER BY path"), 'the hit after the broken line is counted');
+		Assert::assertStringContainsString('Kizami: 1 unreadable spool line(s) skipped', (string)@file_get_contents("$this->root/spool-half.log"), 'the broken line is skipped');
+	}
+
+	/**
 	 * The database stays locked for 20 s (a long rebuild), in WAL and in
 	 * rollback-journal mode, where the lock also stops readers and the
 	 * opening of the database. Every hit waits at most 5 s and goes to the
@@ -435,7 +532,7 @@ final class RebuildTest extends TestCase
 				Assert::assertLessThan(6.0, $took, "$journal #$i: waited at most the busy timeout of 5 s (plus start-up)");
 				Assert::assertSame('', $log, "$journal #$i: nothing logged, nothing lost");
 			}
-			Assert::assertCount(4, file(Spool::path($file), FILE_IGNORE_NEW_LINES), "$journal: four hits in the spool");
+			Assert::assertSame(4, self::spooled($file), "$journal: four hits in the spool");
 			Assert::assertSame('0600', substr(sprintf('%o', fileperms(Spool::path($file))), -4), "$journal: the spool is readable by its owner only");
 			while (microtime(true) - $locked < 20) {
 				usleep(100000);
@@ -561,7 +658,7 @@ final class RebuildTest extends TestCase
 			Assert::assertTrue($response['ended'], 'page view: the response ended; ' . $diagnosis($response, "$kirby/php-errors.log"));
 			Assert::assertStringEndsWith("\r\n\r\nPAGE\n", $response['stdout'], 'page view: the whole page');
 			Assert::assertLessThan(6.0, $took, 'page view: the visitor waited at most the busy timeout of 5 s');
-			Assert::assertCount(1, file(Spool::path($file), FILE_IGNORE_NEW_LINES), 'page view: in the spool');
+			Assert::assertSame(1, self::spooled($file), 'page view: in the spool');
 			$release();
 			self::fastCgi($socket, ['SCRIPT_FILENAME' => dirname(__DIR__) . '/tests/helpers/count-request.php', 'REQUEST_METHOD' => 'GET', 'KIZAMI_TEST_OPTIONS' => $options('second')], 8.0);
 			Assert::assertSame(['/first', '/second'], self::column($file, "SELECT path FROM kizami_events WHERE type='page' ORDER BY path"), 'page view: read in by the next request, each once');
@@ -707,6 +804,33 @@ final class RebuildTest extends TestCase
 	}
 
 	/**
+	 * The process that read the spool dies after the COMMIT, before it could
+	 * empty the file (or emptying fails): the next reader starts after what
+	 * was read, nothing is counted twice, and a hit appended later is read.
+	 */
+	public function testSpoolIsNotCountedTwice(): void
+	{
+		$file = $this->kirbyRoot('spool-twice')[1];
+		$at = gmdate('Y-m-d H:i:s');
+		foreach (['/one', '/two', '/three'] as $path) {
+			Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => $path, 'session' => 's', 'created_at' => $at]);
+		}
+		$bytes = (string)file_get_contents(Spool::path($file));
+		$store = new Store($file, 'wal');
+		Assert::assertSame(3, $store->readSpool(), 'three hits read');
+		Assert::assertSame(0, self::bytes(Spool::path($file)), 'counter-check: the file is emptied');
+		// The state of a reader that died between COMMIT and emptying.
+		file_put_contents(Spool::path($file), $bytes);
+		Assert::assertSame(0, $store->readSpool(), 'the next reader reads nothing again');
+		$count = fn (): int => self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE path IN ('/one', '/two', '/three', '/four')");
+		Assert::assertSame(3, $count(), 'each hit once');
+		Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => '/four', 'session' => 's', 'created_at' => $at]);
+		Assert::assertSame(1, (new Store($file, 'wal'))->readSpool(), 'a later hit is read');
+		Assert::assertSame(4, $count(), 'and counted once');
+		Assert::assertSame(0, self::bytes(Spool::path($file)), 'the file is emptied');
+	}
+
+	/**
 	 * Reading the spool: at the end of a rebuild too; an unreadable line is
 	 * skipped and logged without its content, a line older than the retention
 	 * period dropped. When the spool cannot be written either, the hit is lost
@@ -760,5 +884,32 @@ final class RebuildTest extends TestCase
 		Assert::assertStringContainsString('Kizami: INSERT failed: disk full', $logged, 'Store message logged');
 		Assert::assertStringNotContainsString('Kizami: Kizami:', $logged, 'not twice');
 		Assert::assertStringContainsString('Kizami: disk full', $logged, 'a plain message gets the prefix');
+	}
+
+	/**
+	 * At most Spool::READ_LINES lines per call: 2,500 hits are read in three
+	 * calls, each once, none lost; then the file is emptied.
+	 */
+	public function testSpoolIsReadInBlocks(): void
+	{
+		$file = $this->kirbyRoot('spool-blocks')[1];
+		$at = gmdate('Y-m-d H:i:s');
+		for ($i = 0; $i < 2500; $i++) {
+			Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => "/p$i", 'session' => 's', 'created_at' => $at]);
+		}
+		$reads = [];
+		$took = [];
+		for ($call = 0; $call < 4; $call++) {
+			$start = microtime(true);
+			$reads[] = (new Store($file, 'wal'))->readSpool();
+			$took[] = microtime(true) - $start;
+		}
+		Assert::assertSame([1000, 1000, 500, 0], $reads, 'three blocks, then nothing');
+		Assert::assertSame([2500, 2500], [
+			self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE path LIKE '/p%'"),
+			self::scalar($file, "SELECT COUNT(DISTINCT path) FROM kizami_events WHERE path LIKE '/p%'"),
+		], 'every hit once, none lost');
+		Assert::assertSame(0, self::bytes(Spool::path($file)), 'emptied after the last block');
+		Assert::assertLessThan(1.0, max($took), 'one block takes well under a second: ' . json_encode($took));
 	}
 }

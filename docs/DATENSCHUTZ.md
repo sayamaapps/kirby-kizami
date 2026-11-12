@@ -88,8 +88,8 @@ scheitert er wiederholt, zeigt das Dashboard eine Warnung. Auch der
 Wartungsjob (`maintenance.php compact`) baut die Datei neu auf. Neue Snapshots
 werden stets ohne solche Reste neu aufgebaut.
 Kann ein Aufruf nicht sofort gespeichert werden, weil die Datenbank gesperrt
-ist, liegt er bis zum nächsten Speichern mit denselben Angaben in einer
-Zwischendatei neben der Datenbank.
+ist, liegt er mit denselben Angaben in einer Zwischendatei neben der Datenbank,
+bis er eingelesen ist; die Zwischendatei fasst höchstens 5 MB.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe
@@ -121,20 +121,27 @@ nicht archivieren.
   (gemessen rund 0,13 s für eine Datei von 20 MB auf normaler Platte, auf
   langsamer Platte mehrere Sekunden). Der Neuaufbau hält währenddessen die
   Schreibsperre. Solange die Datenbank gesperrt ist, etwa während eines
-  Neuaufbaus, wartet ein Aufruf (Seitenaufruf, Klick, Aktion) wie bisher
-  höchstens 5 Sekunden. Ist sie dann noch gesperrt, kommt der Aufruf in eine
-  Zwischendatei neben der Datenbank (`storage/kizami/spool.jsonl`, dieselben
-  Angaben wie in der Datenbank, nichts weiter) und wird beim nächsten
-  gelungenen Schreiben oder am Ende des Neuaufbaus gespeichert; ein Klick, der
-  einen Seitenaufruf desselben Besuchs braucht, wird erst dann entschieden.
-  Nur wenn auch die Zwischendatei nicht geschrieben werden kann, geht der
-  Aufruf verloren; das Error-Log enthält dann `database is locked`. Die
+  Neuaufbaus, wartet ein Aufruf (Seitenaufruf, Klick, Aktion) wie bisher bis
+  zu 5 Sekunden je Sperre; in seltenen Fällen, wenn eine Sperre frei und
+  wieder genommen wird, während der Aufruf geschrieben wird, addieren sich
+  diese Wartezeiten. Ist die Datenbank dann noch gesperrt, kommt der Aufruf in
+  eine Zwischendatei neben der Datenbank (`storage/kizami/spool.jsonl`,
+  dieselben Angaben wie in der Datenbank, nichts weiter) und wird bei den
+  nächsten gelungenen Schreibvorgängen und am Ende des Neuaufbaus gespeichert,
+  jeweils höchstens 1.000 Zeilen; ein Klick, der einen Seitenaufruf desselben
+  Besuchs braucht, wird erst dann entschieden. Die Zwischendatei fasst
+  höchstens 5 MB; solange sie voll ist, gehen weitere Aufrufe verloren, und
+  das Error-Log meldet das, wenn sie voll wird, und danach höchstens einmal am
+  Tag. Kann die Zwischendatei nicht geschrieben werden, geht der Aufruf
+  ebenfalls verloren; das Error-Log enthält dann `database is locked`. Die
   Zwischendatei liegt wie die Datenbank außerhalb des Web-Verzeichnisses und
-  ist nur für ihren Eigentümer lesbar; sie wird beim Einlesen geleert, Zeilen
-  älter als die Aufbewahrungsfrist werden dabei verworfen. Snapshots enthalten
-  sie nicht; aus Dateisicherungen wie `secret.txt` ausschließen und zusammen
-  mit der Datenbank löschen, wenn die Erfassung dauerhaft abgeschaltet wird.
-  Ein Neuaufbau braucht vorübergehend freien Speicherplatz bis zur doppelten
+  ist nur für ihren Eigentümer lesbar; sie wird geleert, sobald sie bis zum
+  Ende eingelesen ist, Zeilen älter als die Aufbewahrungsfrist werden beim
+  Einlesen verworfen. Wie weit sie eingelesen ist, steht in der Datenbank, so
+  wird kein Aufruf doppelt gezählt. Snapshots enthalten sie nicht; aus
+  Dateisicherungen wie `secret.txt` ausschließen und zusammen mit der
+  Datenbank löschen, wenn die Erfassung dauerhaft abgeschaltet wird. Ein
+  Neuaufbau braucht vorübergehend freien Speicherplatz bis zur doppelten
   Dateigröße: eine Kopie im temporären Verzeichnis (oft eine andere Partition)
   und das Journal oder WAL neben der Datei. Fehler stehen im Error-Log
   (`Kizami: rebuild …`); der nächste Versuch folgt spätestens am nächsten Tag.
