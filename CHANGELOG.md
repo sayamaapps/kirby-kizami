@@ -32,22 +32,38 @@ All notable changes to this project are documented here. Versions follow
   to the error log and never reaches the page. Measured: about 0.13 s for a 20
   MB file (about 50,000 rows) with PHP 8.3; a slow disk can take several
   seconds.
-- **Counting during a rebuild.** The rebuild holds the write lock of the
-  database while it runs. Where the response can be ended first, a hit (page
-  view, click, action) is written after the response and waits up to 60
-  seconds for a running rebuild. Without `fastcgi_finish_request()` or
-  `litespeed_finish_request()` (cgi-fcgi, mod_php) it is written during the
-  request and waits at most 5 seconds, as before; if a rebuild takes longer,
-  that hit is not counted (error log: `Kizami: database is locked`).
+- **Spool file instead of lost hits.** The rebuild holds the write lock of the
+  database while it runs. While the database is locked, for example during a
+  rebuild, a hit (page view, click, action) waits at most 5 seconds, as
+  before. If it is still locked then, the hit goes to a spool file next to the
+  database (`storage/kizami/spool.jsonl`, the same fields as in the database,
+  nothing more) and is written at the next successful write or at the end of
+  the rebuild; a click that needs a page view of the same visit is decided
+  then. Only if the spool file cannot be written either is the hit lost; the
+  error log then contains `database is locked`. The spool file sits outside
+  the web root like the database and is readable by its owner only; it is
+  emptied when it is read, and lines older than the retention period are
+  dropped then. Snapshots do not contain it; leave it out of file backups like
+  `secret.txt`, and delete it together with the database when counting is
+  switched off for good. (`Spool`, `Store::readSpool()`, `LinkFilter`; the
+  database's write lock is taken before the file's `flock()`, so two readers
+  never count a line twice.)
 - A rebuild needs free disk space of up to twice the file size for a moment: a
   copy in the temporary directory (often another partition) plus the journal
   or WAL next to the file.
-- The dashboard warns when the last successful rebuild is more than 48 hours
-  old although Kizami tried since (`Rebuild::failing()`).
+- The dashboard warns when the attempts since the last successful rebuild have
+  failed for more than 48 hours (`Rebuild::failing()`, new column `since`); a
+  first attempt that fails right after the update does not warn yet.
 - New table `kizami_rebuild` (day of the last attempt, time of the last
-  success), created on first use like `kizami_maintenance`; no migration.
-- `Store::BUSY_TIMEOUT_MS` (5000) and `Store::waitUpTo()`;
-  `Rebuild::WRITE_WAIT_SECONDS` (60) for the write after the response.
+  success, time of the first attempt since), created on first use like
+  `kizami_maintenance`; no migration. `Store::BUSY_TIMEOUT_MS` (5000).
+
+### Fixed
+
+- A log line no longer starts with "Kizami: Kizami:" when Store's own message
+  already carries the prefix.
+- Opening the database reports a lock at once instead of waiting the busy
+  timeout again for the next statement.
 
 ### Changed
 
@@ -58,8 +74,8 @@ All notable changes to this project are documented here. Versions follow
   last successful rebuild is more than two days old, provided the rebuild
   succeeds; if it keeps failing, the dashboard shows a warning. The
   maintenance job (`maintenance.php compact`) rebuilds the file as well.
-  Before, only the maintenance job removed them. The operations part no longer
-  asks for a daily `compact` cron job.
+  Before, only the maintenance job removed them. Both texts name the spool
+  file. The operations part no longer asks for a daily `compact` cron job.
 
 ## [3.0.0] — 2026-11-11
 

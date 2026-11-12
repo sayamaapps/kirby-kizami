@@ -17,6 +17,7 @@ return [
 	'sayamaapps\\kizami\\gaps' => 'src/Gaps.php',
 	'sayamaapps\\kizami\\hooks' => 'src/Hooks.php',
 	'sayamaapps\\kizami\\i18n' => 'src/I18n.php',
+	'sayamaapps\\kizami\\linkfilter' => 'src/LinkFilter.php',
 	'sayamaapps\\kizami\\migration' => 'src/Migration.php',
 	'sayamaapps\\kizami\\names' => 'src/Names.php',
 	'sayamaapps\\kizami\\options' => 'src/Options.php',
@@ -33,5 +34,6 @@ return [
 	'kizami\\setuperror' => 'src/SetupError.php',
 	'sayamaapps\\kizami\\snapshotresponse' => 'src/SnapshotResponse.php',
 	'sayamaapps\\kizami\\snapshotservice' => 'src/SnapshotService.php',
+	'sayamaapps\\kizami\\spool' => 'src/Spool.php',
 	'sayamaapps\\kizami\\store' => 'src/Store.php',
 ];

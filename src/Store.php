@@ -83,10 +83,12 @@ class Store
 	/**
 	 * The rebuild of the file (since 3.1.0, see Rebuild): `day` is the Berlin
 	 * day of the last attempt after a response, `done` the UTC time of the
-	 * last of these rebuilds that succeeded; '' = never. Simply
+	 * last of these rebuilds that succeeded, `since` the UTC time of the
+	 * first attempt after it ('' once it succeeded); '' = never. Simply
 	 * created like kizami_maintenance, no migration.
 	 */
-	private const REBUILD_TABLE = "CREATE TABLE IF NOT EXISTS kizami_rebuild (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL, done TEXT NOT NULL DEFAULT '')";
+	private const REBUILD_TABLE = "CREATE TABLE IF NOT EXISTS kizami_rebuild (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL,
+        done TEXT NOT NULL DEFAULT '', since TEXT NOT NULL DEFAULT '')";
 
 	/** `user_version` once the first rebuild has run, see purgeResidue(). */
 	private const RESIDUE_PURGED = 1;
@@ -102,6 +104,9 @@ class Store
 
 	/** Closed by PHP when the last Store or view that holds it is destroyed, so SQLite can checkpoint and remove -wal/-shm. */
 	private SQLite3 $db;
+
+	/** Path of the database file; the spool file sits next to it (Spool). */
+	private string $file;
 
 	/**
 	 * Reference time of window(); null means "now" (Berlin). Set by atTime(),
@@ -133,6 +138,7 @@ class Store
 	 */
 	public function __construct(string $dbPath, string|null $journal = null, array $ownHosts = [], int|null $retentionMonths = null)
 	{
+		$this->file = $dbPath;
 		$this->ownHosts = self::normaliseHosts($ownHosts);
 		$this->retentionMonths = self::validRetentionMonths($retentionMonths) ?? self::RETENTION_MONTHS;
 		$journal ??= self::journalOfFile($dbPath);
@@ -165,8 +171,14 @@ class Store
 			// Without it the bytes of a removed event stay in the free pages
 			// of the file (and of every snapshot copied from it).
 			$this->db->exec('PRAGMA secure_delete = ON');
-		} catch (\Throwable) {
-			// The write probe/schema report the relevant error.
+		} catch (\Throwable $e) {
+			// The write probe/schema report the relevant error. A lock is
+			// different: after the busy timeout the caller must learn of it
+			// now (Runtime::write() then spools the hit), instead of waiting
+			// the busy timeout again for the next statement.
+			if (Spool::locked($e)) {
+				throw new RuntimeException($e->getMessage(), 0, $e);
+			}
 		}
 
 		$this->migrateLegacySchema();
@@ -218,6 +230,23 @@ class Store
 			$offset,
 			$target === null ? [] : ['target' => $target]
 		);
+	}
+
+	/** One more hit for the daily counter kizami_discarded; inside a transaction of the caller. */
+	private function addDiscarded(string $day): void
+	{
+		foreach (['INSERT OR IGNORE INTO kizami_discarded (day, hits) VALUES (:day, 0)',
+			'UPDATE kizami_discarded SET hits = hits + 1 WHERE day = :day'] as $sql) {
+			$stmt = $this->db->prepare($sql);
+			if ($stmt === false) {
+				throw new RuntimeException($this->db->lastErrorMsg());
+			}
+			$stmt->bindValue(':day', $day, SQLITE3_TEXT);
+			if ($stmt->execute() === false) {
+				throw new RuntimeException($this->db->lastErrorMsg());
+			}
+			$stmt->close();
+		}
 	}
 
 	private static function afterEntrySql(): string
@@ -530,18 +559,7 @@ class Store
 	{
 		$this->exec('BEGIN IMMEDIATE');
 		try {
-			foreach (['INSERT OR IGNORE INTO kizami_discarded (day, hits) VALUES (:day, 0)',
-				'UPDATE kizami_discarded SET hits = hits + 1 WHERE day = :day'] as $sql) {
-				$stmt = $this->db->prepare($sql);
-				if ($stmt === false) {
-					throw new RuntimeException($this->db->lastErrorMsg());
-				}
-				$stmt->bindValue(':day', $day, SQLITE3_TEXT);
-				if ($stmt->execute() === false) {
-					throw new RuntimeException($this->db->lastErrorMsg());
-				}
-				$stmt->close();
-			}
+			$this->addDiscarded($day);
 			$this->exec('COMMIT');
 		} catch (\Throwable $e) {
 			$this->db->exec('ROLLBACK');
@@ -802,17 +820,18 @@ class Store
 
 	/**
 	 * State of the rebuild (Rebuild): the Berlin day of the last attempt
-	 * after a response and the UTC time of the last rebuild that succeeded,
-	 * '' for never.
+	 * after a response, the UTC time of the last rebuild that succeeded and
+	 * the UTC time of the first attempt since; '' for never or none.
 	 *
-	 * @return array{day:string,done:string}
+	 * @return array{day:string,done:string,since:string}
 	 */
 	public function lastRebuild(): array
 	{
-		$row = $this->db->querySingle('SELECT day, done FROM kizami_rebuild WHERE id=1', true);
+		$row = $this->db->querySingle('SELECT day, done, since FROM kizami_rebuild WHERE id=1', true);
 		return [
-			'day'  => is_array($row) ? (string)($row['day'] ?? '') : '',
-			'done' => is_array($row) ? (string)($row['done'] ?? '') : '',
+			'day'   => is_array($row) ? (string)($row['day'] ?? '') : '',
+			'done'  => is_array($row) ? (string)($row['done'] ?? '') : '',
+			'since' => is_array($row) ? (string)($row['since'] ?? '') : '',
 		];
 	}
 
@@ -1061,11 +1080,88 @@ class Store
 	}
 
 	/**
+	 * Writes the hits waiting in the spool file (Spool) into the database
+	 * and empties the file; returns the number of lines read. The database's
+	 * write lock comes first, then the file's flock(): appending never waits
+	 * for the database, and a second reader finds the file already empty, so
+	 * nothing is counted twice. All lines go in one transaction; the file is
+	 * emptied only after the COMMIT. A click that needs a page view of the
+	 * same day identifier (check 'pageview', see LinkFilter) is decided now,
+	 * against the page views in the database, spooled ones written before it
+	 * included; without one it adds to the discarded counter. Unreadable
+	 * lines are skipped and logged without their content, lines older than
+	 * the retention period are dropped.
+	 */
+	public function readSpool(): int
+	{
+		$file = Spool::path($this->file);
+		clearstatcache(true, $file);
+		if (!is_file($file) || (int)filesize($file) === 0) {
+			return 0;
+		}
+		$utc = new \DateTimeZone('UTC');
+		$berlin = new \DateTimeZone('Europe/Berlin');
+		$limit = (new \DateTimeImmutable('today', $berlin))->modify('-' . $this->retentionMonths . ' months')->setTimezone($utc)->format('Y-m-d H:i:s');
+		if (!is_writable($file)) {
+			throw new RuntimeException('Kizami: spool file cannot be written');
+		}
+		$this->exec('BEGIN IMMEDIATE');
+		$handle = fopen($file, 'r+');
+		$read = 0;
+		$skipped = 0;
+		try {
+			if ($handle === false || !flock($handle, LOCK_EX)) {
+				throw new RuntimeException('Kizami: spool file cannot be opened');
+			}
+			foreach (explode("\n", (string)stream_get_contents($handle)) as $line) {
+				if (trim($line) === '') {
+					continue;
+				}
+				$entry = json_decode($line, true);
+				$row = is_array($entry) && is_array($entry['row'] ?? null) ? $entry['row'] : null;
+				if ($row === null || !self::spooledRow($row)) {
+					$skipped++;
+					continue;
+				}
+				$read++;
+				if ($row['created_at'] < $limit) {
+					continue;
+				}
+				$at = new \DateTimeImmutable($row['created_at'], $utc);
+				if (($entry['check'] ?? '') === 'pageview' && !$this->hasPageView((string)($row['session'] ?? ''), $at)) {
+					$this->addDiscarded($at->setTimezone($berlin)->format('Y-m-d'));
+					continue;
+				}
+				$this->insert($row);
+			}
+			$this->exec('COMMIT');
+			ftruncate($handle, 0);
+		} catch (\Throwable $e) {
+			try {
+				$this->db->exec('ROLLBACK');
+			} catch (\Throwable) {
+				// SQLite ended the transaction itself.
+			}
+			throw $e;
+		} finally {
+			if ($handle !== false) {
+				flock($handle, LOCK_UN);
+				fclose($handle);
+			}
+		}
+		if ($skipped > 0) {
+			error_log('Kizami: ' . $skipped . ' unreadable spool line(s) skipped');
+		}
+		return $read;
+	}
+
+	/**
 	 * compact() after a response (Rebuild), at most once per Berlin day.
 	 * The day is claimed in the same write transaction as the roll-up, so of
 	 * two parallel requests only one rebuilds. Unlike compact(), a failing
 	 * rebuild is thrown: the caller logs it, the day stays claimed (the next
-	 * attempt is the next day's) and `done` keeps the last success.
+	 * attempt is the next day's), `done` keeps the last success and `since`
+	 * the first attempt after it. A success then reads the spool (Spool).
 	 *
 	 * Returns false when this day's attempt has already been made. The plain
 	 * check comes first, so only the first request of a day takes the write
@@ -1083,9 +1179,11 @@ class Store
 				$this->exec('COMMIT');
 				return false;
 			}
-			$stmt = $this->db->prepare("INSERT OR REPLACE INTO kizami_rebuild (id, day, done)
-                VALUES (1, :day, COALESCE((SELECT done FROM kizami_rebuild WHERE id=1), ''))");
+			$stmt = $this->db->prepare("INSERT OR REPLACE INTO kizami_rebuild (id, day, done, since)
+                VALUES (1, :day, COALESCE((SELECT done FROM kizami_rebuild WHERE id=1), ''),
+                COALESCE(NULLIF((SELECT since FROM kizami_rebuild WHERE id=1), ''), :now))");
 			$stmt->bindValue(':day', $day, SQLITE3_TEXT);
+			$stmt->bindValue(':now', $now->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'), SQLITE3_TEXT);
 			$stmt->execute()->finalize();
 			$this->rollUpOldDays();
 			$this->exec('COMMIT');
@@ -1100,13 +1198,19 @@ class Store
 		}
 		$this->purgeResidue();
 		$this->rebuilt($now);
+		// Hits that waited in the spool during the rebuild are written now.
+		try {
+			$this->readSpool();
+		} catch (\Throwable $e) {
+			error_log('Kizami: spool not read after the rebuild: ' . $e->getMessage());
+		}
 		return true;
 	}
 
 	/** Records a rebuild that succeeded (kizami_rebuild.done, UTC); the row exists since the claim. */
 	private function rebuilt(\DateTimeImmutable $now): void
 	{
-		$stmt = $this->db->prepare('UPDATE kizami_rebuild SET done = :done WHERE id=1');
+		$stmt = $this->db->prepare("UPDATE kizami_rebuild SET done = :done, since = '' WHERE id=1");
 		$stmt->bindValue(':done', $now->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'), SQLITE3_TEXT);
 		$stmt->execute()->finalize();
 	}
@@ -1240,6 +1344,28 @@ class Store
 			$offset,
 			$this->ownReferrerBindings()
 		);
+	}
+
+	/**
+	 * A spooled row Store::insert() can take: a known type with a valid action
+	 * (or an action key for type 'event'), a UTC time and only scalar values.
+	 */
+	private static function spooledRow(array $row): bool
+	{
+		foreach ($row as $value) {
+			if (!is_string($value) && !is_int($value)) {
+				return false;
+			}
+		}
+		$type = $row['type'] ?? null;
+		if (!is_string($row['created_at'] ?? null) || preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $row['created_at']) !== 1) {
+			return false;
+		}
+		if ($type === 'event') {
+			return Events::isKey($row['event'] ?? null);
+		}
+		return in_array($type, ['page', 'redirect', 'notfound', 'image', 'duration'], true) &&
+			in_array($row['action'] ?? null, ['view', 'click', 'visible'], true);
 	}
 
 	/** @return list<string> */

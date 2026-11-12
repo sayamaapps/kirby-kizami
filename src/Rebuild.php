@@ -22,11 +22,9 @@ use Throwable;
  *   OVERDUE_HOURS old (no bot came, or every attempt failed) does a counted
  *   visit rebuild at its end, so the rebuild also happens on days without bots.
  *
- * VACUUM holds the write lock. Where the response can be ended first, the
- * counting write runs after it too (afterResponse()) and waits up to
- * WRITE_WAIT_SECONDS, so a long rebuild costs no count. Elsewhere it stays in
- * the request with Store::BUSY_TIMEOUT_MS (5 s): if a rebuild takes longer, a
- * page view that waits for it is not counted (logged).
+ * VACUUM holds the write lock. A hit that waits for it longer than
+ * Store::BUSY_TIMEOUT_MS (5 s) goes to the spool file (Spool) and is written
+ * at the next successful write or at the end of the rebuild.
  *
  * The tasks are registered from a shutdown function, so they run after every
  * other one (a session, the site's own). Never throws: the page is already
@@ -47,15 +45,6 @@ class Rebuild
 	 * two days".
 	 */
 	public const OVERDUE_HOURS = 48;
-
-	/**
-	 * Seconds a write after the response (afterResponse()) waits for the
-	 * write lock that a rebuild holds: longer than a rebuild takes (measured
-	 * 0.13 s for 20 MB on a normal disk, 10 s with the disk throttled to
-	 * 5 MB/s). Nobody waits for such a write. A write inside the request keeps
-	 * Store::BUSY_TIMEOUT_MS, so no visitor waits longer than before.
-	 */
-	public const WRITE_WAIT_SECONDS = 60;
 
 	/**
 	 * After a request of a known bot (Runtime::write()): nobody waits for it.
@@ -91,29 +80,6 @@ class Rebuild
 		}
 	}
 
-	/**
-	 * Runs $task after the response, after every other shutdown function,
-	 * when this server can end the response first (PHP-FPM, LiteSpeed), and
-	 * returns true. Elsewhere it returns false and does nothing: the caller
-	 * runs the task in the request. Runtime::write() uses it for the counting
-	 * write, which may then wait WRITE_WAIT_SECONDS for a running rebuild.
-	 */
-	public static function afterResponse(callable $task): bool
-	{
-		if (self::finisher() === null) {
-			return false;
-		}
-		self::last(static function () use ($task): void {
-			try {
-				self::endResponse();
-				$task();
-			} catch (Throwable $e) {
-				error_log('Kizami: ' . $e->getMessage());
-			}
-		});
-		return true;
-	}
-
 	/** The Berlin day of $time. */
 	private static function day(\DateTimeImmutable $time): string
 	{
@@ -142,20 +108,17 @@ class Rebuild
 	}
 
 	/**
-	 * For the dashboard warning: an attempt has been made since the last
-	 * rebuild that succeeded, and that success is overdue (never, or more
-	 * than OVERDUE_HOURS ago). A site without any request has made no attempt
-	 * and deleted nothing, so it is not warned about.
+	 * For the dashboard warning: the first attempt since the last rebuild
+	 * that succeeded is more than OVERDUE_HOURS old, so the attempts since
+	 * have failed for two days. A site without any request has made no
+	 * attempt and deleted nothing, so it is not warned about; neither is a
+	 * site whose first attempt after an update is still young.
 	 *
-	 * @param array{day:string,done:string} $state Store::lastRebuild()
+	 * @param array{day:string,done:string,since:string} $state Store::lastRebuild()
 	 */
 	public static function failing(array $state, \DateTimeImmutable $now): bool
 	{
-		if ($state['day'] === '' || !self::overdue($state['done'], $now)) {
-			return false;
-		}
-		$last = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $state['done'], new \DateTimeZone('UTC'));
-		return $last === false || $state['day'] > self::day($last);
+		return $state['since'] !== '' && self::overdue($state['since'], $now);
 	}
 
 	/**
@@ -182,15 +145,15 @@ class Rebuild
 	}
 
 	/**
-	 * True when the last rebuild that succeeded ($done, UTC, '' = never) is
-	 * more than OVERDUE_HOURS before $now.
+	 * True when $time (UTC, as kizami_rebuild stores it; '' = never) is more
+	 * than OVERDUE_HOURS before $now.
 	 */
-	public static function overdue(string $done, \DateTimeImmutable $now): bool
+	public static function overdue(string $time, \DateTimeImmutable $now): bool
 	{
-		if ($done === '') {
+		if ($time === '') {
 			return true;
 		}
-		$last = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $done, new \DateTimeZone('UTC'));
+		$last = \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $time, new \DateTimeZone('UTC'));
 		return $last === false || $now->getTimestamp() - $last->getTimestamp() > self::OVERDUE_HOURS * 3600;
 	}
 

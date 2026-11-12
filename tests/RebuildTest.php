@@ -16,11 +16,13 @@ use Sayamaapps\Kizami\Analysis;
 use Sayamaapps\Kizami\I18n;
 use Sayamaapps\Kizami\Names;
 use Sayamaapps\Kizami\Rebuild;
+use Sayamaapps\Kizami\Spool;
 use Sayamaapps\Kizami\Store;
 
 #[CoversClass(\Sayamaapps\Kizami\Analysis::class)]
 #[CoversClass(\Sayamaapps\Kizami\Rebuild::class)]
 #[CoversClass(\Sayamaapps\Kizami\Runtime::class)]
+#[CoversClass(\Sayamaapps\Kizami\Spool::class)]
 #[CoversClass(\Sayamaapps\Kizami\Store::class)]
 #[RunTestsInSeparateProcesses]
 final class RebuildTest extends TestCase
@@ -34,6 +36,29 @@ final class RebuildTest extends TestCase
 	private static function before(string $modifier): string
 	{
 		return (new DateTimeImmutable(self::NOW . ' ' . $modifier, new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+	}
+
+	/** The size of $file now, not from PHP's stat cache. */
+	private static function bytes(string $file): int
+	{
+		clearstatcache(true, $file);
+		return (int)filesize($file);
+	}
+
+	/** @return list<mixed> the first column of every row */
+	private static function column(string $file, string $sql): array
+	{
+		$db = new SQLite3($file);
+		$db->busyTimeout(5000);
+		$result = $db->query($sql);
+		$values = [];
+		while (($row = $result->fetchArray(SQLITE3_NUM)) !== false) {
+			$values[] = $row[0];
+		}
+		$result->finalize();
+		unset($result);
+		$db->close();
+		return $values;
 	}
 
 	/**
@@ -117,14 +142,14 @@ final class RebuildTest extends TestCase
 	 *
 	 * @return array{0:string,1:string} root, database file
 	 */
-	private function kirbyRoot(string $name): array
+	private function kirbyRoot(string $name, string $journal = 'wal'): array
 	{
 		$root = $this->root . '/' . $name;
 		foreach (['public', 'content', 'site', 'storage/kizami'] as $dir) {
 			mkdir("$root/$dir", 0700, true);
 		}
 		$file = "$root/storage/kizami/" . Store::FILE;
-		$store = new Store($file, 'wal');
+		$store = new Store($file, $journal);
 		unset($store);
 		$db = new SQLite3($file);
 		$today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
@@ -242,16 +267,17 @@ final class RebuildTest extends TestCase
 
 	/**
 	 * The four texts (README, PRIVACY, CHANGELOG, DATENSCHUTZ) say the same:
-	 * the promise and the rest case in the same words, with the numbers the
-	 * code uses.
+	 * the promise, the spool and its protection in the same words, with the
+	 * numbers the code uses, and nothing of the earlier drafts.
 	 */
 	public function testDocsSayTheSame(): void
 	{
-		Assert::assertSame([48, 60, 5000], [Rebuild::OVERDUE_HOURS, Rebuild::WRITE_WAIT_SECONDS, Store::BUSY_TIMEOUT_MS], 'the numbers the texts name');
+		Assert::assertSame([48, 5000, 'spool.jsonl'], [Rebuild::OVERDUE_HOURS, Store::BUSY_TIMEOUT_MS, Spool::FILE], 'the numbers and the name the texts use');
 		$read = fn (string $file): string => preg_replace('/\s+/u', ' ', (string)file_get_contents(dirname(__DIR__) . '/' . $file));
 		$english = [
 			'promise' => 'Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed when the file is rebuilt: as a rule daily, after a page has been delivered, at the latest at the first counted visit once the last successful rebuild is more than two days old, provided the rebuild succeeds; if it keeps failing, the dashboard shows a warning.',
-			'rest' => 'Where the response can be ended first, a hit (page view, click, action) is written after the response and waits up to 60 seconds for a running rebuild. Without `fastcgi_finish_request()` or `litespeed_finish_request()` (cgi-fcgi, mod_php) it is written during the request and waits at most 5 seconds, as before; if a rebuild takes longer, that hit is not counted (error log: `Kizami: database is locked`).',
+			'spool' => 'While the database is locked, for example during a rebuild, a hit (page view, click, action) waits at most 5 seconds, as before. If it is still locked then, the hit goes to a spool file next to the database (`storage/kizami/spool.jsonl`, the same fields as in the database, nothing more) and is written at the next successful write or at the end of the rebuild; a click that needs a page view of the same visit is decided then. Only if the spool file cannot be written either is the hit lost; the error log then contains `database is locked`.',
+			'protection' => 'The spool file sits outside the web root like the database and is readable by its owner only; it is emptied when it is read, and lines older than the retention period are dropped then. Snapshots do not contain it; leave it out of file backups like `secret.txt`, and delete it together with the database when counting is switched off for good.',
 		];
 		foreach (['README.md', 'PRIVACY.md', 'CHANGELOG.md'] as $file) {
 			foreach ($english as $what => $sentence) {
@@ -260,7 +286,8 @@ final class RebuildTest extends TestCase
 		}
 		foreach ([
 			'promise' => 'Reste gelöschter Inhalte in freien Seiten der Datenbankdatei, auch aus früheren Versionen, werden entfernt, wenn die Datei neu aufgebaut wird: in der Regel täglich, nachdem eine Seite ausgeliefert ist, spätestens beim ersten erfassten Aufruf, nachdem der letzte gelungene Neuaufbau mehr als zwei Tage zurückliegt, sofern der Neuaufbau gelingt; scheitert er wiederholt, zeigt das Dashboard eine Warnung.',
-			'rest' => 'Wo die Antwort vorher abgeschlossen werden kann, wird ein Aufruf (Seitenaufruf, Klick, Aktion) nach der Antwort geschrieben und wartet bis zu 60 Sekunden auf einen laufenden Neuaufbau. Ohne `fastcgi_finish_request()` oder `litespeed_finish_request()` (cgi-fcgi, mod_php) wird er während der Anfrage geschrieben und wartet wie bisher höchstens 5 Sekunden; dauert ein Neuaufbau länger, wird dieser Aufruf nicht gezählt (Error-Log: `Kizami: database is locked`).',
+			'spool' => 'Solange die Datenbank gesperrt ist, etwa während eines Neuaufbaus, wartet ein Aufruf (Seitenaufruf, Klick, Aktion) wie bisher höchstens 5 Sekunden. Ist sie dann noch gesperrt, kommt der Aufruf in eine Zwischendatei neben der Datenbank (`storage/kizami/spool.jsonl`, dieselben Angaben wie in der Datenbank, nichts weiter) und wird beim nächsten gelungenen Schreiben oder am Ende des Neuaufbaus gespeichert; ein Klick, der einen Seitenaufruf desselben Besuchs braucht, wird erst dann entschieden. Nur wenn auch die Zwischendatei nicht geschrieben werden kann, geht der Aufruf verloren; das Error-Log enthält dann `database is locked`.',
+			'protection' => 'Die Zwischendatei liegt wie die Datenbank außerhalb des Web-Verzeichnisses und ist nur für ihren Eigentümer lesbar; sie wird beim Einlesen geleert, Zeilen älter als die Aufbewahrungsfrist werden dabei verworfen. Snapshots enthalten sie nicht; aus Dateisicherungen wie `secret.txt` ausschließen und zusammen mit der Datenbank löschen, wenn die Erfassung dauerhaft abgeschaltet wird.',
 		] as $what => $sentence) {
 			Assert::assertStringContainsString($sentence, $read('docs/DATENSCHUTZ.md'), "DATENSCHUTZ.md: $what");
 		}
@@ -268,14 +295,15 @@ final class RebuildTest extends TestCase
 			Assert::assertStringContainsString($space, $read($file), "$file: disk space");
 		}
 		foreach (['README.md', 'PRIVACY.md', 'CHANGELOG.md', 'docs/DATENSCHUTZ.md'] as $file) {
-			Assert::assertDoesNotMatchRegularExpression('/space the size of the file|Speicherplatz in der Größe der Datei|keep their count|fehlt ihr Zähler/u', $read($file), "$file: nothing of the old wording");
+			Assert::assertDoesNotMatchRegularExpression('/space the size of the file|Speicherplatz in der Größe der Datei|keep their count|fehlt ihr Zähler|60 seconds|60 Sekunden|WRITE_WAIT|written after the response|nach der Antwort geschrieben|error log: `Kizami: database is locked`/u', $read($file), "$file: nothing of the earlier drafts");
 		}
 	}
 
 	/**
 	 * VACUUM fails after the day was claimed: no second attempt that day, the
-	 * last success stays, and once it is more than 48 hours old the
-	 * dashboard warns. The next day's attempt succeeds and the warning goes.
+	 * last success stays, and only once the first failed attempt is more than
+	 * 48 hours old does the dashboard warn (an update that failed its first
+	 * attempt today does not). The next success removes the warning.
 	 */
 	public function testFailedRebuildKeepsTheDayAndWarnsOnTheDashboard(): void
 	{
@@ -292,12 +320,19 @@ final class RebuildTest extends TestCase
 			$error = $e->getMessage();
 		}
 		Assert::assertStringContainsString('cannot VACUUM', $error, 'counter-check: VACUUM failed');
+		// PHP 8.5 keeps the statement until the result object is gone.
 		$pending->finalize();
-		Assert::assertSame(['day' => '2026-11-12', 'done' => self::before('-3 days')], $store->lastRebuild(), 'day claimed, last success kept');
+		unset($pending);
+		Assert::assertSame(['day' => '2026-11-12', 'done' => self::before('-3 days'), 'since' => self::NOW], $store->lastRebuild(), 'day claimed, last success kept, first failed attempt recorded');
 		Assert::assertGreaterThan(0, self::scalar($file, 'PRAGMA freelist_count'), 'not rebuilt');
 		Assert::assertFalse($store->rebuildDaily($now->modify('+1 hour')), 'no second attempt the same day');
+		Assert::assertFalse(Rebuild::failing($store->lastRebuild(), $now), 'the first failed attempt is young: no warning yet');
+		Assert::assertTrue(Rebuild::failing($store->lastRebuild(), $now->modify('+49 hours')), 'failing for more than 48 hours: warning');
 
-		Assert::assertTrue(Rebuild::failing($store->lastRebuild(), $now), 'failing: attempted, last success 3 days ago');
+		// Attempts have failed for three days: the dashboard warns.
+		$db = new SQLite3($file);
+		$db->exec("UPDATE kizami_rebuild SET since = '" . self::before('-3 days') . "'");
+		$db->close();
 		I18n::setLanguage('de');
 		$data = Analysis::data($store, new Names([], [], []), 7, []);
 		ob_start();
@@ -306,6 +341,7 @@ final class RebuildTest extends TestCase
 		Assert::assertStringContainsString('Die Datenbankdatei wurde seit mehr als zwei Tagen nicht neu aufgebaut (zuletzt: 9.11.2026)', $html, 'the dashboard warns with the date of the last success');
 
 		Assert::assertTrue($store->rebuildDaily($now->modify('+1 day')), 'the next day the rebuild succeeds');
+		Assert::assertSame('', $store->lastRebuild()['since'], 'success: no failed attempt open');
 		Assert::assertFalse(Rebuild::failing($store->lastRebuild(), $now->modify('+1 day')), 'success: no warning');
 		$data = Analysis::data($store, new Names([], [], []), 7, []);
 		ob_start();
@@ -315,11 +351,12 @@ final class RebuildTest extends TestCase
 
 		// When to warn.
 		foreach ([
-			'never attempted' => [['day' => '', 'done' => ''], false],
-			'attempted, never succeeded' => [['day' => '2026-11-12', 'done' => ''], true],
-			'succeeded 47 hours ago, failed today' => [['day' => '2026-11-12', 'done' => self::before('-47 hours')], false],
-			'succeeded 49 hours ago, failed since' => [['day' => '2026-11-11', 'done' => self::before('-49 hours')], true],
-			'no request for three days' => [['day' => '2026-11-09', 'done' => self::before('-3 days')], false],
+			'never attempted' => [['day' => '', 'done' => '', 'since' => ''], false],
+			'first attempt after the update failed today' => [['day' => '2026-11-12', 'done' => '', 'since' => self::NOW], false],
+			'first attempt after the update failed 49 hours ago' => [['day' => '2026-11-12', 'done' => '', 'since' => self::before('-49 hours')], true],
+			'attempts failing for 47 hours' => [['day' => '2026-11-12', 'done' => self::before('-3 days'), 'since' => self::before('-47 hours')], false],
+			'attempts failing for 49 hours' => [['day' => '2026-11-12', 'done' => self::before('-3 days'), 'since' => self::before('-49 hours')], true],
+			'no request for three days after a success' => [['day' => '2026-11-09', 'done' => self::before('-3 days'), 'since' => ''], false],
 		] as $case => [$state, $expected]) {
 			Assert::assertSame($expected, Rebuild::failing($state, $now), $case);
 		}
@@ -343,7 +380,7 @@ final class RebuildTest extends TestCase
 			Assert::assertSame(0, $result['code'], 'locked: exit code 0');
 			Assert::assertStringContainsString('Kizami: rebuild after the response failed: database is locked', $result['log'], 'locked: logged');
 			Assert::assertGreaterThan(0, self::scalar($file, 'PRAGMA freelist_count'), 'locked: not rebuilt');
-			Assert::assertSame(['day' => '', 'done' => ''], (new Store($file, 'wal'))->lastRebuild(), 'locked: nothing claimed, the next request tries again');
+			Assert::assertSame(['day' => '', 'done' => '', 'since' => ''], (new Store($file, 'wal'))->lastRebuild(), 'locked: nothing claimed, the next request tries again');
 		}
 
 		// A failing check after a counted visit does not reach the caller.
@@ -356,54 +393,67 @@ final class RebuildTest extends TestCase
 	}
 
 	/**
-	 * A rebuild that holds the write lock longer than the busy timeout (5 s):
-	 * where the response can be ended first, the page view is written after
-	 * it and waits, nobody waits for it, and it is kept. Without a way to end
-	 * the response the write stays in the request: the visitor waits at most
-	 * 5 s as before, and the page view is lost (logged). That is the rest the
-	 * README, PRIVACY, DATENSCHUTZ and CHANGELOG name.
+	 * The database stays locked for 20 s (a long rebuild), in WAL and in
+	 * rollback-journal mode, where the lock also stops readers and the
+	 * opening of the database. Every hit waits at most 5 s and goes to the
+	 * spool file; once the lock is gone, two parallel requests read the spool
+	 * in: every hit is counted once, the link filter decides the clicks
+	 * against the spooled page view, and the spool is empty.
 	 */
-	public function testLongRebuildCostsNoCountWhereTheResponseEndsFirst(): void
+	public function testLockedDatabaseSpoolsEveryHit(): void
 	{
-		foreach ([true, false] as $fpm) {
-			[$root, $file] = $this->kirbyRoot('kirby-' . (int)$fpm);
+		foreach (['wal', 'delete'] as $journal) {
+			[$root, $file] = $this->kirbyRoot("spool-$journal", $journal);
+			$request = function (array $options) use ($root, $journal): array {
+				$log = "$root/" . bin2hex(random_bytes(4)) . '.log';
+				$process = proc_open([PHP_BINARY, dirname(__DIR__) . '/tests/helpers/count-request.php', json_encode($options + [
+					'root' => $root, 'log' => $log, 'finished' => "$root/finished", 'journal' => $journal,
+				])], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+				return [$process, $pipes, $log, microtime(true)];
+			};
+			$finish = function (array $started): array {
+				[$process, $pipes, $log, $start] = $started;
+				$out = (string)stream_get_contents($pipes[1]) . (string)stream_get_contents($pipes[2]);
+				proc_close($process);
+				return [$out, microtime(true) - $start, (string)@file_get_contents($log)];
+			};
 
-			// Another connection holds the write lock for 7 s, like a long rebuild.
 			$lock = new SQLite3($file);
-			$lock->exec('BEGIN IMMEDIATE');
+			$lock->exec($journal === 'wal' ? 'BEGIN IMMEDIATE' : 'BEGIN EXCLUSIVE');
 			$lock->exec("INSERT INTO kizami_discarded (day, hits) VALUES ('2000-01-01', 1)");
-			$start = microtime(true);
-			$finished = "$root/finished";
-			$process = proc_open([PHP_BINARY, dirname(__DIR__) . '/tests/helpers/count-request.php', json_encode([
-				'root' => $root, 'log' => "$root/php-errors.log", 'finished' => $finished, 'fpm' => $fpm,
-			])], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-			$exited = null;
-			while (microtime(true) - $start < 7) {
-				if ($exited === null && !proc_get_status($process)['running']) {
-					$exited = microtime(true);
-				}
-				usleep(50000);
+			$locked = microtime(true);
+			// A page view first, then three clicks at once: one of the same
+			// visit without a confirmed user action, one of another visit
+			// without, one with.
+			$results = [$finish($request(['path' => '/a']))];
+			$clicks = [$request(['click' => false, 'path' => '/a']), $request(['click' => false, 'path' => '/b', 'ip' => '198.51.100.8']), $request(['click' => true, 'path' => '/a'])];
+			foreach ($clicks as $started) {
+				$results[] = $finish($started);
+			}
+			foreach ($results as $i => [$out, $took, $log]) {
+				Assert::assertSame("PAGE\n", $out, "$journal #$i: the whole page");
+				Assert::assertLessThan(6.0, $took, "$journal #$i: waited at most the busy timeout of 5 s (plus start-up)");
+				Assert::assertSame('', $log, "$journal #$i: nothing logged, nothing lost");
+			}
+			Assert::assertCount(4, file(Spool::path($file), FILE_IGNORE_NEW_LINES), "$journal: four hits in the spool");
+			Assert::assertSame('0600', substr(sprintf('%o', fileperms(Spool::path($file))), -4), "$journal: the spool is readable by its owner only");
+			while (microtime(true) - $locked < 20) {
+				usleep(100000);
 			}
 			$lock->exec('ROLLBACK');
 			$lock->close();
-			$out = (string)stream_get_contents($pipes[1]);
-			$err = (string)stream_get_contents($pipes[2]);
-			proc_close($process);
-			$took = ($exited ?? microtime(true)) - $start;
-			$log = (string)@file_get_contents("$root/php-errors.log");
-			$rows = self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='page'");
-			Assert::assertSame('', $err, 'child without stderr');
-			if ($fpm) {
-				Assert::assertSame("PAGE\nFINISH\n", $out, 'FPM: the whole page, then the response ends');
-				Assert::assertLessThan(3, (float)@file_get_contents($finished) - $start, 'FPM: the response ended while the lock was still held, nobody waited');
-				Assert::assertSame(1, $rows, 'FPM: the page view waited for the lock after the response and is kept');
-				Assert::assertSame('', $log, 'FPM: no error');
-			} else {
-				Assert::assertSame("PAGE\n", $out, 'no finisher: the whole page');
-				Assert::assertSame(0, $rows, 'no finisher: after 5 s in the request the page view is lost');
-				Assert::assertStringContainsString('Kizami: database is locked', $log, 'no finisher: the lost page view is logged');
-				Assert::assertLessThan(6.5, $took, 'no finisher: the visitor waited no longer than the busy timeout, not for the whole rebuild');
+
+			// Two requests at once read the spool in; each counts its own page view.
+			$readers = [$request(['path' => '/c']), $request(['path' => '/d'])];
+			foreach ($readers as $started) {
+				[$out, , $log] = $finish($started);
+				Assert::assertSame(['PAGE', ''], [trim($out), $log], "$journal: reader without error");
 			}
+			$paths = self::column($file, "SELECT path FROM kizami_events WHERE type='page' ORDER BY path");
+			Assert::assertSame(['/a', '/c', '/d'], $paths, "$journal: every page view once, none twice");
+			Assert::assertSame(2, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='redirect'"), "$journal: the confirmed click and the click after the spooled page view count");
+			Assert::assertSame(1, self::scalar($file, "SELECT hits FROM kizami_discarded WHERE day <> '2000-01-01'"), "$journal: the click without a page view of its visit is discarded");
+			Assert::assertSame(0, self::bytes(Spool::path($file)), "$journal: the spool is empty");
 		}
 	}
 
@@ -452,10 +502,11 @@ final class RebuildTest extends TestCase
 	}
 
 	/**
-	 * The real PHP-FPM, no stub: fastcgi_finish_request() ends the response
-	 * (END_REQUEST reaches the web server) while the page view and the rebuild
-	 * still wait for a write lock; both happen once the lock is free. Needs a
-	 * php-fpm binary (PHP_FPM, or next to PHP); skipped without one.
+	 * The real PHP-FPM, no stub. A page view during a lock waits at most 5 s
+	 * and goes to the spool, the next request reads it in. The rebuild after a
+	 * bot's request: fastcgi_finish_request() ends the response (END_REQUEST
+	 * reaches the web server) while the rebuild still waits for the lock.
+	 * Needs a php-fpm binary (PHP_FPM, or next to PHP); skipped without one.
 	 */
 	public function testRealFpmEndsTheResponseFirst(): void
 	{
@@ -495,20 +546,26 @@ final class RebuildTest extends TestCase
 			}
 			Assert::assertFileExists($socket, 'php-fpm started: ' . @file_get_contents("$this->root/fpm.out"));
 
-			// A counted page view through Runtime::write(): the response ends,
-			// the row is written after it, once the lock is free.
+			// A counted page view through Runtime::write() under the real FPM:
+			// it waits at most 5 s for the lock, then goes to the spool; the
+			// next request reads it in.
 			[$kirby, $file] = $this->kirbyRoot('fpm-count');
-			file_put_contents("$kirby/options.json", json_encode(['root' => $kirby, 'log' => "$kirby/php-errors.log", 'finished' => "$kirby/finished"]));
+			$options = function (string $path) use ($kirby): string {
+				file_put_contents("$kirby/$path.json", json_encode(['root' => $kirby, 'log' => "$kirby/php-errors.log", 'finished' => "$kirby/finished", 'path' => "/$path"]));
+				return "$kirby/$path.json";
+			};
 			$hold($file);
-			$response = self::fastCgi($socket, ['SCRIPT_FILENAME' => dirname(__DIR__) . '/tests/helpers/count-request.php', 'REQUEST_METHOD' => 'GET', 'KIZAMI_TEST_OPTIONS' => "$kirby/options.json"], 3.0);
-			Assert::assertTrue($response['ended'], 'page view: END_REQUEST while the lock was held, nobody waits for the write; ' . $diagnosis($response, "$kirby/php-errors.log"));
+			$start = microtime(true);
+			$response = self::fastCgi($socket, ['SCRIPT_FILENAME' => dirname(__DIR__) . '/tests/helpers/count-request.php', 'REQUEST_METHOD' => 'GET', 'KIZAMI_TEST_OPTIONS' => $options('first')], 8.0);
+			$took = microtime(true) - $start;
+			Assert::assertTrue($response['ended'], 'page view: the response ended; ' . $diagnosis($response, "$kirby/php-errors.log"));
 			Assert::assertStringEndsWith("\r\n\r\nPAGE\n", $response['stdout'], 'page view: the whole page');
-			Assert::assertSame(0, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='page'"), 'page view: not written yet');
+			Assert::assertLessThan(6.0, $took, 'page view: the visitor waited at most the busy timeout of 5 s');
+			Assert::assertCount(1, file(Spool::path($file), FILE_IGNORE_NEW_LINES), 'page view: in the spool');
 			$release();
-			for ($i = 0; $i < 100 && self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='page'") === 0; $i++) {
-				usleep(100000);
-			}
-			Assert::assertSame(1, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='page'"), 'page view: written after the response');
+			self::fastCgi($socket, ['SCRIPT_FILENAME' => dirname(__DIR__) . '/tests/helpers/count-request.php', 'REQUEST_METHOD' => 'GET', 'KIZAMI_TEST_OPTIONS' => $options('second')], 8.0);
+			Assert::assertSame(['/first', '/second'], self::column($file, "SELECT path FROM kizami_events WHERE type='page' ORDER BY path"), 'page view: read in by the next request, each once');
+			Assert::assertSame(0, self::bytes(Spool::path($file)), 'page view: spool empty');
 			Assert::assertSame('', (string)@file_get_contents("$kirby/php-errors.log"), 'page view: no error');
 
 			// A bot request: its page comes from an output buffer, the response
@@ -573,7 +630,7 @@ final class RebuildTest extends TestCase
 		$now = new DateTimeImmutable(self::NOW, new DateTimeZone('UTC'));
 		Assert::assertTrue($store->rebuildDaily($now), 'first attempt of the day rebuilds');
 		Assert::assertSame(0, self::scalar($file, 'PRAGMA freelist_count'), 'rebuilt: no free pages');
-		Assert::assertSame(['day' => '2026-11-12', 'done' => self::NOW], $store->lastRebuild(), 'day claimed (Berlin), success recorded (UTC)');
+		Assert::assertSame(['day' => '2026-11-12', 'done' => self::NOW, 'since' => ''], $store->lastRebuild(), 'day claimed (Berlin), success recorded (UTC)');
 
 		// New free pages the same day: the second attempt does nothing.
 		$raw = new SQLite3($file);
@@ -647,5 +704,61 @@ final class RebuildTest extends TestCase
 		Assert::assertSame("PAGE\n", $result['out'], 'counted visit: the whole page');
 		Assert::assertGreaterThan(0, self::scalar($file, 'PRAGMA freelist_count'), 'counted visit without a way to end the response: no rebuild, a visitor would wait');
 		Assert::assertSame('2026-11-11', self::scalar($file, 'SELECT day FROM kizami_rebuild'), 'counted visit: the day is not claimed');
+	}
+
+	/**
+	 * Reading the spool: at the end of a rebuild too; an unreadable line is
+	 * skipped and logged without its content, a line older than the retention
+	 * period dropped. When the spool cannot be written either, the hit is lost
+	 * and the log says `database is locked`, with the prefix "Kizami:" once.
+	 */
+	public function testSpoolIsReadAndKeepsNothingStale(): void
+	{
+		$file = $this->database('spool-read', 'wal');
+		$at = (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+		Assert::assertTrue(Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => '/spooled', 'session' => 's', 'created_at' => $at]), 'spooled');
+		Assert::assertTrue(Spool::add($file, ['type' => 'page', 'action' => 'view', 'path' => '/ancient', 'session' => 's', 'created_at' => '2001-01-01 10:00:00']), 'spooled, older than the retention period');
+		Assert::assertTrue(Spool::add($file, ['type' => 'event', 'event' => 'download', 'detail' => 'x.pdf', 'path' => '/', 'session' => 's', 'created_at' => $at]), 'an action spooled');
+		file_put_contents(Spool::path($file), "{not json SECRET-DETAIL\n" . json_encode(['row' => ['type' => 'nonsense', 'created_at' => $at]]) . "\n", FILE_APPEND);
+		$log = "$this->root/spool-read.log";
+		ini_set('error_log', $log);
+		$store = new Store($file, 'wal');
+		Assert::assertTrue($store->rebuildDaily(new DateTimeImmutable(self::NOW, new DateTimeZone('UTC'))), 'the rebuild ran');
+		Assert::assertSame(['/spooled'], self::column($file, "SELECT path FROM kizami_events WHERE path IN ('/spooled', '/ancient')"), 'the end of the rebuild read the spool; the stale line is dropped');
+		Assert::assertSame(1, self::scalar($file, "SELECT COUNT(*) FROM kizami_custom_events WHERE detail='x.pdf'"), 'the action is written');
+		Assert::assertSame(0, self::bytes(Spool::path($file)), 'spool empty');
+		$logged = (string)@file_get_contents($log);
+		Assert::assertStringContainsString('Kizami: 2 unreadable spool line(s) skipped', $logged, 'unreadable lines logged');
+		Assert::assertStringNotContainsString('SECRET-DETAIL', $logged, 'without their content');
+		Assert::assertSame(0, $store->readSpool(), 'nothing left to read');
+
+		// The spool cannot be written either (here a directory in its place):
+		// the hit is lost, and the log says why.
+		[$root, $file] = $this->kirbyRoot('spool-blocked');
+		mkdir(Spool::path($file));
+		$lock = new SQLite3($file);
+		$lock->exec('BEGIN IMMEDIATE');
+		$lock->exec("INSERT INTO kizami_discarded (day, hits) VALUES ('2000-01-01', 1)");
+		$process = proc_open([PHP_BINARY, dirname(__DIR__) . '/tests/helpers/count-request.php', json_encode(['root' => $root, 'log' => "$root/php-errors.log", 'finished' => "$root/finished"])], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+		$out = (string)stream_get_contents($pipes[1]) . (string)stream_get_contents($pipes[2]);
+		proc_close($process);
+		$lock->exec('ROLLBACK');
+		$lock->close();
+		$logged = (string)@file_get_contents("$root/php-errors.log");
+		Assert::assertSame("PAGE\n", $out, 'the whole page');
+		Assert::assertStringContainsString('database is locked', $logged, 'the log says database is locked');
+		Assert::assertStringContainsString('Kizami: spool file not writable, hit lost', $logged, 'and that the hit is lost');
+		Assert::assertStringNotContainsString('Kizami: Kizami:', $logged, 'the prefix once');
+		Assert::assertSame(0, self::scalar($file, "SELECT COUNT(*) FROM kizami_events WHERE type='page'"), 'lost');
+
+		// Store's own messages keep their prefix once.
+		ini_set('error_log', $log);
+		@unlink($log);
+		(new ReflectionMethod(\Sayamaapps\Kizami\Runtime::class, 'logWriteError'))->invoke(null, new RuntimeException('Kizami: INSERT failed: disk full'));
+		(new ReflectionMethod(\Sayamaapps\Kizami\Runtime::class, 'logWriteError'))->invoke(null, new RuntimeException('disk full'));
+		$logged = (string)@file_get_contents($log);
+		Assert::assertStringContainsString('Kizami: INSERT failed: disk full', $logged, 'Store message logged');
+		Assert::assertStringNotContainsString('Kizami: Kizami:', $logged, 'not twice');
+		Assert::assertStringContainsString('Kizami: disk full', $logged, 'a plain message gets the prefix');
 	}
 }

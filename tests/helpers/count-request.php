@@ -9,9 +9,13 @@
  * or through PHP-FPM, with the options in a file (KIZAMI_TEST_OPTIONS).
  *
  * Options: root (Kirby root with public/ and storage/), log (error log),
- * finished (file that receives the time the response ended, with fpm), and fpm: defines
- * fastcgi_finish_request() as PHP-FPM has it (every output buffer is ended
- * and sent, then the response is over). The CLI has none, like cgi-fcgi.
+ * finished (file that receives the time the response ended, with fpm),
+ * journal (`wal` or `delete`), path (of the page view), ip (REMOTE_ADDR, so
+ * another day identifier), click: a link click with the redirects' link
+ * filter instead of a page view, `true` with a confirmed user action
+ * (Sec-Fetch-User), `false` without. fpm: defines fastcgi_finish_request()
+ * as PHP-FPM has it (every output buffer is ended and sent, then the response
+ * is over). The CLI has none, like cgi-fcgi.
  *
  * Prints `PAGE` (the page) and, with fpm, `FINISH` when the response ends.
  * Without fpm the response ends with the process.
@@ -44,11 +48,16 @@ if (!empty($options['fpm'])) {
 }
 
 $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (X11; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0';
-$_SERVER['REMOTE_ADDR'] = '198.51.100.7';
+$_SERVER['REMOTE_ADDR'] = $options['ip'] ?? '198.51.100.7';
 $root = $options['root'];
 $kirby = new Kirby\Cms\App([
 	'roots' => ['index' => $root . '/public', 'base' => $root, 'content' => $root . '/content', 'site' => $root . '/site', 'storage' => $root . '/storage'],
-	'options' => ['url' => 'https://example.org', 'sayamaapps.kizami.active' => true],
+	'options' => ['url' => 'https://example.org', 'sayamaapps.kizami.active' => true, 'sayamaapps.kizami.journal' => $options['journal'] ?? 'wal'],
 ]);
-Sayamaapps\Kizami\Runtime::write($kirby, ['type' => 'page', 'action' => 'view', 'path' => '/']);
+if (isset($options['click'])) {
+	// What the redirect route writes (Routes::redirect()).
+	Sayamaapps\Kizami\Runtime::write($kirby, ['type' => 'redirect', 'action' => 'click', 'path' => $options['path'] ?? '/', 'target' => 'call'], new Sayamaapps\Kizami\LinkFilter($options['click'] === true));
+} else {
+	Sayamaapps\Kizami\Runtime::write($kirby, ['type' => 'page', 'action' => 'view', 'path' => $options['path'] ?? '/']);
+}
 echo "PAGE\n";

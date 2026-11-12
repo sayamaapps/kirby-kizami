@@ -265,10 +265,11 @@ class Runtime
 		return new Response($text, 'text/plain', 503, ['Cache-Control' => 'no-store']);
 	}
 
-	/** A setup error's message already says "Kizami: …". */
+	/** A message that already says "Kizami: …" (a setup error, Store's own) keeps it once. */
 	private static function logWriteError(Throwable $e): void
 	{
-		error_log($e instanceof SetupError ? $e->getMessage() : 'Kizami: ' . $e->getMessage());
+		$message = $e->getMessage();
+		error_log(str_starts_with($message, 'Kizami: ') ? $message : 'Kizami: ' . $message);
 	}
 
 	/** Kirby's real 404 — no format of its own that would reveal the module. */
@@ -359,9 +360,8 @@ class Runtime
 	 * the redirect keeps redirecting. That is why this helper catches \Throwable
 	 * and returns nothing a caller could evaluate — there is nothing to decide.
 	 *
-	 * Since 3.1.0 the row is written after the response where the server can
-	 * end it first (PHP-FPM, LiteSpeed; Rebuild::afterResponse()) and may wait
-	 * for a running rebuild there; elsewhere it is written now, as before.
+	 * Since 3.1.0 a hit that meets a database locked longer than
+	 * Store::BUSY_TIMEOUT_MS goes to the spool file instead (Spool::commit()).
 	 */
 	public static function write(App $kirby, array|callable $row, callable|null $counts = null): void
 	{
@@ -427,32 +427,7 @@ class Runtime
 				'session'      => $session,
 				'device'       => Capture::deviceClass($ua),
 			];
-			$commit = static function (Store $store) use ($counts, $session, $now, $row, $file): void {
-				// Optional check of the caller (link filter of the redirects).
-				// Discarding is never silent: the daily counter kizami_discarded
-				// shows up in the dashboard and the report.
-				if ($counts !== null && $counts($store, $session, $now) !== true) {
-					$store->discard($now->format('Y-m-d'));
-					return;
-				}
-				$store->write($row);
-				// The rebuild of the file, after the response (Rebuild).
-				Rebuild::afterCount($store, $file, $now);
-			};
-			// Where the response can be ended first, the row is written after
-			// it and may wait for a running rebuild (Rebuild::WRITE_WAIT_SECONDS);
-			// nobody waits for it. Elsewhere it is written now, with the usual
-			// busy timeout of 5 s.
-			$later = static function () use ($commit, $open): void {
-				try {
-					$commit($open()->waitUpTo(Rebuild::WRITE_WAIT_SECONDS * 1000));
-				} catch (Throwable $e) {
-					self::logWriteError($e);
-				}
-			};
-			if (!Rebuild::afterResponse($later)) {
-				$commit($open());
-			}
+			Spool::commit($open, $file, $row, $counts, $session, $now);
 		} catch (Throwable $e) {
 			// A missing statistics row has no consequences. A broken page and a
 			// lost phone call do.
