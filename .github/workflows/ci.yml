@@ -53,8 +53,11 @@ jobs:
       - name: PHP-FPM
         if: matrix.deps == 'locked'
         run: |
-          sudo apt-get install -y -qq --no-install-recommends php${{ matrix.php }}-fpm php${{ matrix.php }}-sqlite3
-          echo "PHP_FPM=/usr/sbin/php-fpm${{ matrix.php }}" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends php${{ matrix.php }}-fpm php${{ matrix.php }}-sqlite3 || true
+          fpm=$(ls /usr/sbin/php-fpm${{ matrix.php }} /usr/sbin/php-fpm "$(dirname "$(command -v php)")/../sbin/php-fpm" 2>/dev/null | head -1 || true)
+          echo "php-fpm: ${fpm:-none} $(lsb_release -ds 2>/dev/null)"
+          if [ -n "$fpm" ]; then echo "PHP_FPM=$fpm" >> "$GITHUB_ENV"; fi
 
       - name: Tests (Kirby as fixture)
         run: vendor/bin/phpunit
