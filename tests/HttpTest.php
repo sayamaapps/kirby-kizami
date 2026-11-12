@@ -638,12 +638,45 @@ final class HttpTest extends TestCase
 			unset($config['kizami.report']); // reportWithoutHttps stays: the fixture speaks HTTP
 			self::writeConfig($config);
 
+			// Rebuild of the file after the response (3.1.0). The built-in server,
+			// like cgi-fcgi, cannot end a response early: a bot's request rebuilds,
+			// a counted visit only once the last rebuild is more than 48 hours old.
+			$setRebuild = function (string $day, string $done) use ($tmp): void {
+				$db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+				$db->busyTimeout(5000);
+				$db->exec('DELETE FROM kizami_rebuild');
+				$stmt = $db->prepare('INSERT INTO kizami_rebuild (id, day, done) VALUES (1, :day, :done)');
+				$stmt->bindValue(':day', $day, SQLITE3_TEXT);
+				$stmt->bindValue(':done', $done, SQLITE3_TEXT);
+				$stmt->execute()->finalize();
+				$db->close();
+			};
+			$rebuildState = function () use ($tmp): array {
+				$db = new SQLite3($tmp . '/storage/kizami/kizami.sqlite');
+				$row = $db->querySingle('SELECT day, done FROM kizami_rebuild WHERE id=1', true);
+				$db->close();
+				return $row;
+			};
+			$today = (new DateTimeImmutable('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+			$utc = fn (string $modifier): string => (new DateTimeImmutable($modifier, new DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+			$googlebot = 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)';
+			$setRebuild('2000-01-01', $utc('-1 hour'));
+			Assert::assertTrue(self::requestHttp('/')[1] === 'Fixture OK' && $rebuildState()['day'] === '2000-01-01', 'Rebuild: a counted visit leaves it to a bot while the last rebuild is younger than 48 hours');
+			[$status, $body] = self::requestHttp('/', [$googlebot]);
+			Assert::assertTrue($status === 200 && $body === 'Fixture OK', 'Rebuild: the bot gets the whole page');
+			$state = $rebuildState();
+			Assert::assertTrue($state['day'] === $today && $state['done'] >= $utc('-5 minutes'), 'Rebuild: a bot request rebuilds after its page: ' . json_encode($state));
+			$setRebuild('2000-01-01', $utc('-49 hours'));
+			Assert::assertTrue(self::requestHttp('/')[1] === 'Fixture OK' && $rebuildState()['day'] === $today, 'Rebuild: a counted visit rebuilds once the last rebuild is more than 48 hours old');
+
 			// Server handles sequential requests, no open request/DB writer here.
 			foreach (glob($tmp . '/storage/kizami/kizami.sqlite*') as $file) {
 				unlink($file);
 			}
 			file_put_contents($tmp . '/storage/kizami/kizami.sqlite', 'not a database');
 			Assert::assertTrue(self::requestHttp('/?utm_source[]=test')[0] === 200, 'Broken DB keeps the website working');
+			[$status, $body] = self::requestHttp('/', [$googlebot]);
+			Assert::assertTrue($status === 200 && $body === 'Fixture OK', 'Broken DB: the failing rebuild after a bot request keeps the page whole');
 			Assert::assertTrue(self::requestHttp('/call?from[]=test')[0] === 302, 'Broken DB keeps the redirect working');
 			Assert::assertTrue(self::requestHttp('/k/image', [$origin], $post)[0] === 204, 'Broken DB does not break the image gallery');
 			Assert::assertTrue(self::requestHttp('/k/event', [$origin], $download)[0] === 204, 'Broken DB: /k/event still answers 204');

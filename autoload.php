@@ -21,6 +21,7 @@ return [
 	'sayamaapps\\kizami\\names' => 'src/Names.php',
 	'sayamaapps\\kizami\\options' => 'src/Options.php',
 	'sayamaapps\\kizami\\pagemethods' => 'src/PageMethods.php',
+	'sayamaapps\\kizami\\rebuild' => 'src/Rebuild.php',
 	'sayamaapps\\kizami\\redirect' => 'src/Redirect.php',
 	'sayamaapps\\kizami\\report' => 'src/Report.php',
 	'kizami\\reporterror' => 'src/ReportError.php',

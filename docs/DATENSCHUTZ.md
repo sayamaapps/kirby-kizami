@@ -80,9 +80,10 @@ entfällt die Erfassung durch dieses Modul. Bekannte Bots werden ausgefiltert.
 Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `sayamaapps.kizami.retentionMonths`) aus der aktiven
 Datenbank entfernt. Die Zeilen werden beim ersten erfassten Aufruf eines Tages
 und im Wartungsjob entfernt. Reste gelöschter Inhalte in freien Seiten der
-Datenbankdatei, auch aus früheren Versionen, werden erst entfernt, wenn der
-Wartungsjob (`maintenance.php compact`) die Datei neu aufbaut; er muss dafür
-regelmäßig laufen, ein erfasster Aufruf baut die Datei nicht neu auf. Neue
+Datenbankdatei, auch aus früheren Versionen, werden entfernt, wenn die Datei
+neu aufgebaut wird. Das geschieht in der Regel täglich, nachdem eine Seite
+ausgeliefert ist, spätestens beim ersten erfassten Aufruf, nachdem der letzte
+Neuaufbau mehr als zwei Tage zurückliegt, und außerdem im Wartungsjob. Neue
 Snapshots werden stets ohne solche Reste neu aufgebaut.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
@@ -93,7 +94,7 @@ Geräteklassen, Fehlseiten, Bildöffnungen, Aktionen und ihre Zusatzangaben, Lin
 werden nicht in diese Zusammenfassung übernommen. Gemeldete Aktionen werden nach
 derselben Frist ohne Zusammenfassung gelöscht.
 
-Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages und über einen separat eingerichteten Wartungsjob (`maintenance.php`). Der Aufruf fasst nur zusammen und löscht die Zeilen; die Datenbankdatei baut allein der Wartungsjob neu auf. Das Öffnen von Dashboard und Report bereinigt nicht.
+Die Bereinigung läuft beim ersten erfassten Aufruf eines Tages und, falls eingerichtet, über einen Wartungsjob (`maintenance.php`). Der Aufruf fasst zusammen und löscht die Zeilen; die Datenbankdatei wird wie oben beschrieben nach der Auslieferung einer Seite neu aufgebaut. Das Öffnen von Dashboard und Report bereinigt nicht.
 Ohne solche Aufrufe kann sich die Bereinigung verzögern. Sicherungen brauchen
 eine eigene, begrenzte Aufbewahrungsfrist und dürfen die täglichen Schlüssel
 nicht archivieren.
@@ -102,13 +103,26 @@ nicht archivieren.
 
 - Die Aufbewahrung von 13 Monaten (Standard von `sayamaapps.kizami.retentionMonths`) ist ein technischer Standard, keine rechtliche
   Begründung; die notwendige Dauer muss der Betreiber festlegen.
+- Neuaufbau der Datei (seit 3.1.0, ohne Cronjob): höchstens einmal je Tag
+  (Europe/Berlin) und erst nach der Antwort an den Browser. Unter PHP-FPM und
+  LiteSpeed schließt PHP die Antwort vorher ab (`fastcgi_finish_request()`,
+  `litespeed_finish_request()`); dann übernimmt der erste erfasste Aufruf oder
+  Bot-Aufruf des Tages. Unter cgi-fcgi und mod_php kann PHP das nicht; dort
+  übernimmt der Aufruf eines erkannten Bots (auf ihn wartet niemand). Liegt
+  der letzte gelungene Neuaufbau mehr als 48 Stunden zurück, etwa weil kein
+  Bot kam, übernimmt der nächste erfasste Aufruf am Ende seiner Anfrage; dieser
+  Besucher wartet dann einmal die Dauer des Neuaufbaus (gemessen rund 0,13 s
+  für eine Datei von 20 MB auf normaler Platte, auf langsamer Platte mehrere
+  Sekunden). Parallele Aufrufe warten so lange auf die Schreibsperre, höchstens
+  5 s; dauert der Neuaufbau länger, fehlt ihr Zähler. Der Neuaufbau braucht
+  vorübergehend freien Speicherplatz in der Größe der Datei. Fehler stehen im
+  Error-Log (`Kizami: rebuild …`); der nächste Versuch folgt spätestens am
+  nächsten Tag.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
-  sollte täglich als Cronjob laufen; Exitcode 1 und stderr sind ein
+  ist für den Neuaufbau nicht mehr nötig, kann aber zusätzlich als Cronjob
+  laufen; Exitcode 1 und stderr sind ein
   Wartungsfehler. Ist `sayamaapps.kizami.retentionMonths` gesetzt, muss derselbe Wert als
-  `--retention-months=N` angegeben werden, sonst gelten 13 Monate. Die Anwendung benötigt keinen separaten Job zum Zusammenfassen,
-  wohl aber zum Entfernen von Resten gelöschter Inhalte aus der Datenbankdatei (freie
-  Seiten, auch aus früheren Versionen): das tut nur dieser Job. Läuft er nicht, den
-  Absatz zur Aufbewahrung im Datenschutztext entsprechend anpassen.
+  `--retention-months=N` angegeben werden, sonst gelten 13 Monate.
   Der Job löscht außerdem einen veralteten Tagesschlüssel (er erzeugt keinen,
   damit keine Datei mit dem Cron-Benutzer als Eigentümer entsteht) und meldet
   `stale daily key removed` bzw. `daily key current`; er ist dann nötig, wenn

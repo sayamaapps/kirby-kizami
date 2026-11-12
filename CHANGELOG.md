@@ -13,6 +13,37 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [3.1.0] — 2026-11-12
+
+### Added
+
+- **Kizami rebuilds its database file itself, no cron job needed.** What
+  `maintenance.php compact` does (roll-up, then VACUUM, which removes leftover
+  bytes of deleted events from free pages) now also runs at most once per day
+  (Europe/Berlin) after a response (`Rebuild`, `Store::rebuildDaily()`). Under
+  PHP-FPM and LiteSpeed the response is ended first
+  (`fastcgi_finish_request()`, `litespeed_finish_request()`), then the first
+  counted visit or bot request of the day rebuilds. Under cgi-fcgi and mod_php
+  PHP cannot end a response early: there a request of a known bot rebuilds,
+  and only when the last successful rebuild is more than 48 hours old
+  (`Rebuild::OVERDUE_HOURS`) does a counted visit rebuild at the end of its
+  request. The day is claimed in one write transaction, so of parallel
+  requests only one rebuilds. A failure goes to the error log and never
+  reaches the page. Measured: about 0.13 s for a 20 MB file (about 50,000
+  rows) with PHP 8.3; parallel page views wait for the write lock meanwhile
+  (busy timeout 5 s) and keep their count.
+- New table `kizami_rebuild` (day of the last attempt, time of the last
+  success), created on first use like `kizami_maintenance`; no migration.
+
+### Changed
+
+- **[privacy text]** `DATENSCHUTZ.md` and `PRIVACY.md`: leftover bytes are
+  removed when the file is rebuilt, as a rule daily after a page has been
+  delivered, at the latest at the first counted visit once the last rebuild is
+  more than two days old, and in the maintenance job. Before, only the
+  maintenance job removed them. The operations part no longer asks for a
+  daily `compact` cron job.
+
 ## [3.0.0] — 2026-11-11
 
 ### Changed — counting definition (2026-11-11)

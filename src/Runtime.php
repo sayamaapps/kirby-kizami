@@ -374,6 +374,12 @@ class Runtime
 			$ua = $server['HTTP_USER_AGENT'] ?? '';
 			if (Capture::isBot($ua) || (self::option($kirby, 'countOutdatedBrowsers', false) !== true && Capture::isOutdated($ua))) {
 				Secret::expire($directory, $now->format('Y-m-d'));
+				// Nobody waits for a bot: its request may rebuild the file
+				// after the response (Rebuild). Never creates the database.
+				$file = $directory . '/' . Store::FILE;
+				if (is_file($file)) {
+					Rebuild::afterBot(fn (): Store => new Store($file, Store::journal(self::option($kirby, 'journal')), [], Options::retentionMonths($kirby)), $now);
+				}
 				return;
 			}
 
@@ -411,6 +417,8 @@ class Runtime
 				'session'      => $session,
 				'device'       => Capture::deviceClass($ua),
 			]);
+			// The rebuild of the file, after the response (Rebuild).
+			Rebuild::afterCount($store, $now);
 		} catch (Throwable $e) {
 			// A missing statistics row has no consequences. A broken page and a
 			// lost phone call do.

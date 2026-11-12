@@ -49,7 +49,7 @@ total with no other data**.
 
 ## Retention
 
-Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months). The rows are removed at the first counted visit of a day and by the maintenance job. Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed only when the maintenance job (`maintenance.php compact`) rebuilds the file, so the job has to run regularly; a counted visit does not rebuild the file. New snapshots are always rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
+Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months). The rows are removed at the first counted visit of a day and by the maintenance job. Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed when the file is rebuilt. This happens as a rule daily, after a page has been delivered, at the latest at the first counted visit once the last rebuild is more than two days old, and also in the maintenance job (`maintenance.php compact`). New snapshots are always rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
 that, full days are condensed into daily totals (page views, redirect clicks,
 estimated devices). Actions and their details are deleted after the same period as
 well and are not part of the daily totals. Backups need their own limited retention and must not

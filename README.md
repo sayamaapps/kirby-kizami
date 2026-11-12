@@ -101,7 +101,7 @@ Without a tag the link comes back unchanged; `hosts` names the hosts that count 
 - any logged-in Panel user, without further setup;
 - or a Kirby account with the role `kizami-dashboard` (Basic Auth). Create it in the Panel under Users with that role. The role has no Panel access and no permissions; it appears while `sayamaapps.kizami.active` is on. Other roles can be named in `dashboardRoles`.
 
-Passwords are checked by Kirby itself, so Kirby's `auth.trials` and `auth.timeout` limit failed logins. The dashboard and the report only read: compaction and key rotation run when pages are counted and in `maintenance.php`. There is no password file of the plugin. One known exception: opening the database creates a missing table or migrates an old schema (idempotent).
+Passwords are checked by Kirby itself, so Kirby's `auth.trials` and `auth.timeout` limit failed logins. The dashboard and the report only read: compaction, the rebuild of the file and key rotation run when pages are counted or requested by bots, and in `maintenance.php`. There is no password file of the plugin. One known exception: opening the database creates a missing table or migrates an old schema (idempotent).
 
 **JSON report.** Set `'sayamaapps.kizami.report' => true` and give the reading account the role `kizami-report` (see `reportRoles`):
 
@@ -193,7 +193,14 @@ php site/plugins/kizami/maintenance.php compact /abs/path/storage/kizami
 php site/plugins/kizami/bin/kizami-snapshot /abs/path/storage/kizami /backups/new.sqlite
 ```
 
-Run `compact` daily. A counted visit only rolls up old events and deletes their rows; `compact` also rebuilds the database file, which removes leftover bytes of deleted events from free pages (also from older versions). It also removes the previous day's salt key, which matters if the site may go days without visits. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
+No cron job is needed to keep the database file clean (since 3.1.0). The first counted visit of a day rolls up old events and deletes their rows. Kizami then rebuilds the file (VACUUM), which removes leftover bytes of deleted events from free pages (also from older versions): as a rule daily, at most once a day, and only after the response has been sent:
+
+- PHP-FPM and LiteSpeed end the response first (`fastcgi_finish_request()`, `litespeed_finish_request()`). The first counted visit or bot request of the day rebuilds.
+- cgi-fcgi and mod_php cannot end a response early. There a request of a known bot rebuilds; nobody waits for it. If the last successful rebuild is more than 48 hours old (`Rebuild::OVERDUE_HOURS`), the next counted visit rebuilds at the end of its request, and that visitor waits for it once.
+
+A rebuild of a 20 MB file took about 0.13 s on a normal disk; a slow disk can take several seconds. Parallel requests wait for the write lock meanwhile, up to 5 s. The rebuild needs free disk space the size of the file for a moment. Failures go to the error log (`Kizami: rebuild …`).
+
+`compact` does the same from the command line and can still run as a cron job. It also removes the previous day's salt key, which matters if the site may go days without visits. Add `--retention-months=N` after `maintenance.php` if `sayamaapps.kizami.retentionMonths` is set. Back up with `kizami-snapshot`, not by copying `kizami.sqlite` while the site runs.
 
 Tests: `composer test`. Issues and pull requests are welcome, without a support promise. Report security problems privately through GitHub's vulnerability reporting. Changes: [CHANGELOG.md](https://github.com/sayamaapps/kirby-kizami/blob/main/CHANGELOG.md).
 

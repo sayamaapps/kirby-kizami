@@ -77,6 +77,14 @@ class Store
 	public const JOURNAL_WAL = 'wal';
 	private const MAINTENANCE_TABLE = 'CREATE TABLE IF NOT EXISTS kizami_maintenance (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL)';
 
+	/**
+	 * The rebuild of the file (since 3.1.0, see Rebuild): `day` is the Berlin
+	 * day of the last attempt after a response, `done` the UTC time of the
+	 * last of these rebuilds that succeeded; '' = never. Simply
+	 * created like kizami_maintenance, no migration.
+	 */
+	private const REBUILD_TABLE = "CREATE TABLE IF NOT EXISTS kizami_rebuild (id INTEGER PRIMARY KEY CHECK (id=1), day TEXT NOT NULL, done TEXT NOT NULL DEFAULT '')";
+
 	/** `user_version` once the first rebuild has run, see purgeResidue(). */
 	private const RESIDUE_PURGED = 1;
 
@@ -165,6 +173,7 @@ class Store
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_events_image ON kizami_events(type, session, target)');
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_events_session ON kizami_events(session, created_at)');
 		$this->exec(self::MAINTENANCE_TABLE);
+		$this->exec(self::REBUILD_TABLE);
 		$this->exec(self::DISCARDED_TABLE);
 		$this->exec(self::CUSTOM_EVENTS_TABLE);
 		$this->exec('CREATE INDEX IF NOT EXISTS idx_kizami_custom_events_event ON kizami_custom_events(event, created_at)');
@@ -788,6 +797,22 @@ class Store
 		return self::JOURNAL_WAL;
 	}
 
+	/**
+	 * State of the rebuild (Rebuild): the Berlin day of the last attempt
+	 * after a response and the UTC time of the last rebuild that succeeded,
+	 * '' for never.
+	 *
+	 * @return array{day:string,done:string}
+	 */
+	public function lastRebuild(): array
+	{
+		$row = $this->db->querySingle('SELECT day, done FROM kizami_rebuild WHERE id=1', true);
+		return [
+			'day'  => is_array($row) ? (string)($row['day'] ?? '') : '',
+			'done' => is_array($row) ? (string)($row['done'] ?? '') : '',
+		];
+	}
+
 	/** @return list<array{target:string,position:string,count:int}> */
 	public function linkPositions(int $days): array
 	{
@@ -1012,8 +1037,9 @@ class Store
 	 * exist. secure_delete zeroes deleted cells, but SQLite hands a page that
 	 * became empty back to the free list as it was, and old builds (3.7.17)
 	 * leave parts of a deleted row in a page that stays in use.
-	 * Explicit maintenance only (dashboard, report, CLI), never the visitor's
-	 * request: VACUUM rewrites the whole file. It cannot run inside a
+	 * Explicit maintenance (CLI) and the rebuild after the response
+	 * (rebuildDaily(), Rebuild), never while a visitor's page is built:
+	 * VACUUM rewrites the whole file. It cannot run inside a
 	 * transaction, so it follows the COMMIT. The done-mark is the file's own
 	 * `user_version` header field: no table, no migration, it survives
 	 * VACUUM and older versions ignore it. Without the mark VACUUM runs
@@ -1029,6 +1055,57 @@ class Store
 		if (!$marked) {
 			$this->db->exec('PRAGMA user_version = ' . self::RESIDUE_PURGED);
 		}
+	}
+
+	/**
+	 * compact() after a response (Rebuild), at most once per Berlin day.
+	 * The day is claimed in the same write transaction as the roll-up, so of
+	 * two parallel requests only one rebuilds. Unlike compact(), a failing
+	 * rebuild is thrown: the caller logs it, the day stays claimed (the next
+	 * attempt is the next day's) and `done` keeps the last success.
+	 *
+	 * Returns false when this day's attempt has already been made. The plain
+	 * check comes first, so only the first request of a day takes the write
+	 * lock.
+	 */
+	public function rebuildDaily(\DateTimeImmutable $now): bool
+	{
+		$day = $now->setTimezone(new \DateTimeZone('Europe/Berlin'))->format('Y-m-d');
+		if ($this->lastRebuild()['day'] === $day) {
+			return false;
+		}
+		$this->exec('BEGIN IMMEDIATE');
+		try {
+			if ($this->lastRebuild()['day'] === $day) {
+				$this->exec('COMMIT');
+				return false;
+			}
+			$stmt = $this->db->prepare("INSERT OR REPLACE INTO kizami_rebuild (id, day, done)
+                VALUES (1, :day, COALESCE((SELECT done FROM kizami_rebuild WHERE id=1), ''))");
+			$stmt->bindValue(':day', $day, SQLITE3_TEXT);
+			$stmt->execute()->finalize();
+			$this->rollUpOldDays();
+			$this->exec('COMMIT');
+		} catch (\Throwable $e) {
+			// A failed COMMIT may have ended the transaction already.
+			try {
+				$this->db->exec('ROLLBACK');
+			} catch (\Throwable) {
+				// Nothing left to roll back.
+			}
+			throw $e;
+		}
+		$this->purgeResidue();
+		$this->rebuilt($now);
+		return true;
+	}
+
+	/** Records a rebuild that succeeded (kizami_rebuild.done, UTC); the row exists since the claim. */
+	private function rebuilt(\DateTimeImmutable $now): void
+	{
+		$stmt = $this->db->prepare('UPDATE kizami_rebuild SET done = :done WHERE id=1');
+		$stmt->bindValue(':done', $now->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'), SQLITE3_TEXT);
+		$stmt->execute()->finalize();
 	}
 
 	/**
