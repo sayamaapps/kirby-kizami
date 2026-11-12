@@ -265,6 +265,13 @@ class Runtime
 		return new Response($text, 'text/plain', 503, ['Cache-Control' => 'no-store']);
 	}
 
+	/** A message that already says "Kizami: …" (a setup error, Store's own) keeps it once. */
+	private static function logWriteError(Throwable $e): void
+	{
+		$message = $e->getMessage();
+		error_log(str_starts_with($message, 'Kizami: ') ? $message : 'Kizami: ' . $message);
+	}
+
 	/** Kirby's real 404 — no format of its own that would reveal the module. */
 	public static function notFound(App $kirby): Response
 	{
@@ -352,6 +359,9 @@ class Runtime
 	 * redirect) may notice a broken database: the hook keeps rendering the page,
 	 * the redirect keeps redirecting. That is why this helper catches \Throwable
 	 * and returns nothing a caller could evaluate — there is nothing to decide.
+	 *
+	 * Since 3.1.0 a hit that meets a database locked longer than
+	 * Store::BUSY_TIMEOUT_MS goes to the spool file instead (Spool::commit()).
 	 */
 	public static function write(App $kirby, array|callable $row, callable|null $counts = null): void
 	{
@@ -372,7 +382,21 @@ class Runtime
 				return;
 			}
 			$ua = $server['HTTP_USER_AGENT'] ?? '';
-			if (Capture::isBot($ua) || (self::option($kirby, 'countOutdatedBrowsers', false) !== true && Capture::isOutdated($ua))) {
+			$file = $directory . '/' . Store::FILE;
+			$open = fn (): Store => new Store($file, Store::journal(self::option($kirby, 'journal')), [], Options::retentionMonths($kirby));
+			if (Capture::isBot($ua)) {
+				Secret::expire($directory, $now->format('Y-m-d'));
+				// Nobody waits for a bot: its request may rebuild the file after
+				// the response (Rebuild). Only an existing database, checked
+				// again after the response.
+				if (is_file($file)) {
+					Rebuild::afterBot($file, $open, $now);
+				}
+				return;
+			}
+			// A retired browser is not counted either, but a person may be
+			// using it: it never takes the bot's way to the rebuild.
+			if (self::option($kirby, 'countOutdatedBrowsers', false) !== true && Capture::isOutdated($ua)) {
 				Secret::expire($directory, $now->format('Y-m-d'));
 				return;
 			}
@@ -387,21 +411,13 @@ class Runtime
 				return; // no secret, no capture
 			}
 
-			$store = new Store($directory . '/' . Store::FILE, Store::journal(self::option($kirby, 'journal')), [], Options::retentionMonths($kirby));
 			$session = Capture::sessionHash(
 				$server['REMOTE_ADDR'] ?? '0.0.0.0',
 				$ua,
 				$secret,
 				$now
 			);
-			// Optional check of the caller (link filter of the redirects).
-			// Discarding is never silent: the daily counter kizami_discarded
-			// shows up in the dashboard and the report.
-			if ($counts !== null && $counts($store, $session, $now) !== true) {
-				$store->discard($now->format('Y-m-d'));
-				return;
-			}
-			$store->write($row + [
+			$row += [
 				'created_at'   => $now->setTimezone(new \DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
 				'target'       => '',
 				'referrer'     => '',
@@ -410,12 +426,12 @@ class Runtime
 				'utm_campaign' => '',
 				'session'      => $session,
 				'device'       => Capture::deviceClass($ua),
-			]);
+			];
+			Spool::commit($open, $file, $row, $counts, $session, $now);
 		} catch (Throwable $e) {
 			// A missing statistics row has no consequences. A broken page and a
 			// lost phone call do.
-			// A setup error's message already says "Kizami: …".
-			error_log($e instanceof SetupError ? $e->getMessage() : 'Kizami: ' . $e->getMessage());
+			self::logWriteError($e);
 		}
 	}
 }

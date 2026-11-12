@@ -13,6 +13,76 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [3.1.0] — 2026-11-12
+
+### Added
+
+- **Kizami rebuilds its database file itself, no cron job needed.** What
+  `maintenance.php compact` does (roll-up, then VACUUM, which removes leftover
+  bytes of deleted events from free pages) now also runs at most once per day
+  (Europe/Berlin) after a response (`Rebuild`, `Store::rebuildDaily()`).
+  PHP-FPM and LiteSpeed end the response first (`fastcgi_finish_request()`,
+  `litespeed_finish_request()`); there the first counted visit or bot request
+  of the day rebuilds. cgi-fcgi and mod_php cannot end a response early; there
+  a request of a known bot rebuilds (a retired browser is not counted but does
+  not take this way: a person may be using it), and once the last successful
+  rebuild is more than 48 hours old (`Rebuild::OVERDUE_HOURS`), the next
+  counted visit rebuilds at the end of its request. The day is claimed in one
+  write transaction, so of parallel requests only one rebuilds. A failure goes
+  to the error log and never reaches the page. Measured: about 0.13 s for a 20
+  MB file (about 50,000 rows) with PHP 8.3; a slow disk can take several
+  seconds.
+- **Spool file instead of lost hits.** The rebuild holds the write lock of the
+  database while it runs. While the database is locked, for example during a
+  rebuild, a hit (page view, click, action) waits up to 5 seconds for each
+  lock, as before; in rare cases, when a lock is released and taken again
+  while the hit is being written, these waits add up. If the database is still
+  locked then, the hit goes to a spool file next to the database
+  (`storage/kizami/spool.jsonl`, the same fields as in the database, nothing
+  more) and is written at the next successful writes and at the end of the
+  rebuild, at most 1,000 lines each time; a click that needs a page view of
+  the same visit is decided then. The spool file holds at most 5 MB; while it
+  is full, further hits are lost, and the error log says so when it fills up
+  and then at most once a day. If the spool file cannot be written, the hit is
+  lost as well; the error log then contains `database is locked`. The spool
+  file sits outside the web root like the database and is readable by its
+  owner only; it is emptied once it has been read to its end, and lines older
+  than the retention period are dropped when it is read. How far it has been
+  read is recorded in the database, so no hit is counted twice. Snapshots do
+  not contain it; leave it out of file backups like `secret.txt`, and delete
+  it together with the database when counting is switched off for good.
+  (`Spool`, `Store::readSpool()`, `LinkFilter`, new table `kizami_spool` with
+  the batch name and the position read, written in the same transaction as the
+  lines; the database's write lock is taken before the file's `flock()`.)
+- A rebuild needs free disk space of up to twice the file size for a moment: a
+  copy in the temporary directory (often another partition) plus the journal
+  or WAL next to the file.
+- The dashboard warns when the attempts since the last successful rebuild have
+  failed for more than 48 hours (`Rebuild::failing()`, new column `since`); a
+  first attempt that fails right after the update does not warn yet.
+- New table `kizami_rebuild` (day of the last attempt, time of the last
+  success, time of the first attempt since), created on first use like
+  `kizami_maintenance`; no migration. `Store::BUSY_TIMEOUT_MS` (5000).
+
+### Fixed
+
+- A log line no longer starts with "Kizami: Kizami:" when Store's own message
+  already carries the prefix.
+- Opening the database reports a lock at once instead of waiting the busy
+  timeout again for the next statement.
+
+### Changed
+
+- **[privacy text]** `DATENSCHUTZ.md` and `PRIVACY.md`: Leftover bytes of
+  deleted content in free pages of the database file, including those left by
+  older versions, are removed when the file is rebuilt: as a rule daily, after
+  a page has been delivered, at the latest at the first counted visit once the
+  last successful rebuild is more than two days old, provided the rebuild
+  succeeds; if it keeps failing, the dashboard shows a warning. The
+  maintenance job (`maintenance.php compact`) rebuilds the file as well.
+  Before, only the maintenance job removed them. Both texts name the spool
+  file. The operations part no longer asks for a daily `compact` cron job.
+
 ## [3.0.0] — 2026-11-11
 
 ### Changed — counting definition (2026-11-11)

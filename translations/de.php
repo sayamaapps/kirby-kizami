@@ -64,6 +64,8 @@ return [
 	'dashboard.period' => 'Zeitraum',
 	'dashboard.keyFigures' => 'Hauptkennzahlen',
 	'dashboard.unavailable' => 'Die Kennzahlen sind derzeit nicht verfügbar. Bitte den Betreiber informieren. Die Website und ihre Links funktionieren weiter.',
+	'dashboard.rebuildFailing' => 'Die Datenbankdatei wurde seit mehr als zwei Tagen nicht neu aufgebaut (zuletzt: {date}), obwohl Kizami es versucht hat. Reste gelöschter Daten können darin liegen bleiben. Bitte den Betreiber informieren; der Grund steht im Error-Log („Kizami: rebuild …“).',
+	'dashboard.rebuildNever' => 'nie',
 	'dashboard.subtitle' => '{from} – {to}, verglichen mit den {days} Tagen davor.',
 	'period.7' => '7 Tage',
 	'period.30' => '30 Tage',
