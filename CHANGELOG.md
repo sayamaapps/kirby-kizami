@@ -20,29 +20,46 @@ All notable changes to this project are documented here. Versions follow
 - **Kizami rebuilds its database file itself, no cron job needed.** What
   `maintenance.php compact` does (roll-up, then VACUUM, which removes leftover
   bytes of deleted events from free pages) now also runs at most once per day
-  (Europe/Berlin) after a response (`Rebuild`, `Store::rebuildDaily()`). Under
-  PHP-FPM and LiteSpeed the response is ended first
-  (`fastcgi_finish_request()`, `litespeed_finish_request()`), then the first
-  counted visit or bot request of the day rebuilds. Under cgi-fcgi and mod_php
-  PHP cannot end a response early: there a request of a known bot rebuilds,
-  and only when the last successful rebuild is more than 48 hours old
-  (`Rebuild::OVERDUE_HOURS`) does a counted visit rebuild at the end of its
-  request. The day is claimed in one write transaction, so of parallel
-  requests only one rebuilds. A failure goes to the error log and never
-  reaches the page. Measured: about 0.13 s for a 20 MB file (about 50,000
-  rows) with PHP 8.3; parallel page views wait for the write lock meanwhile
-  (busy timeout 5 s) and keep their count.
+  (Europe/Berlin) after a response (`Rebuild`, `Store::rebuildDaily()`).
+  PHP-FPM and LiteSpeed end the response first (`fastcgi_finish_request()`,
+  `litespeed_finish_request()`); there the first counted visit or bot request
+  of the day rebuilds. cgi-fcgi and mod_php cannot end a response early; there
+  a request of a known bot rebuilds (a retired browser is not counted but does
+  not take this way: a person may be using it), and once the last successful
+  rebuild is more than 48 hours old (`Rebuild::OVERDUE_HOURS`), the next
+  counted visit rebuilds at the end of its request. The day is claimed in one
+  write transaction, so of parallel requests only one rebuilds. A failure goes
+  to the error log and never reaches the page. Measured: about 0.13 s for a 20
+  MB file (about 50,000 rows) with PHP 8.3; a slow disk can take several
+  seconds.
+- **Counting during a rebuild.** The rebuild holds the write lock of the
+  database while it runs. Where the response can be ended first, a hit (page
+  view, click, action) is written after the response and waits up to 60
+  seconds for a running rebuild. Without `fastcgi_finish_request()` or
+  `litespeed_finish_request()` (cgi-fcgi, mod_php) it is written during the
+  request and waits at most 5 seconds, as before; if a rebuild takes longer,
+  that hit is not counted (error log: `Kizami: database is locked`).
+- A rebuild needs free disk space of up to twice the file size for a moment: a
+  copy in the temporary directory (often another partition) plus the journal
+  or WAL next to the file.
+- The dashboard warns when the last successful rebuild is more than 48 hours
+  old although Kizami tried since (`Rebuild::failing()`).
 - New table `kizami_rebuild` (day of the last attempt, time of the last
   success), created on first use like `kizami_maintenance`; no migration.
+- `Store::BUSY_TIMEOUT_MS` (5000) and `Store::waitUpTo()`;
+  `Rebuild::WRITE_WAIT_SECONDS` (60) for the write after the response.
 
 ### Changed
 
-- **[privacy text]** `DATENSCHUTZ.md` and `PRIVACY.md`: leftover bytes are
-  removed when the file is rebuilt, as a rule daily after a page has been
-  delivered, at the latest at the first counted visit once the last rebuild is
-  more than two days old, and in the maintenance job. Before, only the
-  maintenance job removed them. The operations part no longer asks for a
-  daily `compact` cron job.
+- **[privacy text]** `DATENSCHUTZ.md` and `PRIVACY.md`: Leftover bytes of
+  deleted content in free pages of the database file, including those left by
+  older versions, are removed when the file is rebuilt: as a rule daily, after
+  a page has been delivered, at the latest at the first counted visit once the
+  last successful rebuild is more than two days old, provided the rebuild
+  succeeds; if it keeps failing, the dashboard shows a warning. The
+  maintenance job (`maintenance.php compact`) rebuilds the file as well.
+  Before, only the maintenance job removed them. The operations part no longer
+  asks for a daily `compact` cron job.
 
 ## [3.0.0] — 2026-11-11
 

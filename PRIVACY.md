@@ -49,10 +49,12 @@ total with no other data**.
 
 ## Retention
 
-Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months). The rows are removed at the first counted visit of a day and by the maintenance job. Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed when the file is rebuilt. This happens as a rule daily, after a page has been delivered, at the latest at the first counted visit once the last rebuild is more than two days old, and also in the maintenance job (`maintenance.php compact`). New snapshots are always rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
+Single events are removed from the active database after 13 months (`sayamaapps.kizami.retentionMonths`, the operator may choose 1 to 600 months). The rows are removed at the first counted visit of a day and by the maintenance job. Leftover bytes of deleted content in free pages of the database file, including those left by older versions, are removed when the file is rebuilt: as a rule daily, after a page has been delivered, at the latest at the first counted visit once the last successful rebuild is more than two days old, provided the rebuild succeeds; if it keeps failing, the dashboard shows a warning. The maintenance job (`maintenance.php compact`) rebuilds the file as well. New snapshots are always rebuilt without such leftovers. File-system and hoster snapshots are outside the application's control. Before
 that, full days are condensed into daily totals (page views, redirect clicks,
 estimated devices). Actions and their details are deleted after the same period as
 well and are not part of the daily totals. Backups need their own limited retention and must not
 contain the daily key (`secret.txt`). The CLI snapshot and the `/k/snapshot`
 route exclude it. The snapshot route returns all single events, so its
 recipients and retention belong in the privacy policy.
+
+The rebuild holds the write lock of the database while it runs. Where the response can be ended first, a hit (page view, click, action) is written after the response and waits up to 60 seconds for a running rebuild. Without `fastcgi_finish_request()` or `litespeed_finish_request()` (cgi-fcgi, mod_php) it is written during the request and waits at most 5 seconds, as before; if a rebuild takes longer, that hit is not counted (error log: `Kizami: database is locked`).

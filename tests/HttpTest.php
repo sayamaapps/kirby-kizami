@@ -662,6 +662,8 @@ final class HttpTest extends TestCase
 			$googlebot = 'User-Agent: Mozilla/5.0 (compatible; Googlebot/2.1)';
 			$setRebuild('2000-01-01', $utc('-1 hour'));
 			Assert::assertTrue(self::requestHttp('/')[1] === 'Fixture OK' && $rebuildState()['day'] === '2000-01-01', 'Rebuild: a counted visit leaves it to a bot while the last rebuild is younger than 48 hours');
+			$retired = 'User-Agent: Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)';
+			Assert::assertTrue(self::requestHttp('/', [$retired])[1] === 'Fixture OK' && $rebuildState()['day'] === '2000-01-01', 'Rebuild: a retired browser is not counted, yet never takes the bot\'s way: a person may be waiting');
 			[$status, $body] = self::requestHttp('/', [$googlebot]);
 			Assert::assertTrue($status === 200 && $body === 'Fixture OK', 'Rebuild: the bot gets the whole page');
 			$state = $rebuildState();

@@ -65,6 +65,8 @@ return [
 	'dashboard.period' => 'Period',
 	'dashboard.keyFigures' => 'Key figures',
 	'dashboard.unavailable' => 'The statistics are currently unavailable. Please tell the site operator. The website and its links keep working.',
+	'dashboard.rebuildFailing' => 'The database file has not been rebuilt for more than two days (last time: {date}), although Kizami tried. Leftovers of deleted data may remain in it. Please tell the site operator; the error log says why (“Kizami: rebuild …”).',
+	'dashboard.rebuildNever' => 'never',
 	'dashboard.subtitle' => '{from} – {to}, compared with the {days} days before.',
 	'period.7' => '7 days',
 	'period.30' => '30 days',

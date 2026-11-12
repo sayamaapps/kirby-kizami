@@ -19,6 +19,9 @@ use SQLite3;
  */
 class Store
 {
+	/** Milliseconds a connection waits for a lock (busy timeout), unless waitUpTo() changes it. */
+	public const BUSY_TIMEOUT_MS = 5000;
+
 	/**
 	 * Actions reported by the site's script (`sayamaapps.kizami.events`, /k/event,
 	 * since 1.4.0). A table of its own instead of a new type in
@@ -140,7 +143,7 @@ class Store
 
 		$this->db = new SQLite3($dbPath);
 		$this->db->enableExceptions(true);
-		$this->db->busyTimeout(5000);
+		$this->db->busyTimeout(self::BUSY_TIMEOUT_MS);
 		$berlin = static fn ($utc) => (new \DateTimeImmutable($utc, new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone('Europe/Berlin'));
 		$this->db->createFunction('berlin_day', static fn ($utc) => $berlin($utc)->format('Y-m-d'), 1);
 		$this->db->createFunction('berlin_hour', static fn ($utc) => (int)$berlin($utc)->format('G'), 1);
@@ -1325,6 +1328,17 @@ class Store
                 AND EXISTS (SELECT 1 FROM (" . $this->entriesSql() . ') e
                     WHERE ' . self::afterEntrySql() . ')
             GROUP BY berlin_day(a.created_at), a.session)', $days, $offset, $this->ownReferrerBindings());
+	}
+
+	/**
+	 * Lets this connection wait up to $milliseconds for a lock instead of
+	 * BUSY_TIMEOUT_MS: for a write after the response, which nobody waits for
+	 * (Rebuild::afterResponse()).
+	 */
+	public function waitUpTo(int $milliseconds): self
+	{
+		$this->db->busyTimeout($milliseconds);
+		return $this;
 	}
 
 	/** @return array<int, array<int,int>> [weekday 0=Mon][hour 0..23] */

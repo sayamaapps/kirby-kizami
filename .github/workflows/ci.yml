@@ -48,6 +48,14 @@ jobs:
         if: matrix.deps == 'locked'
         run: composer install --no-interaction --no-progress --prefer-dist --ignore-platform-req=ext-gd
 
+      # The real PHP-FPM for RebuildTest::testRealFpmEndsTheResponseFirst
+      # (skipped without a php-fpm binary).
+      - name: PHP-FPM
+        if: matrix.deps == 'locked'
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends php${{ matrix.php }}-fpm php${{ matrix.php }}-sqlite3
+          echo "PHP_FPM=/usr/sbin/php-fpm${{ matrix.php }}" >> "$GITHUB_ENV"
+
       - name: Tests (Kirby as fixture)
         run: vendor/bin/phpunit
 

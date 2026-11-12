@@ -101,6 +101,7 @@ class Analysis
 		$months = array_reverse(array_slice($lt['months'], 0, 24));
 		$months = array_map(fn ($m) => ['name' => I18n::monthYear($m['month']), 'value' => $m['devices']], $months);
 
+		$rebuild = $store->lastRebuild();
 		return [
 			'days' => $days, 'from' => $from, 'to' => $to, 'brand' => (string)($settings['brand'] ?? ''),
 			'tiles' => self::tiles($store, $names, $days, $settings, $visits, $visitsPrevious, $visitsPerDay),
@@ -136,7 +137,10 @@ class Analysis
 			'sourcesTable' => [...$sources, ...($internal > 0 ? [['name' => I18n::t('source.internal'), 'value' => $internal]] : [])],
 			'pages' => array_map(fn ($p) => ['name' => $names->page($p['path']), 'value' => $p['count']], $store->viewsPerPage($days)),
 			'longTerm' => ['total' => $lt['total'], 'months' => $months],
-			'technical' => ['notFound' => $store->notFound($days), 'schema' => $store->missingTables(), 'writeError' => $store->writeProbe()],
+			'technical' => ['notFound' => $store->notFound($days), 'schema' => $store->missingTables(), 'writeError' => $store->writeProbe(),
+				// The rebuild of the file (Rebuild): a warning when the last
+				// success is overdue although attempts were made.
+				'rebuild' => ['failing' => Rebuild::failing($rebuild, new \DateTimeImmutable('now')), 'done' => $rebuild['done']]],
 			'shades' => Chart::shades((string)($settings['color'] ?? '#2f4f2a')),
 			// Dwell time: its own section, only with the switch on. null keeps
 			// the template lean — it does not show the section at all then.

@@ -81,10 +81,12 @@ Einzelereignisse werden bei der Bereinigung nach 13 Monaten (einstellbar über `
 Datenbank entfernt. Die Zeilen werden beim ersten erfassten Aufruf eines Tages
 und im Wartungsjob entfernt. Reste gelöschter Inhalte in freien Seiten der
 Datenbankdatei, auch aus früheren Versionen, werden entfernt, wenn die Datei
-neu aufgebaut wird. Das geschieht in der Regel täglich, nachdem eine Seite
-ausgeliefert ist, spätestens beim ersten erfassten Aufruf, nachdem der letzte
-Neuaufbau mehr als zwei Tage zurückliegt, und außerdem im Wartungsjob. Neue
-Snapshots werden stets ohne solche Reste neu aufgebaut.
+neu aufgebaut wird: in der Regel täglich, nachdem eine Seite ausgeliefert ist,
+spätestens beim ersten erfassten Aufruf, nachdem der letzte gelungene
+Neuaufbau mehr als zwei Tage zurückliegt, sofern der Neuaufbau gelingt;
+scheitert er wiederholt, zeigt das Dashboard eine Warnung. Auch der
+Wartungsjob (`maintenance.php compact`) baut die Datei neu auf. Neue Snapshots
+werden stets ohne solche Reste neu aufgebaut.
 Dateisystem- und Hoster-Snapshots liegen außerhalb der Kontrolle der Anwendung.
 Vorher werden vollständige Tage in Tageszahlen zusammengefasst:
 Datum, Anzahl der Seitenaufrufe, Gesamtzahl der Weiterleitungs-Klicks und Summe
@@ -108,16 +110,26 @@ nicht archivieren.
   LiteSpeed schließt PHP die Antwort vorher ab (`fastcgi_finish_request()`,
   `litespeed_finish_request()`); dann übernimmt der erste erfasste Aufruf oder
   Bot-Aufruf des Tages. Unter cgi-fcgi und mod_php kann PHP das nicht; dort
-  übernimmt der Aufruf eines erkannten Bots (auf ihn wartet niemand). Liegt
-  der letzte gelungene Neuaufbau mehr als 48 Stunden zurück, etwa weil kein
-  Bot kam, übernimmt der nächste erfasste Aufruf am Ende seiner Anfrage; dieser
-  Besucher wartet dann einmal die Dauer des Neuaufbaus (gemessen rund 0,13 s
-  für eine Datei von 20 MB auf normaler Platte, auf langsamer Platte mehrere
-  Sekunden). Parallele Aufrufe warten so lange auf die Schreibsperre, höchstens
-  5 s; dauert der Neuaufbau länger, fehlt ihr Zähler. Der Neuaufbau braucht
-  vorübergehend freien Speicherplatz in der Größe der Datei. Fehler stehen im
-  Error-Log (`Kizami: rebuild …`); der nächste Versuch folgt spätestens am
-  nächsten Tag.
+  übernimmt der Aufruf eines erkannten Bots (auf ihn wartet niemand). Ein
+  veralteter Browser wird nicht gezählt, nimmt diesen Weg aber nicht: ihn kann
+  ein Mensch benutzen. Liegt der letzte gelungene Neuaufbau mehr als 48
+  Stunden zurück, übernimmt der nächste erfasste Aufruf am Ende seiner
+  Anfrage; dieser Besucher wartet dann einmal die Dauer des Neuaufbaus
+  (gemessen rund 0,13 s für eine Datei von 20 MB auf normaler Platte, auf
+  langsamer Platte mehrere Sekunden). Der Neuaufbau hält währenddessen die
+  Schreibsperre. Wo die Antwort vorher abgeschlossen werden kann, wird ein
+  Aufruf (Seitenaufruf, Klick, Aktion) nach der Antwort geschrieben und wartet
+  bis zu 60 Sekunden auf einen laufenden Neuaufbau. Ohne
+  `fastcgi_finish_request()` oder `litespeed_finish_request()` (cgi-fcgi,
+  mod_php) wird er während der Anfrage geschrieben und wartet wie bisher
+  höchstens 5 Sekunden; dauert ein Neuaufbau länger, wird dieser Aufruf nicht
+  gezählt (Error-Log: `Kizami: database is locked`). Ein Neuaufbau braucht
+  vorübergehend freien Speicherplatz bis zur doppelten Dateigröße: eine Kopie
+  im temporären Verzeichnis (oft eine andere Partition) und das Journal oder
+  WAL neben der Datei. Fehler stehen im Error-Log (`Kizami: rebuild …`); der
+  nächste Versuch folgt spätestens am nächsten Tag. Liegt der letzte gelungene
+  Neuaufbau trotz Versuchen mehr als 48 Stunden zurück, zeigt das Dashboard
+  eine Warnung.
 - `php site/plugins/kizami/maintenance.php compact /absolut/storage/kizami`
   ist für den Neuaufbau nicht mehr nötig, kann aber zusätzlich als Cronjob
   laufen; Exitcode 1 und stderr sind ein
