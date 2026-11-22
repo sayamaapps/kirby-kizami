@@ -29,28 +29,12 @@ class Report
 	public const KINDS = ['day', 'week'];
 
 	/**
-	 * @param 'day'|'week' $kind
-	 * @param array{
-	 *     tiles?: list<string>,
-	 *     tileNames?: array<string,string>,
-	 *     contactTargets?: list<string>,
-	 *     brand?: string,
-	 *     dwellTime?: bool,
-	 *     events?: array,
-	 *     gaps?: array,
-	 *     now?: \DateTimeImmutable
-	 * } $settings
+	 * `actions` (every redirect hit) and `actionVisits` (visits per target
+	 * after a page view), both with the same names in the same order.
+	 * @return array{0: list<array{name:string,value:int}>, 1: list<array{name:string,value:int}>}
 	 */
-	public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
+	private static function actionLists(Store $store, Names $names, int $days, array $settings): array
 	{
-		$p = self::period($kind, $today);
-		$store = $store->atTime($p['now']);
-		$days = $p['days'];
-		$offset = $p['offset'];
-
-		$to = $p['now'];
-		$from = $to->setTime(0, 0, 0)->modify('-' . ($days - 1) . ' days');
-
 		// Tile targets (call, route) always, even with 0 — the other targets
 		// only if they were clicked at all.
 		$tileNames = (array)($settings['tileNames'] ?? []);
@@ -77,6 +61,34 @@ class Report
 			$actions[] = ['name' => $name, 'value' => $count];
 			$actionVisits[] = ['name' => $name, 'value' => $perVisit[$target] ?? 0];
 		}
+
+		return [$actions, $actionVisits];
+	}
+
+	/**
+	 * @param 'day'|'week' $kind
+	 * @param array{
+	 *     tiles?: list<string>,
+	 *     tileNames?: array<string,string>,
+	 *     contactTargets?: list<string>,
+	 *     brand?: string,
+	 *     dwellTime?: bool,
+	 *     events?: array,
+	 *     gaps?: array,
+	 *     now?: \DateTimeImmutable
+	 * } $settings
+	 */
+	public static function data(Store $store, Names $names, string $kind, \DateTimeImmutable $today, array $settings): array
+	{
+		$p = self::period($kind, $today);
+		$store = $store->atTime($p['now']);
+		$days = $p['days'];
+		$offset = $p['offset'];
+
+		$to = $p['now'];
+		$from = $to->setTime(0, 0, 0)->modify('-' . ($days - 1) . ' days');
+
+		[$actions, $actionVisits] = self::actionLists($store, $names, $days, $settings);
 
 		// Source per visit (first page of the day), not per page view.
 		// contactSources() counts the visits regardless of the targets, but
