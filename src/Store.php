@@ -508,27 +508,6 @@ class Store
 	}
 
 	/**
-	 * Visits per redirect target: day visits that hit the target at least once
-	 * after a page view (since 3.0.1). The same count as "contact clicks" in
-	 * contactSources() — the same target counts once per visit — but for every
-	 * target. Direct link hits (directLinkHits()) are not part of it.
-	 * @return list<array{target:string,count:int}>
-	 */
-	public function visitsPerAction(int $days, int $offset = 0): array
-	{
-		return $this->fetch(
-			'SELECT a.target AS target, COUNT(DISTINCT e.id) AS n FROM (' . $this->entriesSql() . ") e
-            JOIN kizami_events a ON a.type='redirect' AND a.created_at >= :since AND a.created_at < :until
-                AND " . self::afterEntrySql() . '
-            GROUP BY a.target ORDER BY n DESC, a.target',
-			$days,
-			fn ($r) => ['target' => (string)$r['target'], 'count' => (int)$r['n']],
-			$offset,
-			$this->ownReferrerBindings()
-		);
-	}
-
-	/**
 	 * Count one discarded redirect hit for the day.
 	 *
 	 * Without UPSERT (ON CONFLICT … DO UPDATE only exists since SQLite 3.24,
@@ -1250,6 +1229,30 @@ class Store
             WHERE created_at >= :since AND created_at < :until AND session <> ''
                 AND type='page' AND action='view'
             GROUP BY berlin_day(created_at), session)", $days, $offset);
+	}
+
+	/**
+	 * Visits per redirect target: day visits that hit the target at least once
+	 * after a page view (since 3.0.1). The same count as "contact clicks" in
+	 * contactSources() — the same target counts once per visit — but for every
+	 * target. Direct link hits (directLinkHits()) are not part of it.
+	 * @return list<array{target:string,count:int}>
+	 */
+	public function visitsPerAction(int $days, int $offset = 0): array
+	{
+		/** @var list<array{target:string,count:int}> $rows */
+		$rows = $this->fetch(
+			'SELECT a.target AS target, COUNT(DISTINCT e.id) AS n FROM (' . $this->entriesSql() . ") e
+            JOIN kizami_events a ON a.type='redirect' AND a.created_at >= :since AND a.created_at < :until
+                AND " . self::afterEntrySql() . '
+            GROUP BY a.target ORDER BY n DESC, a.target',
+			$days,
+			fn ($r) => ['target' => (string)$r['target'], 'count' => (int)$r['n']],
+			$offset,
+			$this->ownReferrerBindings()
+		);
+
+		return $rows;
 	}
 
 	/** @return list<array{day:string,count:int}> every day of the window, ascending */
