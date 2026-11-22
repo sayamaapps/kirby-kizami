@@ -13,6 +13,19 @@ All notable changes to this project are documented here. Versions follow
 - The report JSON carries `format`; it increases only when a field is removed,
   renamed or changes meaning.
 
+## [3.0.1] — 2026-11-22
+
+### Added
+
+- **Report field `actionsWithVisit`.** The same list as `actions` (same names
+  and order), without the direct link hits: redirect hits with no page view
+  before them that day (`directLinkHits`). `actions` keeps counting every
+  redirect hit, as before. A morning message that shows contact clicks should
+  read `actionsWithVisit`: link scanners and address harvesters that resolve
+  a phone or e-mail redirect directly, with a browser that confirms a user
+  action, otherwise appear as calls and e-mails. Format stays 2; counting
+  definition unchanged.
+
 ## [3.0.0] — 2026-11-11
 
 ### Changed — counting definition (2026-11-11)
