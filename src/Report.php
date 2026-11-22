@@ -61,20 +61,21 @@ class Report
 		foreach ($store->actions($days) as $a) {
 			$clicks[$a['target']] = $a['count'];
 		}
-		// The same list without direct link hits (no page view before the
-		// click that day): contact clicks of visitors. Link scanners and
-		// address harvesters that resolve a contact redirect directly would
-		// otherwise inflate the counts of a morning message (since 3.0.1).
-		$direct = [];
-		foreach ($store->directLinkHits($days) as $h) {
-			$direct[$h['target']] = $h['count'];
+		// Per target the visits that clicked it after a page view, the same
+		// target once per visit (since 3.0.1). Link scanners and address
+		// harvesters that resolve a contact redirect directly, or hit it many
+		// times in one visit, would otherwise inflate the counts of a morning
+		// message.
+		$perVisit = [];
+		foreach ($store->visitsPerAction($days) as $v) {
+			$perVisit[$v['target']] = $v['count'];
 		}
 		$actions = [];
-		$actionsWithVisit = [];
+		$actionVisits = [];
 		foreach ($clicks as $target => $count) {
 			$name = (string)($tileNames[$target] ?? $names->target((string)$target));
 			$actions[] = ['name' => $name, 'value' => $count];
-			$actionsWithVisit[] = ['name' => $name, 'value' => max(0, $count - ($direct[$target] ?? 0))];
+			$actionVisits[] = ['name' => $name, 'value' => $perVisit[$target] ?? 0];
 		}
 
 		// Source per visit (first page of the day), not per page view.
@@ -117,8 +118,9 @@ class Report
 			'discardedLinkHits' => $store->discardedLinkHits($days),
 			'discardedLinkHitsPrevious' => $store->discardedLinkHits($days, $offset),
 			'actions' => $actions,
-			// New field, format stays 2: `actions` minus `directLinkHits` per target.
-			'actionsWithVisit' => $actionsWithVisit,
+			// New field, format stays 2: same names and order as `actions`,
+			// value = visits that clicked the target after a page view.
+			'actionVisits' => $actionVisits,
 			'sources' => array_slice($sources, 0, 4, true),
 			'pages' => array_slice($pages, 0, 3, true),
 			'campaigns' => array_slice($campaigns, 0, self::CAMPAIGNS_MAX),

@@ -206,12 +206,15 @@ final class ReportTest extends TestCase
 				$put('2026-09-30 11:00:00', 'scanner-' . $i, ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
 			}
 			I18n::setLanguage('de');
+			// Visitor a taps the call link twice more: three hits, one visit with a call.
+			$put('2026-09-30 10:04:00', 'a', ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
+			$put('2026-09-30 10:05:00', 'a', ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
 			$scan = Report::data($store, $names, 'day', $thu, $settings);
-			Assert::assertSame([3, 1, 5, 3], [$scan['visits'], $scan['visitsPrevious'], $scan['clicks'], $scan['directLinkHits']], 'Link scanners stay separate from visits and the previous-week comparison in the report');
+			Assert::assertSame([3, 1, 7, 3], [$scan['visits'], $scan['visitsPrevious'], $scan['clicks'], $scan['directLinkHits']], 'Link scanners stay separate from visits and the previous-week comparison in the report');
 			Assert::assertSame(true, str_contains($scan['text'], 'Davon ohne vorherigen Seitenbesuch: 3'), 'Direct hits listed separately in the bot text');
 			$value = fn (array $list, string $name) => array_column($list, 'value', 'name')[$name] ?? null;
-			Assert::assertSame([4, 1, 1, 1], [$value($scan['actions'], 'Calls'), $value($scan['actionsWithVisit'], 'Calls'), $value($scan['actions'], 'Instagram'), $value($scan['actionsWithVisit'], 'Instagram')], 'actionsWithVisit: scanner hits taken out per target, visitor clicks kept');
-			Assert::assertSame(array_column($scan['actions'], 'name'), array_column($scan['actionsWithVisit'], 'name'), 'actionsWithVisit: same names and order as actions');
+			Assert::assertSame([6, 1, 1, 1], [$value($scan['actions'], 'Calls'), $value($scan['actionVisits'], 'Calls'), $value($scan['actions'], 'Instagram'), $value($scan['actionVisits'], 'Instagram')], 'actionVisits: scanner hits out, repeated taps of one visit count once');
+			Assert::assertSame(array_column($scan['actions'], 'name'), array_column($scan['actionVisits'], 'name'), 'actionVisits: same names and order as actions');
 			$put('2026-09-22 11:00:00', 'scanner-only', ['type' => 'redirect', 'action' => 'click', 'target' => 'call']);
 			$scanEmpty = Report::data($store, $names, 'day', new DateTimeImmutable('2026-09-23 08:00', $berlin), $settings);
 			Assert::assertSame("Sample Inn · Di 22.09.\nKeine Besuche erfasst (Vorwoche Di: 0).\nDirekte Linkaufrufe ohne Seitenbesuch: 1", $scanEmpty['text'], 'Pure link checks create no visits even in the empty day report');
