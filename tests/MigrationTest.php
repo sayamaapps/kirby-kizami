@@ -157,6 +157,11 @@ final class MigrationTest extends TestCase
 			self::expect('Shop 2', Options::brand($app(['kizami.brand' => fn () => 'Shop 2'])), 'brand closure');
 
 			// Dashboard login: a Kirby account with the role kizami-dashboard. No file of the plugin.
+			// The admin first: Kirby 6 refuses any other role for the first account.
+			// A fresh app: permissions and roles are asked of the current instance, which the checks above replaced.
+			$kirby = $app(['kizami.active' => true]);
+			$kirby->impersonate('kirby');
+			$kirby->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
 			$kirby->users()->create(['email' => 'dashboard@example.invalid', 'role' => 'kizami-dashboard', 'password' => 'dashboard-password-very-long-123']);
 			$dashboard = function (string $user, string $password, array $options) use ($app) {
 				$_SERVER['HTTP_AUTHORIZATION'] = 'Basic ' . base64_encode($user . ':' . $password);
