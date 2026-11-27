@@ -96,6 +96,9 @@ final class SetupTest extends TestCase
 				'roots' => ['index' => $tmp . '/public', 'base' => $tmp, 'content' => $tmp . '/content', 'site' => $tmp . '/site'],
 				'options' => ['url' => 'https://example.invalid', 'kizami.active' => true],
 			]);
+			// The admin first: Kirby 6 refuses any other role for the first account.
+			$accounts->impersonate('kirby');
+			$accounts->users()->create(['email' => 'admin@example.invalid', 'role' => 'admin', 'password' => 'admin-password-very-long-123']);
 			$accounts->users()->create(['email' => 'dashboard@example.invalid', 'role' => 'kizami-dashboard', 'password' => 'dashboard-password-very-long-123']);
 
 			$app = function (string|null $storage, string $url, array $request = [], array $extra = []) use ($tmp) {

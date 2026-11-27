@@ -1,6 +1,6 @@
 # Kizami
 
-**Versions:** Kirby 5 · PHP 8.2 to 8.5 · MIT · [Changes](https://github.com/sayamaapps/kirby-kizami/blob/main/CHANGELOG.md)
+**Versions:** Kirby 5 and 6 · PHP 8.2 to 8.5 · MIT · [Changes](https://github.com/sayamaapps/kirby-kizami/blob/main/CHANGELOG.md)
 
 Cookieless, server-side visitor statistics for [Kirby CMS](https://getkirby.com).
 
@@ -17,7 +17,7 @@ Kizami counts page views, contact clicks and optional actions on a Kirby site an
 
 ## Requirements
 
-- Kirby 5 (`getkirby/cms` 5.0 or newer).
+- Kirby 5 or 6 (`getkirby/cms` `^5.0 || ^6.0`); Kirby 6 needs PHP 8.3 or newer.
 - PHP 8.2, 8.3, 8.4 or 8.5 with the `sqlite3`, `ctype` and `mbstring` extensions.
 - A Kirby `storage` root outside the web root. Without it, nothing is counted.
 

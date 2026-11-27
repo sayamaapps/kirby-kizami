@@ -33,7 +33,7 @@
     },
     "require-dev": {
         "ergebnis/composer-normalize": "^2.54",
-        "getkirby/cms": "^5.0",
+        "getkirby/cms": "^5.0 || ^6.0",
         "icanhazstring/composer-unused": "^0.9.7",
         "maglnet/composer-require-checker": "^4.0",
         "phpmd/phpmd": "^2.15",
@@ -57,7 +57,7 @@
     "extra": {
         "installer-name": "kizami",
         "kirby": {
-            "compatible": "^5.0"
+            "compatible": "^5.0 || ^6.0"
         },
         "kirby-cms-path": false
     },
