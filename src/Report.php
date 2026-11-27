@@ -29,6 +29,43 @@ class Report
 	public const KINDS = ['day', 'week'];
 
 	/**
+	 * `actions` (every redirect hit) and `actionVisits` (visits per target
+	 * after a page view), both with the same names in the same order.
+	 * @return array{0: list<array{name:string,value:int}>, 1: list<array{name:string,value:int}>}
+	 */
+	private static function actionLists(Store $store, Names $names, int $days, array $settings): array
+	{
+		// Tile targets (call, route) always, even with 0 — the other targets
+		// only if they were clicked at all.
+		$tileNames = (array)($settings['tileNames'] ?? []);
+		$clicks = [];
+		foreach ((array)($settings['tiles'] ?? []) as $target) {
+			$clicks[(string)$target] = 0;
+		}
+		foreach ($store->actions($days) as $a) {
+			$clicks[$a['target']] = $a['count'];
+		}
+		// Per target the visits that clicked it after a page view, the same
+		// target once per visit (since 3.0.1). Link scanners and address
+		// harvesters that resolve a contact redirect directly, or hit it many
+		// times in one visit, would otherwise inflate the counts of a morning
+		// message.
+		$perVisit = [];
+		foreach ($store->visitsPerAction($days) as $v) {
+			$perVisit[$v['target']] = $v['count'];
+		}
+		$actions = [];
+		$actionVisits = [];
+		foreach ($clicks as $target => $count) {
+			$name = (string)($tileNames[$target] ?? $names->target((string)$target));
+			$actions[] = ['name' => $name, 'value' => $count];
+			$actionVisits[] = ['name' => $name, 'value' => $perVisit[$target] ?? 0];
+		}
+
+		return [$actions, $actionVisits];
+	}
+
+	/**
 	 * @param 'day'|'week' $kind
 	 * @param array{
 	 *     tiles?: list<string>,
@@ -51,20 +88,7 @@ class Report
 		$to = $p['now'];
 		$from = $to->setTime(0, 0, 0)->modify('-' . ($days - 1) . ' days');
 
-		// Tile targets (call, route) always, even with 0 — the other targets
-		// only if they were clicked at all.
-		$tileNames = (array)($settings['tileNames'] ?? []);
-		$clicks = [];
-		foreach ((array)($settings['tiles'] ?? []) as $target) {
-			$clicks[(string)$target] = 0;
-		}
-		foreach ($store->actions($days) as $a) {
-			$clicks[$a['target']] = $a['count'];
-		}
-		$actions = [];
-		foreach ($clicks as $target => $count) {
-			$actions[] = ['name' => (string)($tileNames[$target] ?? $names->target((string)$target)), 'value' => $count];
-		}
+		[$actions, $actionVisits] = self::actionLists($store, $names, $days, $settings);
 
 		// Source per visit (first page of the day), not per page view.
 		// contactSources() counts the visits regardless of the targets, but
@@ -106,6 +130,9 @@ class Report
 			'discardedLinkHits' => $store->discardedLinkHits($days),
 			'discardedLinkHitsPrevious' => $store->discardedLinkHits($days, $offset),
 			'actions' => $actions,
+			// New field, format stays 2: same names and order as `actions`,
+			// value = visits that clicked the target after a page view.
+			'actionVisits' => $actionVisits,
 			'sources' => array_slice($sources, 0, 4, true),
 			'pages' => array_slice($pages, 0, 3, true),
 			'campaigns' => array_slice($campaigns, 0, self::CAMPAIGNS_MAX),

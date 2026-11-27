@@ -83,6 +83,20 @@ All notable changes to this project are documented here. Versions follow
   Before, only the maintenance job removed them. Both texts name the spool
   file. The operations part no longer asks for a daily `compact` cron job.
 
+## [3.0.1] — 2026-11-22
+
+### Added
+
+- **Report field `actionVisits`.** The same names and order as `actions`; the
+  value is the number of visits that hit the target after a page view that
+  day, the same target once per visit (`Store::visitsPerAction()`, the count
+  the dashboard shows as contact clicks). `actions` keeps counting every
+  redirect hit, as before. A morning message that shows contact clicks should
+  read `actionVisits`: link scanners and address harvesters that resolve a
+  phone or e-mail redirect directly, with a browser that confirms a user
+  action, and repeated taps within one visit otherwise appear as many calls
+  and e-mails. Format stays 2; counting definition unchanged.
+
 ## [3.0.0] — 2026-11-11
 
 ### Changed — counting definition (2026-11-11)
