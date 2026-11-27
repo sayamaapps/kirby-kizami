@@ -190,8 +190,15 @@ final class PagePathTest extends TestCase
 		} catch (Throwable $e) {
 			throw $e;
 		} finally {
-			@unlink($tmp . '/site/plugins/kizami');
-			exec('rm -rf ' . escapeshellarg($tmp));
+			// Only after the rebuilds the requests above scheduled: Rebuild runs
+			// them from a shutdown function, which registers them at the end of
+			// the queue; this cleanup is registered the same way, but later.
+			register_shutdown_function(static function () use ($tmp): void {
+				register_shutdown_function(static function () use ($tmp): void {
+					@unlink($tmp . '/site/plugins/kizami');
+					exec('rm -rf ' . escapeshellarg($tmp));
+				});
+			});
 		}
 		$this->assertFalse((bool)$failed, 'no failure');
 	}

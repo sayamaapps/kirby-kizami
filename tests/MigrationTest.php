@@ -218,7 +218,7 @@ final class MigrationTest extends TestCase
 			while ($row = $result->fetchArray(SQLITE3_NUM)) {
 				$tables[] = $row[0];
 			}
-			self::expect(['kizami_custom_events', 'kizami_days', 'kizami_discarded', 'kizami_events', 'kizami_maintenance'], $tables, 'only English tables left');
+			self::expect(['kizami_custom_events', 'kizami_days', 'kizami_discarded', 'kizami_events', 'kizami_maintenance', 'kizami_rebuild'], $tables, 'only English tables left');
 			self::expect(7, $db->querySingle('SELECT COUNT(*) FROM kizami_events'), 'every event kept, including the one from the WAL');
 			self::expect(1, $db->querySingle("SELECT COUNT(*) FROM kizami_events WHERE id = 16 AND path = '/wal'"), 'WAL row present after the move');
 			$mapped = [];

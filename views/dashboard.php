@@ -58,6 +58,10 @@ $table = function (array $rows, string|null $columnA = null, string|null $column
 <p class="warning"><?= $e($data['setup']) ?></p>
 <?php endif; ?>
 <?php endif; ?>
+<?php if (!empty($data['technical']['rebuild']['failing'])): ?>
+<p class="warning"><?= $t('dashboard.rebuildFailing', ['date' => $data['technical']['rebuild']['done'] === '' ? I18n::t('dashboard.rebuildNever')
+	: I18n::date((new \DateTimeImmutable($data['technical']['rebuild']['done'], new \DateTimeZone('UTC')))->setTimezone(new \DateTimeZone('Europe/Berlin')))]) ?></p>
+<?php endif; ?>
 
 <?php if (empty($data['error'])): ?>
 <p class="subtitle"><?= $t('dashboard.subtitle', [

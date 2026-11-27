@@ -331,10 +331,7 @@ class Routes
 			'path' => Capture::cleanPath($kirby->request()->get('from')),
 			'target' => $name,
 			'position' => is_string($position) && array_key_exists($position, (array)Runtime::option($kirby, 'positionNames', [])) ? $position : '',
-		], fn (Store $store, string $session, DateTimeImmutable $now) => Capture::countsLinkClick(
-			$kirby->request()->header('Sec-Fetch-User') === '?1',
-			fn () => $store->hasPageView($session, $now)
-		));
+		], new LinkFilter($kirby->request()->header('Sec-Fetch-User') === '?1'));
 
 		return new Response('', 'text/plain', 302, ['Location' => $target, 'X-Robots-Tag' => 'noindex, nofollow']);
 	}
